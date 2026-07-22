@@ -1,0 +1,117 @@
+'use strict'
+
+const { contextBridge, ipcRenderer } = require('electron')
+
+const invoke = (channel) => (payload) => ipcRenderer.invoke(channel, payload)
+
+// Permukaan API yang sempit dan eksplisit — renderer tidak pernah menyentuh
+// Node.js, filesystem, maupun token autentikasi.
+contextBridge.exposeInMainWorld('iposAPI', {
+  app: {
+    info: invoke('app:info'),
+    print: invoke('app:print')
+  },
+  settings: {
+    get: invoke('settings:get'),
+    setBaseUrl: invoke('settings:setBaseUrl')
+  },
+  demo: {
+    start: invoke('demo:start')
+  },
+  net: {
+    ping: invoke('net:ping')
+  },
+  auth: {
+    hasToken: invoke('auth:hasToken'),
+    login: invoke('auth:login'),
+    me: invoke('auth:me'),
+    logout: invoke('auth:logout'),
+    onExpired(callback) {
+      const listener = () => callback()
+      ipcRenderer.on('auth:expired', listener)
+      return () => ipcRenderer.removeListener('auth:expired', listener)
+    }
+  },
+  config: {
+    get: invoke('config:get')
+  },
+  langganan: {
+    status: invoke('langganan:status')
+  },
+  cs: {
+    kontak: invoke('cs:kontak')
+  },
+  toko: {
+    list: invoke('toko:list'),
+    manifest: invoke('toko:manifest'),
+    select: invoke('toko:select')
+  },
+  order: {
+    list: invoke('order:list'),
+    transition: invoke('order:transition'),
+    konfirmasiBayar: invoke('order:konfirmasiBayar'),
+    simpanNota: invoke('order:simpanNota'),
+    lunasi: invoke('order:lunasi')
+  },
+  table: {
+    list: invoke('table:list')
+  },
+  bill: {
+    peta: invoke('bill:peta'),
+    buka: invoke('bill:buka'),
+    detail: invoke('bill:detail'),
+    tambahRonde: invoke('bill:tambahRonde'),
+    setPax: invoke('bill:setPax'),
+    cetak: invoke('bill:cetak'),
+    bayar: invoke('bill:bayar'),
+    gabung: invoke('bill:gabung'),
+    batal: invoke('bill:batal')
+  },
+  qr: {
+    make: invoke('qr:make')
+  },
+  tunnel: {
+    start: invoke('tunnel:start'),
+    stop: invoke('tunnel:stop')
+  },
+  station: {
+    list: invoke('station:list'),
+    create: invoke('station:create'),
+    update: invoke('station:update'),
+    remove: invoke('station:delete')
+  },
+  produk: {
+    list: invoke('produk:list'),
+    byBarcode: invoke('produk:barcode'),
+    detail: invoke('produk:detail')
+  },
+  master: {
+    kategori: invoke('master:kategori'),
+    gudang: invoke('master:gudang'),
+    satuan: invoke('master:satuan')
+  },
+  pelanggan: {
+    list: invoke('pelanggan:list'),
+    create: invoke('pelanggan:create'),
+    detail: invoke('pelanggan:detail')
+  },
+  sesi: {
+    aktif: invoke('sesi:aktif'),
+    list: invoke('sesi:list'),
+    buka: invoke('sesi:buka'),
+    tutup: invoke('sesi:tutup'),
+    rekap: invoke('sesi:rekap')
+  },
+  trx: {
+    checkout: invoke('trx:checkout'),
+    list: invoke('trx:list'),
+    detail: invoke('trx:detail'),
+    batal: invoke('trx:batal')
+  },
+  laporan: {
+    penjualanHarian: invoke('laporan:penjualanHarian'),
+    penjualanProduk: invoke('laporan:penjualanProduk'),
+    stok: invoke('laporan:stok'),
+    rekapKasir: invoke('laporan:rekapKasir')
+  }
+})

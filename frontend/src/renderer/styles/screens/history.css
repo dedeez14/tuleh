@@ -1,0 +1,88 @@
+/* ============================================================
+   Layar Riwayat Transaksi — kelas ber-prefix .hst-
+   Hanya penataan khusus layar; komponen dasar dari components.css.
+   ============================================================ */
+
+/* ---------- Bar filter ---------- */
+
+.hst-filter {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: var(--sp-4);
+  padding: var(--sp-4) var(--sp-5);
+  margin-bottom: var(--sp-5);
+}
+
+.hst-filter__group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hst-filter__label {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-3);
+}
+
+.hst-filter__group .input[type='date'] {
+  width: 168px;
+}
+
+.hst-filter__group .select {
+  width: 184px;
+}
+
+/* ---------- Baris KPI ---------- */
+
+.hst-kpis {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 340px));
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-5);
+}
+
+@media (max-width: 720px) {
+  .hst-kpis {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- Tabel riwayat ---------- */
+
+.hst-col-no {
+  white-space: nowrap;
+}
+
+.hst-col-date {
+  white-space: nowrap;
+  color: var(--text-2);
+}
+
+.hst-total {
+  font-weight: 700;
+}
+
+.hst-table-area tr.is-clickable:focus-visible {
+  outline: 2px solid var(--mint-500);
+  outline-offset: -2px;
+  background: var(--mint-50);
+}
+
+/* ---------- Modal detail (struk) ---------- */
+
+.hst-detail__receipt {
+  display: flex;
+  justify-content: center;
+  padding: var(--sp-2) 0;
+}
+
+.hst-detail__foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-3);
+  width: 100%;
+}

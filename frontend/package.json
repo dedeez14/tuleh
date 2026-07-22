@@ -1,0 +1,54 @@
+{
+  "name": "ipos-frontend",
+  "productName": "Tuléh",
+  "version": "0.4.0",
+  "description": "Tuléh — aplikasi Point of Sale desktop (Electron) untuk TATREPORT POS API",
+  "main": "src/main/main.js",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test \"tests/*.test.js\"",
+    "postinstall": "node tools/fetch-fonts.mjs",
+    "fonts": "node tools/fetch-fonts.mjs",
+    "dist": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "com.movera.mpos",
+    "productName": "Tuléh",
+    "directories": {
+      "buildResources": "build",
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build/backend",
+        "to": "backend",
+        "filter": ["**/*"]
+      }
+    ],
+    "asar": true,
+    "win": {
+      "executableName": "Tuleh",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "artifactName": "Tuleh-Setup-${version}.${ext}",
+      "shortcutName": "Tuléh"
+    }
+  }
+}

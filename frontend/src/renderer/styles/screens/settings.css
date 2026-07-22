@@ -1,0 +1,93 @@
+/* ============================================================
+   Layar Pengaturan (.set-)
+   ============================================================ */
+
+.set-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: var(--sp-5);
+  max-width: 1160px;
+  align-items: start;
+}
+
+/* ---------- Kartu Server ---------- */
+
+.set-server {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface-3);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--sp-5);
+}
+
+.set-server__label {
+  color: var(--text-2);
+  font-size: var(--text-sm);
+  flex-shrink: 0;
+}
+
+.set-server__url {
+  font-weight: 600;
+  word-break: break-all;
+  text-align: right;
+}
+
+.set-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-3);
+  margin-top: var(--sp-5);
+}
+
+/* ---------- Daftar definisi (akun & aplikasi) ---------- */
+
+.set-def__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding: 6px 0;
+}
+
+.set-def__label {
+  color: var(--text-2);
+  font-size: var(--text-sm);
+}
+
+.set-def__value {
+  font-weight: 600;
+  text-align: right;
+}
+
+/* ---------- Pintasan keyboard ---------- */
+
+.set-keys__title {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--text-2);
+  margin-bottom: var(--sp-3);
+}
+
+.set-keys {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.set-keys__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  font-size: var(--text-sm);
+}
+
+.set-keys__combo {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-3);
+}

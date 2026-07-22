@@ -1,0 +1,337 @@
+/* ============================================================
+   iPOS Design Tokens — dibangun dari warna brand #7AE2CF
+   ============================================================ */
+
+:root {
+  /* --- Ramp mint (brand #7AE2CF = mint-400) --- */
+  --mint-50:  #f0fbf8;
+  --mint-100: #dff7f1;
+  --mint-200: #bff0e5;
+  --mint-300: #9de9da;
+  --mint-400: #7ae2cf;
+  --mint-500: #4fcdb7;
+  --mint-600: #2fae99;
+  --mint-700: #1f8c7b;
+  --mint-800: #17695d;
+  --mint-900: #114e45;
+
+  /* --- Tinta & permukaan (netral ber-tint mint) --- */
+  --ink:        #0b2e28;
+  --bg:         #f2faf7;
+  --surface:    #ffffff;
+  --surface-2:  #f7fcfa;
+  --surface-3:  #eef7f3;
+  --line:       #e3efea;
+  --line-strong:#cde2da;
+
+  --text:   #14332c;
+  --text-2: #526e66;
+  --text-3: #647b71;
+  --text-invert: #eafcf7;
+
+  /* --- Sidebar gelap (deep teal) --- */
+  --sidebar-bg:     #0a2723;
+  --sidebar-panel:  #103b33;
+  --sidebar-line:   #1b4a41;
+  --sidebar-text:   #a9c9c1;
+  --sidebar-text-2: #6e948b;
+  --sidebar-active: #7ae2cf;
+
+  /* --- Semantik --- */
+  --success:    #1f8c7b;
+  --success-bg: #dff7f1;
+  --danger:     #d93a49;
+  --danger-bg:  #fcebed;
+  --danger-strong: #b02a37;
+  --warn:       #b45309;
+  --warn-bg:    #fdf1df;
+  --info:       #0e7490;
+  --info-bg:    #e0f4f9;
+
+  /* --- Aksen tombol utama: mint terang + tinta gelap (kontras AAA) --- */
+  --btn-primary-bg:      var(--mint-400);
+  --btn-primary-bg-hover:#8ee8d7;
+  --btn-primary-bg-press:var(--mint-500);
+  --btn-primary-text:    #08332c;
+  --btn-danger-text:     #fff;
+
+  /* --- Tombol gelap (aksi final: Bayar/Tutup) — bukan tombol utama --- */
+  --btn-dark-bg:       var(--ink);
+  --btn-dark-text:     var(--mint-300);
+  --btn-dark-bg-hover: #124139;
+
+  --focus-ring: 0 0 0 3px rgba(122, 226, 207, 0.5);
+
+  /* --- Visualisasi data (tervalidasi kontras/CVD utk surface terang) --- */
+  --chart-1: #0f9d84;        /* bar/garis utama — satu hue sekuensial */
+  --chart-1-soft: #bff0e5;   /* track/fill lembut dari ramp yang sama */
+  --chart-grid: #e9f2ee;     /* gridline hairline, off-surface */
+
+  /* --- Tipografi --- */
+  --font-sans: 'Plus Jakarta Sans', 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-display: 'Plus Jakarta Sans', 'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', 'Cascadia Mono', Consolas, ui-monospace, monospace;
+
+  --text-xs:  0.75rem;   /* 12 */
+  --text-sm:  0.8125rem; /* 13 */
+  --text-base:0.875rem;  /* 14 */
+  --text-md:  0.9375rem; /* 15 */
+  --text-lg:  1.0625rem; /* 17 */
+  --text-xl:  1.25rem;   /* 20 */
+  --text-2xl: 1.5rem;    /* 24 */
+  --text-3xl: 1.875rem;  /* 30 */
+  --text-4xl: 2.375rem;  /* 38 — angka besar / total */
+
+  /* --- Ruang (grid 4px) --- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+
+  /* --- Radius & bayangan ---
+     Desain flat: SEMUA radius kontainer 3px (termasuk bekas pill).
+     Lingkaran sejati (dot, spinner, avatar bulat) memakai 50% langsung. */
+  --radius-xs: 3px;
+  --radius-sm: 3px;
+  --radius:    3px;
+  --radius-lg: 3px;
+  --radius-xl: 3px;
+  --radius-full: 3px;
+
+  --shadow-sm: 0 1px 2px rgba(11, 46, 40, 0.06);
+  --shadow-md: 0 4px 16px rgba(11, 46, 40, 0.08);
+  --shadow-lg: 0 12px 32px rgba(11, 46, 40, 0.16);
+  --shadow-mint: 0 6px 20px rgba(122, 226, 207, 0.35);
+
+  /* --- Gerak --- */
+  --dur-fast: 140ms;
+  --dur: 240ms;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* --- Ukuran layout --- */
+  --sidebar-w: 232px;
+  --cart-w: 400px;
+
+  /* --- Aksen premium (hero + sekunder) — indigo → violet ---
+     Dipakai untuk kartu hero & aksen dekoratif. Tombol utama TETAP mint. */
+  --accent:   #6366F1;
+  --accent-2: #8B5CF6;
+  --grad-hero: linear-gradient(135deg, #6366F1, #8B5CF6);
+
+  /* --- Radius kartu beranda (sedikit lebih membulat, tetap rapi) --- */
+  --radius-card: 10px;
+
+  /* --- Garis pinggir semantik (border pasangan bg lembut) --- */
+  --warn-line:   #f0d9ac;
+  --danger-line: #f0b9be;
+
+  /* --- Warna aksen per-modul (light) ---
+     Chip lembut memakai color-mix ke --surface → otomatis ikut dark. */
+  --mod-kasir:      #6366F1;
+  --mod-dapur:      #F97316;
+  --mod-antrian:    #3B82F6;
+  --mod-proses:     #06B6D4;
+  --mod-meja:       #22C55E;
+  --mod-stasiun:    #F59E0B;
+  --mod-riwayat:    #EC4899;
+  --mod-sesi:       #14B8A6;
+  --mod-laporan:    #3B82F6;
+  --mod-produk:     #10B981;
+  --mod-pelanggan:  #F43F5E;
+  --mod-pengaturan: #64748B;
+
+  --mod-kasir-soft:      color-mix(in srgb, var(--mod-kasir) 12%, var(--surface));
+  --mod-dapur-soft:      color-mix(in srgb, var(--mod-dapur) 12%, var(--surface));
+  --mod-antrian-soft:    color-mix(in srgb, var(--mod-antrian) 12%, var(--surface));
+  --mod-proses-soft:     color-mix(in srgb, var(--mod-proses) 12%, var(--surface));
+  --mod-meja-soft:       color-mix(in srgb, var(--mod-meja) 12%, var(--surface));
+  --mod-stasiun-soft:    color-mix(in srgb, var(--mod-stasiun) 12%, var(--surface));
+  --mod-riwayat-soft:    color-mix(in srgb, var(--mod-riwayat) 12%, var(--surface));
+  --mod-sesi-soft:       color-mix(in srgb, var(--mod-sesi) 12%, var(--surface));
+  --mod-laporan-soft:    color-mix(in srgb, var(--mod-laporan) 12%, var(--surface));
+  --mod-produk-soft:     color-mix(in srgb, var(--mod-produk) 12%, var(--surface));
+  --mod-pelanggan-soft:  color-mix(in srgb, var(--mod-pelanggan) 12%, var(--surface));
+  --mod-pengaturan-soft: color-mix(in srgb, var(--mod-pengaturan) 12%, var(--surface));
+}
+
+/* ============================================================
+   TEMA GELAP
+   Nilai semantik (bg/surface/line/text/ink/semantik/sidebar/accent/mod)
+   di-override di dua tempat:
+   1) :root[data-theme="dark"]  — pilihan pengguna eksplisit
+   2) @media (prefers-color-scheme: dark) — mengikuti sistem, kecuali
+      pengguna memilih 'light' secara eksplisit.
+   Blok keduanya identik (dijaga sinkron).
+   ============================================================ */
+
+:root[data-theme="dark"] {
+  --ink:        #F3F6FC;
+  --bg:         #0E1626;
+  --surface:    #172033;
+  --surface-2:  #1E2A42;
+  --surface-3:  #223150;
+  --line:       #2A3958;
+  --line-strong:#3A4E76;
+
+  --text:   #E7ECF5;
+  --text-2: #9FB0C8;
+  --text-3: #6B7C99;
+  --text-invert: #0E1626;
+
+  --sidebar-bg:     #0A1120;
+  --sidebar-panel:  #141E32;
+  --sidebar-line:   #24324E;
+  --sidebar-text:   #9FB0C8;
+  --sidebar-text-2: #6B7C99;
+  --sidebar-active: #7AE2CF;
+
+  --success:    #34D399;
+  --success-bg: #123023;
+  --danger:     #F87171;
+  --danger-bg:  #2E1619;
+  --danger-strong: #FCA5A5;
+  --warn:       #FBBF24;
+  --warn-bg:    #2C2210;
+  --info:       #38BDF8;
+  --info-bg:    #0F2A3B;
+
+  --warn-line:   #4A3A17;
+  --danger-line: #4A2328;
+
+  --accent:   #818CF8;
+  --accent-2: #A78BFA;
+  --grad-hero: linear-gradient(135deg, #6366F1, #8B5CF6);
+
+  --mod-kasir:      #818CF8;
+  --mod-dapur:      #FB923C;
+  --mod-antrian:    #60A5FA;
+  --mod-proses:     #22D3EE;
+  --mod-meja:       #4ADE80;
+  --mod-stasiun:    #FBBF24;
+  --mod-riwayat:    #F472B6;
+  --mod-sesi:       #2DD4BF;
+  --mod-laporan:    #60A5FA;
+  --mod-produk:     #34D399;
+  --mod-pelanggan:  #FB7185;
+  --mod-pengaturan: #94A3B8;
+
+  --mod-kasir-soft:      color-mix(in srgb, var(--mod-kasir) 20%, var(--surface));
+  --mod-dapur-soft:      color-mix(in srgb, var(--mod-dapur) 20%, var(--surface));
+  --mod-antrian-soft:    color-mix(in srgb, var(--mod-antrian) 20%, var(--surface));
+  --mod-proses-soft:     color-mix(in srgb, var(--mod-proses) 20%, var(--surface));
+  --mod-meja-soft:       color-mix(in srgb, var(--mod-meja) 20%, var(--surface));
+  --mod-stasiun-soft:    color-mix(in srgb, var(--mod-stasiun) 20%, var(--surface));
+  --mod-riwayat-soft:    color-mix(in srgb, var(--mod-riwayat) 20%, var(--surface));
+  --mod-sesi-soft:       color-mix(in srgb, var(--mod-sesi) 20%, var(--surface));
+  --mod-laporan-soft:    color-mix(in srgb, var(--mod-laporan) 20%, var(--surface));
+  --mod-produk-soft:     color-mix(in srgb, var(--mod-produk) 20%, var(--surface));
+  --mod-pelanggan-soft:  color-mix(in srgb, var(--mod-pelanggan) 20%, var(--surface));
+  --mod-pengaturan-soft: color-mix(in srgb, var(--mod-pengaturan) 20%, var(--surface));
+
+  /* Ramp mint teringan dipakai sebagai LATAR di banyak layar → jadikan tint gelap
+     saat dark agar teks (yang kini terang) tetap terbaca; mint-700/800 dipakai sbg
+     TEKS → jadikan mint terang. */
+  --mint-50:  color-mix(in srgb, var(--mint-500) 8%,  var(--surface));
+  --mint-100: color-mix(in srgb, var(--mint-500) 14%, var(--surface));
+  --mint-200: color-mix(in srgb, var(--mint-500) 22%, var(--surface));
+  --mint-700: #8FE3D2;
+  --mint-800: #B4ECDF;
+
+  --btn-dark-bg:       #223150;
+  --btn-dark-text:     #9DE9DA;
+  --btn-danger-text:   #3B0A0A;
+  --btn-dark-bg-hover: #2A3958;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.55);
+  --focus-ring: 0 0 0 3px rgba(129, 140, 248, 0.5);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ink:        #F3F6FC;
+    --bg:         #0E1626;
+    --surface:    #172033;
+    --surface-2:  #1E2A42;
+    --surface-3:  #223150;
+    --line:       #2A3958;
+    --line-strong:#3A4E76;
+
+    --text:   #E7ECF5;
+    --text-2: #9FB0C8;
+    --text-3: #6B7C99;
+    --text-invert: #0E1626;
+
+    --sidebar-bg:     #0A1120;
+    --sidebar-panel:  #141E32;
+    --sidebar-line:   #24324E;
+    --sidebar-text:   #9FB0C8;
+    --sidebar-text-2: #6B7C99;
+    --sidebar-active: #7AE2CF;
+
+    --success:    #34D399;
+    --success-bg: #123023;
+    --danger:     #F87171;
+    --danger-bg:  #2E1619;
+    --danger-strong: #FCA5A5;
+    --warn:       #FBBF24;
+    --warn-bg:    #2C2210;
+    --info:       #38BDF8;
+    --info-bg:    #0F2A3B;
+
+    --warn-line:   #4A3A17;
+    --danger-line: #4A2328;
+
+    --accent:   #818CF8;
+    --accent-2: #A78BFA;
+    --grad-hero: linear-gradient(135deg, #6366F1, #8B5CF6);
+
+    --mod-kasir:      #818CF8;
+    --mod-dapur:      #FB923C;
+    --mod-antrian:    #60A5FA;
+    --mod-proses:     #22D3EE;
+    --mod-meja:       #4ADE80;
+    --mod-stasiun:    #FBBF24;
+    --mod-riwayat:    #F472B6;
+    --mod-sesi:       #2DD4BF;
+    --mod-laporan:    #60A5FA;
+    --mod-produk:     #34D399;
+    --mod-pelanggan:  #FB7185;
+    --mod-pengaturan: #94A3B8;
+
+    --mod-kasir-soft:      color-mix(in srgb, var(--mod-kasir) 20%, var(--surface));
+    --mod-dapur-soft:      color-mix(in srgb, var(--mod-dapur) 20%, var(--surface));
+    --mod-antrian-soft:    color-mix(in srgb, var(--mod-antrian) 20%, var(--surface));
+    --mod-proses-soft:     color-mix(in srgb, var(--mod-proses) 20%, var(--surface));
+    --mod-meja-soft:       color-mix(in srgb, var(--mod-meja) 20%, var(--surface));
+    --mod-stasiun-soft:    color-mix(in srgb, var(--mod-stasiun) 20%, var(--surface));
+    --mod-riwayat-soft:    color-mix(in srgb, var(--mod-riwayat) 20%, var(--surface));
+    --mod-sesi-soft:       color-mix(in srgb, var(--mod-sesi) 20%, var(--surface));
+    --mod-laporan-soft:    color-mix(in srgb, var(--mod-laporan) 20%, var(--surface));
+    --mod-produk-soft:     color-mix(in srgb, var(--mod-produk) 20%, var(--surface));
+    --mod-pelanggan-soft:  color-mix(in srgb, var(--mod-pelanggan) 20%, var(--surface));
+    --mod-pengaturan-soft: color-mix(in srgb, var(--mod-pengaturan) 20%, var(--surface));
+
+    --mint-50:  color-mix(in srgb, var(--mint-500) 8%,  var(--surface));
+    --mint-100: color-mix(in srgb, var(--mint-500) 14%, var(--surface));
+    --mint-200: color-mix(in srgb, var(--mint-500) 22%, var(--surface));
+    --mint-700: #8FE3D2;
+    --mint-800: #B4ECDF;
+
+    --btn-dark-bg:       #223150;
+    --btn-dark-text:     #9DE9DA;
+  --btn-danger-text:   #3B0A0A;
+    --btn-dark-bg-hover: #2A3958;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.45);
+    --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.55);
+    --focus-ring: 0 0 0 3px rgba(129, 140, 248, 0.5);
+  }
+}

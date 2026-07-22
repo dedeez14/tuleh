@@ -1,0 +1,108 @@
+/* ============================================================
+   Layar Produk & Pelanggan — prefix .prd- / .cst-
+   ============================================================ */
+
+.prd-filter,
+.cst-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  margin-bottom: var(--sp-4);
+}
+
+.prd-filter__kat {
+  width: 220px;
+}
+
+.prd-total {
+  font-size: var(--text-sm);
+}
+
+.prd-nama {
+  font-weight: 600;
+}
+
+.prd-barcode {
+  font-size: var(--text-xs);
+  color: var(--text-3);
+  margin-top: 1px;
+}
+
+.prd-more {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  justify-content: center;
+  padding: var(--sp-4) 0;
+}
+
+/* ---------- Detail produk (modal) ---------- */
+
+.prd-detail {
+  display: flex;
+  gap: var(--sp-5);
+}
+
+.prd-detail__media {
+  width: 160px;
+  height: 160px;
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  overflow: hidden;
+  background: var(--surface-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.prd-detail__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.prd-detail__initial {
+  font-family: var(--font-display);
+  font-size: var(--text-3xl);
+  font-weight: 800;
+  color: var(--mint-800);
+}
+
+.prd-detail__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.prd-detail__harga {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: 800;
+  margin-bottom: var(--sp-3);
+}
+
+.prd-detail__rows > div,
+.cst-detail > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: var(--text-sm);
+}
+
+.prd-detail__rows > div > span:first-child,
+.cst-detail > div > span:first-child {
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+
+.prd-detail__rows > div > span:last-child,
+.cst-detail > div > span:last-child {
+  text-align: right;
+}
+
+.cst-nama {
+  font-weight: 600;
+}

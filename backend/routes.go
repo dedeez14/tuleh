@@ -1,0 +1,141 @@
+package main
+
+import (
+	"encoding/json"
+	"net/http"
+	"time"
+)
+
+// Allowlist endpoint MOVERA POS API — hanya rute di tabel ini yang diteruskan.
+// cacheTTL > 0 berarti respons 200 GET di-cache per token.
+// purge = prefix cache (per token) yang dihapus setelah mutasi sukses.
+type route struct {
+	method  string
+	pattern string // relatif terhadap /api/pos/v1
+	cache   time.Duration
+	purge   []string
+	isLogin bool // dikenai rate limit ketat anti brute-force
+}
+
+const apiPrefix = "/api/pos/v1"
+
+var routeTable = []route{
+	// Util
+	{method: "GET", pattern: "/ping"},
+	{method: "GET", pattern: "/config", cache: 5 * time.Minute},
+	{method: "GET", pattern: "/bidang-usaha", cache: 5 * time.Minute},
+
+	// Toko POS (multi-vertical MOVERA)
+	{method: "GET", pattern: "/tokos", cache: 5 * time.Minute},
+	{method: "POST", pattern: "/tokos", purge: []string{apiPrefix + "/tokos"}},
+	{method: "GET", pattern: "/tokos/{id}", cache: 5 * time.Minute},
+	{method: "GET", pattern: "/tokos/{id}/manifest", cache: 5 * time.Minute},
+
+	// Stasiun kerja & meja (endpoint server menyusul — Blueprint §13)
+	{method: "GET", pattern: "/stations", cache: 30 * time.Second},
+	{method: "POST", pattern: "/stations", purge: []string{apiPrefix + "/stations"}},
+	{method: "PATCH", pattern: "/stations/{id}", purge: []string{apiPrefix + "/stations"}},
+	{method: "DELETE", pattern: "/stations/{id}", purge: []string{apiPrefix + "/stations"}},
+	{method: "GET", pattern: "/tables", cache: 5 * time.Minute},
+	{method: "POST", pattern: "/tables", purge: []string{apiPrefix + "/tables"}},
+	{method: "GET", pattern: "/tables/{id}", cache: 5 * time.Minute},
+
+	// Order (F&B/jasa) & sinkronisasi offline — selalu segar
+	{method: "GET", pattern: "/orders"},
+	{method: "POST", pattern: "/orders"},
+	{method: "GET", pattern: "/orders/{id}"},
+	{method: "POST", pattern: "/orders/{id}/transition"},
+	{method: "POST", pattern: "/sync/batch", purge: []string{apiPrefix + "/produk", apiPrefix + "/laporan", apiPrefix + "/transaksi"}},
+
+	// Bon meja (open bill dine-in) — selalu segar; pelunasan menyegarkan stok/laporan/transaksi
+	{method: "GET", pattern: "/bills"},
+	{method: "POST", pattern: "/bills"},
+	{method: "GET", pattern: "/bills/{id}"},
+	{method: "PATCH", pattern: "/bills/{id}"},
+	{method: "GET", pattern: "/bills/{id}/prebill"},
+	{method: "POST", pattern: "/bills/{id}/rounds"},
+	{method: "POST", pattern: "/bills/{id}/merge"},
+	{method: "POST", pattern: "/bills/{id}/void"},
+	{method: "POST", pattern: "/bills/{id}/settle", purge: []string{apiPrefix + "/produk", apiPrefix + "/laporan", apiPrefix + "/transaksi"}},
+
+	// Auth
+	{method: "POST", pattern: "/auth/login", isLogin: true},
+	{method: "GET", pattern: "/auth/me"},
+	{method: "POST", pattern: "/auth/logout", purge: []string{""}}, // "" = semua cache token ini
+
+	// Produk & master
+	{method: "GET", pattern: "/produk", cache: 15 * time.Second},
+	{method: "GET", pattern: "/produk/barcode/{barcode}", cache: 15 * time.Second},
+	{method: "GET", pattern: "/produk/{id}", cache: 15 * time.Second},
+	{method: "GET", pattern: "/kategori", cache: 5 * time.Minute},
+	{method: "GET", pattern: "/gudang", cache: 5 * time.Minute},
+	{method: "GET", pattern: "/satuan", cache: 5 * time.Minute},
+
+	// Pelanggan
+	{method: "GET", pattern: "/pelanggan", cache: 15 * time.Second},
+	{method: "POST", pattern: "/pelanggan", purge: []string{apiPrefix + "/pelanggan"}},
+	{method: "GET", pattern: "/pelanggan/{id}", cache: time.Minute},
+
+	// Sesi kasir — selalu segar (tanpa cache)
+	{method: "GET", pattern: "/sesi/aktif"},
+	{method: "GET", pattern: "/sesi"},
+	{method: "POST", pattern: "/sesi/buka", purge: []string{apiPrefix + "/laporan"}},
+	{method: "POST", pattern: "/sesi/{id}/tutup", purge: []string{apiPrefix + "/laporan"}},
+	{method: "GET", pattern: "/sesi/{id}"},
+	{method: "GET", pattern: "/sesi/{id}/rekap"},
+
+	// Transaksi — mutasi menyegarkan stok & laporan
+	{method: "POST", pattern: "/transaksi/checkout", purge: []string{apiPrefix + "/produk", apiPrefix + "/laporan"}},
+	{method: "GET", pattern: "/transaksi"},
+	{method: "GET", pattern: "/transaksi/{id}"},
+	{method: "GET", pattern: "/transaksi/{id}/struk"},
+	{method: "POST", pattern: "/transaksi/{id}/batal", purge: []string{apiPrefix + "/produk", apiPrefix + "/laporan"}},
+
+	// Laporan
+	{method: "GET", pattern: "/laporan/penjualan-harian", cache: 30 * time.Second},
+	{method: "GET", pattern: "/laporan/penjualan-produk", cache: 30 * time.Second},
+	{method: "GET", pattern: "/laporan/stok", cache: 30 * time.Second},
+	{method: "GET", pattern: "/laporan/rekap-kasir", cache: 30 * time.Second},
+}
+
+func writeJSON(w http.ResponseWriter, status int, payload any) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(payload)
+}
+
+func writeError(w http.ResponseWriter, status int, message string) {
+	writeJSON(w, status, map[string]any{"success": false, "message": message})
+}
+
+func buildMux(p *proxy, limiter *rateLimiter) *http.ServeMux {
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"success": true,
+			"data": map[string]any{
+				"app":      appName,
+				"version":  appVersion,
+				"upstream": p.upstream.String(),
+				"time":     time.Now().Format(time.RFC3339),
+			},
+		})
+	})
+
+	for _, rt := range routeTable {
+		rt := rt
+		handler := p.handler(rt)
+		if rt.isLogin {
+			handler = loginRateLimit(limiter, rateLoginPerMin, handler)
+		}
+		mux.Handle(rt.method+" "+apiPrefix+rt.pattern, handler)
+	}
+
+	// Selain allowlist → tolak dengan envelope yang dikenali frontend
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		writeError(w, http.StatusNotFound, "Endpoint tidak dikenal.")
+	})
+
+	return mux
+}

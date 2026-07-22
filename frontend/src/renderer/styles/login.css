@@ -1,0 +1,253 @@
+/* ============================================================
+   Layar Login — flat, tegas, tanpa gradient; radius seragam 3px
+   ============================================================ */
+
+.login {
+  --r: 3px; /* radius khusus layar login */
+  display: grid;
+  grid-template-columns: minmax(380px, 44%) 1fr;
+  height: 100vh;
+}
+
+/* Semua elemen interaktif di layar login memakai radius 3px */
+.login .input,
+.login .btn,
+.login .textarea,
+.login .field__error {
+  border-radius: var(--r);
+}
+
+/* ---------- Panel brand (kiri) — warna solid, tanpa dekorasi ---------- */
+
+.login__brand {
+  background: var(--sidebar-bg);
+  color: var(--sidebar-text);
+  padding: var(--sp-12) var(--sp-10);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border-right: 1px solid var(--sidebar-line);
+}
+
+.login__brand-top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.login__logo {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--r);
+}
+
+.login__brand-name {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: 800;
+  color: #fff;
+}
+
+.login__brand-name b {
+  color: var(--mint-400);
+}
+
+.login__wordmark {
+  height: 34px;
+  width: auto;
+  display: block;
+}
+
+.login__hero-title {
+  font-size: clamp(1.9rem, 3vw, 2.6rem);
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.02em;
+  line-height: 1.18;
+  max-width: 420px;
+}
+
+.login__hero-title em {
+  font-style: normal;
+  color: var(--mint-400);
+}
+
+.login__hero-desc {
+  margin-top: var(--sp-4);
+  font-size: var(--text-md);
+  color: var(--sidebar-text);
+  max-width: 380px;
+  line-height: 1.6;
+}
+
+.login__features {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border-top: 1px solid var(--sidebar-line);
+}
+
+.login__feature {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  font-size: var(--text-sm);
+  padding: var(--sp-3) 0;
+  border-bottom: 1px solid var(--sidebar-line);
+}
+
+.login__feature-icon {
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--sidebar-line);
+  border-radius: var(--r);
+  color: var(--mint-400);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* ---------- Panel form (kanan) — latar polos + kartu tegas ---------- */
+
+.login__panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-8);
+  background: var(--bg);
+}
+
+.login__box {
+  width: min(420px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r);
+  padding: var(--sp-10) var(--sp-8);
+}
+
+/* Branding ringkas di dalam kartu — hanya saat panel kiri tersembunyi */
+.login__box-brand {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: var(--sp-6);
+}
+
+.login__box-logo {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--r);
+}
+
+.login__box-name {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: var(--text-lg);
+  color: var(--text);
+}
+
+.login__box-name b {
+  color: var(--mint-600);
+}
+
+.login__title {
+  font-size: var(--text-2xl);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.login__subtitle {
+  color: var(--text-2);
+  font-size: var(--text-sm);
+  margin: var(--sp-2) 0 var(--sp-6);
+}
+
+.login__form .btn--primary {
+  margin-top: var(--sp-5);
+}
+
+/* Password + tombol lihat */
+.password-box {
+  position: relative;
+}
+
+.password-box .input {
+  padding-right: 44px;
+}
+
+.password-box__toggle {
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: none;
+  color: var(--text-3);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: var(--r);
+}
+
+.password-box__toggle:hover {
+  color: var(--text);
+}
+
+/* Kotak mode demo — garis solid, sejajar dengan kartu */
+.login__demo {
+  margin-top: var(--sp-5);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  font-size: var(--text-sm);
+}
+
+.login__server {
+  margin-top: var(--sp-5);
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: var(--text-sm);
+  color: var(--text-2);
+}
+
+.login__server-host {
+  font-family: var(--font-mono);
+  color: var(--text);
+}
+
+.login__server button {
+  border: none;
+  background: none;
+  color: var(--mint-700);
+  font-weight: 600;
+  cursor: pointer;
+  font-size: var(--text-sm);
+  padding: 2px 4px;
+  border-radius: var(--r);
+}
+
+.login__server button:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 900px) {
+  .login {
+    grid-template-columns: 1fr;
+  }
+
+  .login__brand {
+    display: none;
+  }
+
+  .login__box-brand {
+    display: flex;
+  }
+}

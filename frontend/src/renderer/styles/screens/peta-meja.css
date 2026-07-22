@@ -1,0 +1,195 @@
+/* Peta Meja + Bon (open bill dine-in). Desain rata (radius 3px, tanpa gradient). */
+
+.meja-root { height: 100%; display: flex; flex-direction: column; min-height: 0; }
+
+/* ---------------- PETA ---------------- */
+.meja {
+  padding: var(--sp-6) var(--sp-8);
+  height: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.meja-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-5);
+  flex-wrap: wrap;
+}
+.meja-title { font-family: var(--font-display); font-size: var(--text-2xl); font-weight: 800; color: var(--ink); }
+.meja-sub { color: var(--text-2); font-size: var(--text-sm); margin-top: 2px; }
+.meja-head__act { display: flex; gap: var(--sp-2); align-items: center; }
+.meja-cari { max-width: 220px; }
+
+.meja-gabung-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
+  background: var(--mint-50); border: 1px solid var(--mint-200); border-radius: var(--radius-xs);
+  padding: var(--sp-2) var(--sp-4); margin-bottom: var(--sp-4);
+  color: var(--mint-800); font-size: var(--text-sm);
+}
+
+.meja-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(184px, 1fr));
+  gap: var(--sp-4);
+}
+/* Mode gabung: meja kosong tidak bisa dipilih */
+.meja-grid.is-gabung .meja-card--kosong { opacity: 0.4; cursor: not-allowed; }
+
+.meja-card {
+  position: relative;
+  display: flex; flex-direction: column; gap: 4px; align-items: flex-start;
+  padding: var(--sp-4); min-height: 128px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-top: 4px solid var(--line-strong);
+  border-radius: var(--radius-xs);
+  cursor: pointer; text-align: left;
+  transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+.meja-card:hover { box-shadow: var(--shadow-sm); }
+.meja-card--kosong { border-top-color: var(--line-strong); border-top-style: dashed; background: var(--surface-2); }
+.meja-card--kosong:hover { border-color: var(--mint-500); background: var(--mint-50); }
+.meja-card--belum { border-top-color: var(--warn); background: var(--warn-bg); }
+.meja-card--terisi { border-top-color: var(--mint-500); background: var(--mint-50); }
+.meja-card--bill { border-top-color: var(--info); background: var(--info-bg); }
+.meja-card.is-selected { outline: 2px solid var(--mint-600); outline-offset: 1px; }
+
+.meja-card__qr {
+  position: absolute; top: 6px; right: 6px;
+  width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center;
+  color: var(--text-3); opacity: 0.8; border-radius: var(--radius-xs);
+}
+.meja-card__qr svg { width: 18px; height: 18px; }
+.meja-card__qr:hover { opacity: 1; color: var(--mint-700); background: var(--surface); }
+.meja-card__no { font-family: var(--font-display); font-weight: 800; font-size: var(--text-lg); color: var(--ink); }
+.meja-card__timer { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--text-2); }
+.meja-card__pax { font-size: var(--text-xs); color: var(--text-2); }
+.meja-card__total { font-family: var(--font-display); font-weight: 800; font-size: var(--text-md); color: var(--mint-800); margin-top: 2px; }
+.meja-card__empty { font-size: var(--text-sm); color: var(--text-3); margin-top: auto; }
+.meja-card__grp { font-size: var(--text-xs); color: var(--info); }
+
+.meja-legend {
+  display: flex; gap: var(--sp-4); flex-wrap: wrap;
+  margin-top: var(--sp-6); color: var(--text-2); font-size: var(--text-sm);
+}
+.meja-legend span { display: inline-flex; align-items: center; }
+.meja-dot { display: inline-block; width: 11px; height: 11px; border-radius: 2px; margin-right: 6px; }
+.meja-dot--kosong { background: var(--surface-2); border: 1px dashed var(--line-strong); }
+.meja-dot--belum { background: var(--warn); }
+.meja-dot--terisi { background: var(--mint-500); }
+.meja-dot--bill { background: var(--info); }
+
+/* ---------------- BON (order per meja) ---------------- */
+.bill { display: flex; height: 100%; overflow: hidden; }
+
+.bill-catalog {
+  flex: 1; min-width: 0; display: flex; flex-direction: column;
+  padding: var(--sp-5) var(--sp-6); overflow: hidden;
+}
+.bill-catalog__head { display: flex; gap: var(--sp-3); align-items: center; margin-bottom: var(--sp-3); }
+.bill-cari { flex: 1; max-width: 320px; }
+.bill-chips { display: flex; gap: var(--sp-2); flex-wrap: wrap; margin-bottom: var(--sp-3); }
+.bill-chip {
+  padding: 6px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-xs);
+  background: var(--surface); color: var(--text-2); font-size: var(--text-sm); cursor: pointer;
+  transition: all var(--dur-fast) var(--ease);
+}
+.bill-chip:hover { border-color: var(--mint-500); }
+.bill-chip.is-active { background: var(--mint-400); border-color: var(--mint-400); color: #08332c; font-weight: 600; }
+
+.bill-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: var(--sp-3); overflow-y: auto; align-content: start; padding-right: 4px;
+}
+.bill-prod {
+  display: flex; flex-direction: column; justify-content: space-between; gap: 8px; align-items: flex-start;
+  min-height: 66px; padding: var(--sp-3);
+  background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--radius-xs);
+  cursor: pointer; text-align: left; transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+.bill-prod:hover { border-color: var(--mint-500); background: var(--mint-50); }
+.bill-prod:active { background: var(--mint-100); }
+.bill-prod__nama { font-size: var(--text-md); font-weight: 600; color: var(--text); line-height: 1.2; }
+.bill-prod__harga { font-size: var(--text-sm); color: var(--text-2); }
+
+.bill-panel {
+  width: var(--cart-w); flex-shrink: 0;
+  border-left: 1px solid var(--line); background: var(--surface-2);
+  display: flex; flex-direction: column; gap: var(--sp-2);
+  padding: var(--sp-4) var(--sp-5); overflow-y: auto;
+}
+.bill-panel__head {
+  display: flex; justify-content: space-between; align-items: flex-start; gap: var(--sp-3);
+  padding-bottom: var(--sp-3); border-bottom: 1px solid var(--line);
+}
+.bill-panel__meja { font-family: var(--font-display); font-weight: 800; font-size: var(--text-xl); color: var(--ink); }
+.bill-panel__meta { font-size: var(--text-sm); color: var(--text-2); display: flex; gap: 6px; align-items: center; margin-top: 2px; }
+.linklike { background: none; border: none; padding: 0; color: var(--mint-700); cursor: pointer; font: inherit; text-decoration: underline; }
+
+.bill-section__title {
+  font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--text-3); font-weight: 700; margin-top: var(--sp-3);
+}
+.bill-ronde { display: flex; flex-direction: column; gap: 6px; }
+.bill-ronde__empty { color: var(--text-3); font-size: var(--text-sm); padding: var(--sp-2) 0; }
+.bill-line { display: flex; align-items: center; gap: var(--sp-2); }
+.bill-line__nama { flex: 1; font-size: var(--text-md); min-width: 0; }
+.bill-line__ctrl { display: flex; align-items: center; gap: 6px; }
+.bill-line__sub { min-width: 72px; text-align: right; font-weight: 600; }
+
+.step {
+  width: 26px; height: 26px; flex-shrink: 0;
+  border: 1px solid var(--line-strong); border-radius: var(--radius-xs); background: var(--surface);
+  cursor: pointer; font-size: 16px; line-height: 1; color: var(--ink);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.step:hover { border-color: var(--mint-500); background: var(--mint-50); }
+.step--lg { width: 40px; height: 40px; font-size: 20px; }
+
+.bill-terpesan { display: flex; flex-direction: column; gap: 4px; }
+.bill-item { display: flex; gap: var(--sp-2); align-items: baseline; font-size: var(--text-sm); }
+.bill-item__q { color: var(--mint-700); font-weight: 700; min-width: 36px; }
+.bill-item__nama { flex: 1; min-width: 0; }
+.bill-item__sub { color: var(--text-2); }
+
+.bill-total {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-top: var(--sp-3); padding-top: var(--sp-3); border-top: 1px solid var(--line);
+  font-weight: 600; color: var(--text-2);
+}
+.bill-total .num { font-family: var(--font-display); font-size: var(--text-xl); font-weight: 800; color: var(--ink); }
+.bill-actions { display: flex; gap: var(--sp-2); margin-top: var(--sp-2); }
+.bill-actions .btn { flex: 1; }
+/* Aksi destruktif dipisah jarak dari tombol Bayar */
+.bill-batal { margin-top: var(--sp-5); }
+/* Tombol utama nonaktif di panel bon: redup rata, bukan transparan */
+.bill-panel .btn--primary:disabled { background: var(--surface-3); color: var(--text-3); opacity: 1; }
+
+/* Modal pembayaran & sukses */
+.bill-pay__total { margin-bottom: var(--sp-3); color: var(--text-2); }
+.bill-pay__total strong { color: var(--ink); font-family: var(--font-display); }
+.bill-pay__methods { margin-bottom: var(--sp-3); }
+.bill-pay__cash { margin-bottom: var(--sp-2); }
+.bill-pay__saran { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: var(--sp-2); }
+.bill-pay__kembali { font-size: var(--text-md); min-height: 20px; font-weight: 600; }
+.bill-pay__kembali.is-ok { color: var(--success); }
+.bill-pay__kembali.is-kurang { color: var(--danger); }
+
+.bill-sukses { text-align: center; padding: var(--sp-4) var(--sp-2); }
+.bill-sukses__ic {
+  width: 56px; height: 56px; margin: 0 auto var(--sp-3); border-radius: 50%;
+  background: var(--success-bg); color: var(--success);
+  display: flex; align-items: center; justify-content: center;
+}
+.bill-sukses__ic svg { width: 30px; height: 30px; }
+.bill-sukses__t { font-family: var(--font-display); font-size: var(--text-lg); font-weight: 800; color: var(--ink); }
+.bill-sukses__v { font-family: var(--font-display); font-size: var(--text-2xl); font-weight: 800; color: var(--ink); margin: 4px 0; }
+
+.bill-pax-modal { text-align: center; padding: var(--sp-3) var(--sp-2); }
+.bill-pax-modal__ctrl { display: flex; gap: var(--sp-3); align-items: center; justify-content: center; margin-top: var(--sp-3); }
+.bill-pax-modal__in { width: 84px; text-align: center; font-family: var(--font-display); font-size: var(--text-xl); font-weight: 800; }
+
+.bill-prabon-preview { display: flex; justify-content: center; padding: var(--sp-2) 0; }

@@ -1,0 +1,262 @@
+/* ============================================================
+   Layar Laporan (.rpt-) — bar filter, tab, chart kolom satu-hue,
+   tooltip, bar kontribusi inline, KPI. Warna seri: var(--chart-1).
+   ============================================================ */
+
+/* ---------- Bar filter ---------- */
+
+.rpt-filters {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--sp-4);
+}
+
+.rpt-filters__dates,
+.rpt-filters__gudang {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+
+.rpt-filters__group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rpt-filters__label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-3);
+}
+
+.rpt-filters__group .input[type='date'] {
+  width: 154px;
+}
+
+.rpt-filters__group .select {
+  width: 220px;
+}
+
+/* ---------- Tab & isi ---------- */
+
+.rpt-tabs {
+  margin-bottom: var(--sp-5);
+}
+
+.rpt-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+}
+
+.rpt-retry {
+  margin-top: var(--sp-3);
+}
+
+/* ---------- Baris KPI ---------- */
+
+.rpt-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sp-4);
+}
+
+@media (max-width: 960px) {
+  .rpt-kpis {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- Chart kolom (seri tunggal, tanpa legend) ---------- */
+
+.rpt-chart {
+  padding: var(--sp-5);
+}
+
+.rpt-chart__caption {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--text-2);
+  margin-bottom: var(--sp-4);
+}
+
+.rpt-chart__plot {
+  position: relative;
+  height: 220px;
+  /* baseline siku (garis sumbu), bukan bagian dari bar */
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.rpt-chart__gridlines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.rpt-chart__gridlines i {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--chart-grid);
+}
+
+.rpt-chart__gridlines i:nth-child(1) { top: 25%; }
+.rpt-chart__gridlines i:nth-child(2) { top: 50%; }
+.rpt-chart__gridlines i:nth-child(3) { top: 75%; }
+
+/* Label nilai gridline — rata kanan, redup, tidak menghalangi interaksi */
+.rpt-chart__gridvalues {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.rpt-chart__gridvalues span {
+  position: absolute;
+  right: 0;
+  transform: translateY(calc(-100% - 2px));
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.rpt-chart__gridvalues span:nth-child(1) { top: 25%; }
+.rpt-chart__gridvalues span:nth-child(2) { top: 50%; }
+.rpt-chart__gridvalues span:nth-child(3) { top: 75%; }
+
+.rpt-chart__cells {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: 4px; /* jarak antar bar minimal 2px */
+  height: 100%;
+}
+
+.rpt-chart__cell {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  border-radius: 4px 4px 0 0;
+  transition: background var(--dur-fast) var(--ease);
+}
+
+.rpt-chart__cell:hover,
+.rpt-chart__cell:focus-visible {
+  background: var(--chart-1-soft); /* track kolom saat disorot */
+  outline: none;
+}
+
+.rpt-chart__bar {
+  width: 100%;
+  max-width: 24px; /* tebal maksimum bar */
+  background: var(--chart-1);
+  border-radius: 4px 4px 0 0; /* ujung-data membulat, sisi baseline siku */
+}
+
+.rpt-chart__cell:hover .rpt-chart__bar,
+.rpt-chart__cell:focus-visible .rpt-chart__bar {
+  filter: brightness(0.92);
+}
+
+/* Label nilai selektif (hanya puncak) — token teks, bukan warna seri */
+.rpt-chart__peak {
+  flex-shrink: 0;
+  width: max-content;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-2);
+  margin-bottom: 4px;
+}
+
+.rpt-chart__axis {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.rpt-chart__axis span {
+  flex: 1 1 0;
+  min-width: 0;
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+/* ---------- Tooltip chart ---------- */
+
+.rpt-tooltip {
+  position: absolute;
+  z-index: 5;
+  transform: translate(-50%, calc(-100% - 8px));
+  background: var(--ink);
+  color: var(--text-invert);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.rpt-tooltip[hidden] {
+  display: none;
+}
+
+.rpt-tooltip__date {
+  font-size: 11px;
+  color: var(--sidebar-text);
+  margin-bottom: 2px;
+}
+
+.rpt-tooltip__value {
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+/* ---------- Bar kontribusi inline (tab Per Produk) ---------- */
+
+.rpt-td-contrib {
+  width: 28%;
+  min-width: 150px;
+}
+
+.rpt-contrib {
+  width: 100%; /* track penuh */
+  height: 8px;
+  background: var(--chart-1-soft);
+  border-radius: 0 4px 4px 0;
+}
+
+.rpt-contrib__fill {
+  height: 100%;
+  background: var(--chart-1);
+  border-radius: 0 4px 4px 0; /* ujung kanan membulat, kiri (baseline) siku */
+}
+
+/* ---------- Stok ---------- */
+
+.rpt-stok-search {
+  max-width: 360px;
+}
+
+/* ---------- Selisih rekap kasir ---------- */
+
+.rpt-neg {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.rpt-pos {
+  color: var(--success);
+  font-weight: 600;
+}

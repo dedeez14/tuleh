@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# Build output
+dist/
+out/
+*.log
+
+# Gateway binary (dibangun dari backend/ Go source)
+frontend/build/backend/
+*.exe
+*.blockmap
+
+# Font hasil unduh postinstall (fetch-fonts.mjs)
+frontend/src/renderer/assets/fonts/*.woff2
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

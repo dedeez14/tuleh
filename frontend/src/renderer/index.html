@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <!-- Renderer tidak boleh bicara ke jaringan sama sekali (connect-src via default-src 'none');
+       semua HTTP dilakukan main process. Gambar produk https diizinkan.
+       'unsafe-inline' HANYA untuk atribut style (bar chart dinamis dll.) — script tetap 'self' ketat. -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; font-src 'self'; base-uri 'none'; form-action 'none'" />
+  <title>Tuléh</title>
+  <link rel="stylesheet" href="./assets/fonts/fonts.css" />
+  <link rel="stylesheet" href="./styles/tokens.css" />
+  <link rel="stylesheet" href="./styles/base.css" />
+  <link rel="stylesheet" href="./styles/components.css" />
+  <link rel="stylesheet" href="./styles/shell.css" />
+  <link rel="stylesheet" href="./styles/login.css" />
+  <link rel="stylesheet" href="./styles/receipt.css" />
+  <link rel="stylesheet" href="./styles/screens/pos.css" />
+  <link rel="stylesheet" href="./styles/screens/history.css" />
+  <link rel="stylesheet" href="./styles/screens/sessions.css" />
+  <link rel="stylesheet" href="./styles/screens/reports.css" />
+  <link rel="stylesheet" href="./styles/screens/settings.css" />
+  <link rel="stylesheet" href="./styles/screens/orders.css" />
+  <link rel="stylesheet" href="./styles/screens/stations.css" />
+  <link rel="stylesheet" href="./styles/screens/products.css" />
+  <link rel="stylesheet" href="./styles/screens/tables.css" />
+  <link rel="stylesheet" href="./styles/screens/peta-meja.css" />
+</head>
+<body>
+  <div id="app"></div>
+  <!-- Area khusus cetak struk — lihat receipt.js & base.css @media print -->
+  <div id="print-root" aria-hidden="true"></div>
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>
