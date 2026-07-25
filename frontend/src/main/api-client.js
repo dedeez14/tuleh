@@ -9,6 +9,7 @@ const MAX_BODY_BYTES = 5 * 1024 * 1024
 let baseUrl = 'https://tatreport.com'
 let gatewayUrl = null // bila di-set, transport lewat gateway lokal (mpos-backend)
 let token = null
+let activeTokoId = null // "toko aktif" utk disambiguasi multi-toko (MOVERA §1.3)
 
 function setBaseUrl(url) {
   baseUrl = url
@@ -25,6 +26,16 @@ function setToken(value) {
 
 function hasToken() {
   return token !== null
+}
+
+/** Set/hapus "toko aktif" — otomatis disisipkan sebagai ?toko_id pada tiap
+ *  permintaan terautentikasi (MOVERA §1.3: cara paling pasti, tanpa rebuild). */
+function setActiveTokoId(id) {
+  activeTokoId = typeof id === 'string' && id.length > 0 ? id : null
+}
+
+function getActiveTokoId() {
+  return activeTokoId
 }
 
 function statusMessage(status) {
@@ -68,6 +79,11 @@ async function readJsonSafe(response) {
  *   gagal  → { ok: false, status, message, errors }
  */
 async function request(method, endpoint, { query, body, auth = true } = {}) {
+  // Sisipkan toko aktif untuk permintaan terautentikasi (MOVERA §1.3),
+  // kecuali pemanggil sudah menentukan toko_id sendiri.
+  if (auth && activeTokoId && !(query && Object.prototype.hasOwnProperty.call(query, 'toko_id'))) {
+    query = { ...(query || {}), toko_id: activeTokoId }
+  }
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
 
@@ -118,4 +134,4 @@ async function request(method, endpoint, { query, body, auth = true } = {}) {
 const get = (endpoint, options) => request('GET', endpoint, options)
 const post = (endpoint, options) => request('POST', endpoint, options)
 
-module.exports = { request, get, post, setBaseUrl, setGateway, setToken, hasToken }
+module.exports = { request, get, post, setBaseUrl, setGateway, setToken, hasToken, setActiveTokoId, getActiveTokoId }

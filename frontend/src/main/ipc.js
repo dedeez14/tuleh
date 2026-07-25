@@ -102,6 +102,7 @@ function registerIpcHandlers(getMainWindow) {
     if (!result.ok && result.status === 401) {
       api.setToken(null)
       authStore.clear()
+      api.setActiveTokoId(null)
       const win = getMainWindow()
       if (win && !win.isDestroyed()) win.webContents.send('auth:expired')
     }
@@ -228,6 +229,7 @@ function registerIpcHandlers(getMainWindow) {
     const result = await api.post('/auth/logout')
     api.setToken(null)
     authStore.clear()
+    api.setActiveTokoId(null)
     return result.ok ? result : { ok: true, status: 200, data: null, meta: null, message: '' }
   })
 
@@ -247,9 +249,15 @@ function registerIpcHandlers(getMainWindow) {
   handle('toko:manifest', ({ id }) =>
     withAuthWatch(api.get(`/tokos/${encodeURIComponent(str(id, { required: true }))}/manifest`)))
 
-  // Konteks toko aktif. Di server MOVERA konteks toko terikat payload/route;
-  // handler ini no-op untuk mode produksi — Mode Demo meng-intersepnya.
-  handle('toko:select', ({ id }) => ({ ok: true, data: { selected: str(id, { required: true }) } }))
+  // Konteks toko aktif (MOVERA §1.3): simpan id terpilih agar api-client
+  // menyisipkannya sebagai ?toko_id di tiap permintaan terautentikasi —
+  // menyingkirkan 409 "Pilih toko aktif" pada perusahaan multi-toko.
+  // Mode Demo meng-intersep channel ini (demo.js) sehingga tak sampai sini.
+  handle('toko:select', ({ id }) => {
+    const tokoId = str(id, { required: true })
+    api.setActiveTokoId(tokoId)
+    return { ok: true, data: { selected: tokoId } }
+  })
 
   // ---------- Stasiun kerja (endpoint server menyusul — Blueprint §13) ----------
 
@@ -422,7 +430,9 @@ function registerIpcHandlers(getMainWindow) {
       body: {
         gudang_id: str(gudangId, { required: true }),
         kas_awal: num(kasAwal, { required: true }),
-        catatan: str(catatan, { max: 500 })
+        catatan: str(catatan, { max: 500 }),
+        // Ikat sesi ke toko aktif (MOVERA §1.3 opsi 2); undefined → dihilangkan JSON
+        toko_id: api.getActiveTokoId() || undefined
       }
     })))
 

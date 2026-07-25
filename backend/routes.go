@@ -25,6 +25,10 @@ var routeTable = []route{
 	{method: "GET", pattern: "/config", cache: 5 * time.Minute},
 	{method: "GET", pattern: "/bidang-usaha", cache: 5 * time.Minute},
 
+	// Langganan & Kontak CS (Sistem Mitra §6.5) — info tenant
+	{method: "GET", pattern: "/langganan/status", cache: 60 * time.Second},
+	{method: "GET", pattern: "/kontak-cs", cache: 5 * time.Minute},
+
 	// Toko POS (multi-vertical MOVERA)
 	{method: "GET", pattern: "/tokos", cache: 5 * time.Minute},
 	{method: "POST", pattern: "/tokos", purge: []string{apiPrefix + "/tokos"}},

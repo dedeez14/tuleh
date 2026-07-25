@@ -653,8 +653,10 @@ async function enterApp(identity) {
     paymentMethods: identity.payment_methods || [],
     demo: !!identity.demo
   })
-  await loadWorkspace()
+  // Toko dulu (menetapkan toko aktif) baru workspace, agar /gudang, /kategori,
+  // /langganan otomatis membawa ?toko_id (MOVERA §1.3).
   await loadTokoAndManifest()
+  await loadWorkspace()
   renderShell()
   await showScreen('home')
 }
@@ -744,8 +746,8 @@ async function boot() {
         session: me.data.sesi_aktif || null,
         sessionId: me.data.sesi_aktif && me.data.sesi_aktif.id ? me.data.sesi_aktif.id : null
       })
-      await loadWorkspace()
       await loadTokoAndManifest()
+      await loadWorkspace()
       renderShell()
       await showScreen('home')
       return
