@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="color-scheme" content="light dark" />
+  <!-- Versi Android (Capacitor): berjalan di WebView tersandbox native. CSP ketat
+       desktop DIHILANGKAN karena akan memblokir jembatan Capacitor & CapacitorHttp
+       (network native). Semua data API tetap di-escape di renderer (anti-XSS). -->
+  <title>Tuléh</title>
+  <link rel="stylesheet" href="./assets/fonts/fonts.css" />
+  <link rel="stylesheet" href="./styles/tokens.css" />
+  <link rel="stylesheet" href="./styles/base.css" />
+  <link rel="stylesheet" href="./styles/components.css" />
+  <link rel="stylesheet" href="./styles/shell.css" />
+  <link rel="stylesheet" href="./styles/login.css" />
+  <link rel="stylesheet" href="./styles/receipt.css" />
+  <link rel="stylesheet" href="./styles/screens/pos.css" />
+  <link rel="stylesheet" href="./styles/screens/history.css" />
+  <link rel="stylesheet" href="./styles/screens/sessions.css" />
+  <link rel="stylesheet" href="./styles/screens/reports.css" />
+  <link rel="stylesheet" href="./styles/screens/settings.css" />
+  <link rel="stylesheet" href="./styles/screens/orders.css" />
+  <link rel="stylesheet" href="./styles/screens/stations.css" />
+  <link rel="stylesheet" href="./styles/screens/products.css" />
+  <link rel="stylesheet" href="./styles/screens/tables.css" />
+  <link rel="stylesheet" href="./styles/screens/peta-meja.css" />
+</head>
+<body>
+  <div id="app"></div>
+  <!-- Area khusus cetak struk — lihat receipt.js & base.css @media print -->
+  <div id="print-root" aria-hidden="true"></div>
+  <!-- Android: sediakan window.iposAPI (skrip klasik) SEBELUM app.js (module, deferred) -->
+  <script src="./js/lib/qrcode-generator.js"></script>
+  <script src="./js/mobile-bridge.js"></script>
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>

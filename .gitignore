@@ -16,6 +16,12 @@ frontend/build/backend/
 # Font hasil unduh postinstall (fetch-fonts.mjs)
 frontend/src/renderer/assets/fonts/*.woff2
 
+# Mobile (Capacitor) — derivatif, dibangun ulang oleh mobile/build-android.ps1
+mobile/node_modules/
+mobile/www/
+mobile/android/
+mobile/.gradle/
+
 # OS / editor
 .DS_Store
 Thumbs.db

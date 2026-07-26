@@ -1,0 +1,9 @@
+{
+  "appId": "com.tuleh.kasir",
+  "appName": "Tuléh",
+  "webDir": "www",
+  "server": { "androidScheme": "https" },
+  "plugins": {
+    "CapacitorHttp": { "enabled": true }
+  }
+}

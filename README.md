@@ -14,6 +14,7 @@ usaha: menu & alur kerja menyesuaikan jenis toko secara otomatis (*manifest-driv
 |---|---|---|
 | [`frontend/`](frontend) | Electron (vanilla ES modules, tanpa framework/bundler) | Aplikasi kasir desktop |
 | [`backend/`](backend) | Go (stdlib murni, tanpa dependency) | Gateway lokal — proxy ke MOVERA API |
+| [`mobile/`](mobile) | Capacitor (Android) | Versi Android — bungkus UI web + jembatan API langsung |
 
 Backend cloud sesungguhnya (Laravel/MOVERA) berada di `tatreport.com` — di luar repo
 ini. `backend/` di sini adalah **gateway lokal** yang menyala otomatis saat aplikasi
