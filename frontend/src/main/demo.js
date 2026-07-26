@@ -25,6 +25,8 @@ const STAGE_LABELS = {
 }
 
 let active = false
+let demoStartedAt = 0                     // waktu mulai demo (ms) untuk reset TTL
+const DEMO_TTL_MS = 24 * 60 * 60 * 1000   // demo di-reset tiap 24 jam (cegah pakai sbg POS gratis)
 let catalogs = {}      // tokoId → { produk: [], kategori: [] } — wajah kasir per toko
 let pelanggan = []
 let sesiList = []      // rekap penuh (+toko_id), terbaru dulu
@@ -435,12 +437,20 @@ function seed() {
 // ---------- Kontrol ----------
 
 function isActive() {
+  // Reset data demo tiap 24 jam agar tak bisa dipakai sebagai POS gratis
+  // permanen (memaksa berlangganan). Dipanggil sebelum tiap handler demo
+  // (desktop: ipc.js handle(); Android: dispatch() jembatan).
+  if (active && demoStartedAt && (Date.now() - demoStartedAt) > DEMO_TTL_MS) {
+    seed()
+    demoStartedAt = Date.now()
+  }
   return active
 }
 
 function start() {
   seed()
   active = true
+  demoStartedAt = Date.now()
   return ok({
     user: USER,
     company: COMPANY,

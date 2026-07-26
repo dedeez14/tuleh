@@ -30,7 +30,16 @@ Android (Capacitor): renderer ──▶ www-src/js/mobile-bridge.js ──(Capac
 - Cloudflare tunnel (tidak relevan di HP).
 - Cetak thermal 80mm Electron → di Android memakai dialog cetak sistem
   (`window.print` → PDF/printer); printer Bluetooth = v2.
-- Mode Demo (belum di-port ke jembatan mobile).
+
+## Yang SUDAH jalan (terverifikasi di emulator Android 15/API 35)
+
+- **Login screen** + seluruh navigasi renderer (jembatan iposAPI aktif).
+- **Mode Demo** — `demo.js`/`demo-data.js` (CommonJS) di-bungkus shim `window.__cjs`
+  + shim `crypto` → berjalan di browser; tombol "Coba Mode Demo" → pilih toko →
+  Beranda dengan data demo (kasir/KDS/meja/laporan) tanpa server.
+- **Ikon & splash** dari logo aplikasi (`frontend/build/icon.png`) via
+  `gen-icons.py` (Pillow) → `assets/` → `@capacitor/assets` (adaptive icon +
+  splash terang/gelap).
 
 ## Prasyarat
 

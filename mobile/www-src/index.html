@@ -4,9 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="color-scheme" content="light dark" />
-  <!-- Versi Android (Capacitor): berjalan di WebView tersandbox native. CSP ketat
-       desktop DIHILANGKAN karena akan memblokir jembatan Capacitor & CapacitorHttp
-       (network native). Semua data API tetap di-escape di renderer (anti-XSS). -->
+  <!-- Versi Android (Capacitor): WebView tersandbox native. CSP ketat desktop
+       DIHILANGKAN (akan memblokir jembatan Capacitor & CapacitorHttp). Data API
+       tetap di-escape di renderer (anti-XSS). -->
   <title>Tuléh</title>
   <link rel="stylesheet" href="./assets/fonts/fonts.css" />
   <link rel="stylesheet" href="./styles/tokens.css" />
@@ -30,7 +30,38 @@
   <div id="app"></div>
   <!-- Area khusus cetak struk — lihat receipt.js & base.css @media print -->
   <div id="print-root" aria-hidden="true"></div>
-  <!-- Android: sediakan window.iposAPI (skrip klasik) SEBELUM app.js (module, deferred) -->
+
+  <!-- Shim CommonJS minimal agar demo.js (Node/CJS) berjalan di browser -->
+  <script>
+    (function () {
+      var reg = {}
+      var cryptoShim = {
+        randomBytes: function (n) {
+          var a = new Uint8Array(n)
+          if (window.crypto && window.crypto.getRandomValues) window.crypto.getRandomValues(a)
+          return { toString: function () { var s = ''; for (var i = 0; i < a.length; i++) s += ('0' + a[i].toString(16)).slice(-2); return s } }
+        }
+      }
+      function req (p) {
+        if (p === 'node:crypto' || p === 'crypto') return cryptoShim
+        if (String(p).indexOf('demo-data') !== -1) return reg['demo-data']
+        return {}
+      }
+      window.__cjs = {
+        define: function (name, factory) {
+          var m = { exports: {} }
+          try { factory(m, m.exports, req); reg[name] = m.exports } catch (e) { console.error('Modul demo "' + name + '" gagal dimuat:', e) }
+        },
+        get: function (n) { return reg[n] }
+      }
+    })()
+  </script>
+  <!-- Mode Demo (opsional; di-wrap __cjs.define saat build) -->
+  <script src="./js/demo-data.js"></script>
+  <script src="./js/demo.js"></script>
+  <script>window.__demo = window.__cjs.get('demo')</script>
+
+  <!-- Jembatan Android: sediakan window.iposAPI (klasik) SEBELUM app.js (module) -->
   <script src="./js/lib/qrcode-generator.js"></script>
   <script src="./js/mobile-bridge.js"></script>
   <script type="module" src="./js/app.js"></script>

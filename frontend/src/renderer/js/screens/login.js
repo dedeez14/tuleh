@@ -181,7 +181,7 @@ export function renderLogin(container, { onSuccess }) {
     btn.textContent = 'Menyiapkan data demo…'
     const result = await api.demo.start()
     if (result.ok && result.data) {
-      toast('Mode Demo aktif — semua data hanya simulasi lokal.', 'info')
+      toast('Mode Demo aktif — data simulasi lokal & direset tiap 24 jam.', 'info')
       onSuccess(result.data)
       return
     }
