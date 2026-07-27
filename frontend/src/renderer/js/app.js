@@ -23,10 +23,13 @@ import { ProductsScreen } from './screens/products.js'
 import { CustomersScreen } from './screens/customers.js'
 import { TablesScreen } from './screens/tables.js'
 import { PetaMejaScreen } from './screens/peta-meja.js'
+import { KeuanganScreen } from './screens/keuangan.js'
+import { PengeluaranScreen } from './screens/pengeluaran.js'
 
 const SCREENS = [
   PosScreen, HistoryScreen, SessionsScreen, ReportsScreen, SettingsScreen,
-  OrdersScreen, StationsScreen, ProductsScreen, CustomersScreen, TablesScreen, PetaMejaScreen
+  OrdersScreen, StationsScreen, ProductsScreen, CustomersScreen, TablesScreen, PetaMejaScreen,
+  KeuanganScreen, PengeluaranScreen
 ]
 const LAST_TOKO_KEY = 'mpos.lastTokoId'
 
@@ -46,19 +49,22 @@ const MODULES = {
   meja: { screen: 'peta-meja', title: 'Meja', iconKey: 'store', desc: 'Buka meja, catat pesanan, dan bayar saat pulang.' },
   stasiun: { screen: 'stations', title: 'Stasiun', iconKey: 'station', desc: 'Atur jumlah & status stasiun kerja di toko ini.' },
   produk: { screen: 'products', title: 'Produk', iconKey: 'box', desc: 'Jelajahi katalog — harga, barcode, dan posisi stok.' },
-  pelanggan: { screen: 'customers', title: 'Pelanggan', iconKey: 'user', desc: 'Cari, lihat, dan tambahkan pelanggan.' }
+  pelanggan: { screen: 'customers', title: 'Pelanggan', iconKey: 'user', desc: 'Cari, lihat, dan tambahkan pelanggan.' },
+  keuangan: { screen: 'keuangan', title: 'Keuangan', iconKey: 'report', desc: 'Omzet, laba, margin, metode bayar, dan tren.' },
+  pengeluaran: { screen: 'pengeluaran', title: 'Pengeluaran', iconKey: 'wallet', desc: 'Catat biaya operasional: sewa, gaji, listrik, bahan.' }
 }
 
 // Modul inti selalu tampil walau manifest tidak menyebutnya (kompatibilitas)
-const CORE_MODULES = ['kasir', 'riwayat', 'sesi', 'laporan', 'pengaturan']
+const CORE_MODULES = ['kasir', 'keuangan', 'riwayat', 'sesi', 'laporan', 'pengeluaran', 'pengaturan']
 // Urutan tampil kartu (manifest memilih modul; urutan konsisten dari sini)
-const MODULE_ORDER = ['kasir', 'dapur', 'antrian', 'proses', 'meja', 'riwayat', 'sesi', 'stasiun', 'laporan', 'produk', 'pelanggan', 'pengaturan']
+const MODULE_ORDER = ['kasir', 'keuangan', 'dapur', 'antrian', 'proses', 'meja', 'riwayat', 'sesi', 'stasiun', 'laporan', 'pengeluaran', 'produk', 'pelanggan', 'pengaturan']
 
 // Peta id modul → token warna aksen (dipakai kartu Beranda; ikut dark via token)
 const MODULE_ACCENT = {
   kasir: 'kasir', dapur: 'dapur', antrian: 'antrian', proses: 'proses',
   meja: 'meja', stasiun: 'stasiun', riwayat: 'riwayat', sesi: 'sesi',
-  laporan: 'laporan', produk: 'produk', pelanggan: 'pelanggan', pengaturan: 'pengaturan'
+  laporan: 'laporan', produk: 'produk', pelanggan: 'pelanggan', pengaturan: 'pengaturan',
+  keuangan: 'laporan', pengeluaran: 'meja'
 }
 
 const appRoot = document.getElementById('app')

@@ -12,7 +12,7 @@
   var API_PREFIX = '/api/pos/v1'
   var TIMEOUT_MS = 15000
   var DEFAULT_BASE = 'https://tatreport.com'
-  var APP_VERSION = '0.4.2'
+  var APP_VERSION = '0.5.0'
 
   var baseUrl = DEFAULT_BASE
   var token = null
@@ -113,17 +113,19 @@
     var qr = window.qrcode(0, 'M'); qr.addData(String(text), 'Byte'); qr.make()
     return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(qr.createSvgTag({ cellSize: 4, margin: 8 }))
   }
-  // Sisip URL+QR lacak ke struk (produksi; domain server /public/track)
-  function enrich (channel, promise) {
+  // Sisip URL+QR lacak ke struk mana pun (data / nota / struk / order). Berlaku
+  // untuk hasil DEMO & PRODUKSI agar QR lacak muncul di struk (spt aplikasi
+  // desktop yang membungkus demo+produksi dengan enrichTracking).
+  function enrich (promise) {
     return promise.then(function (result) {
       if (!result || !result.ok || !result.data) return result
-      var target = channel === 'trx:checkout' ? result.data
-        : channel === 'order:simpanNota' ? result.data.nota
-          : channel === 'bill:bayar' ? result.data.struk : null
-      if (target && target.token_lacak) {
-        target.lacak_url = baseUrl + API_PREFIX + '/public/track/' + target.token_lacak
-        try { var qr = qrSvgDataUri(target.lacak_url); if (qr) target.lacak_qr = qr } catch (e) {}
-      }
+      var d = result.data
+      ;[d, d.nota, d.struk, d.order].forEach(function (t) {
+        if (t && t.token_lacak && !t.lacak_qr) {
+          t.lacak_url = baseUrl + API_PREFIX + '/public/track/' + t.token_lacak
+          try { var qr = qrSvgDataUri(t.lacak_url); if (qr) t.lacak_qr = qr } catch (e) {}
+        }
+      })
       return result
     })
   }
@@ -185,9 +187,9 @@
     order: {
       list: function (p) { return dispatch('order:list', p, function () { return apiGet('/orders', { query: { stage: (p && p.stage) || undefined } }) }) },
       transition: function (p) { return dispatch('order:transition', p, function () { return apiPost('/orders/' + enc(p && p.id) + '/transition', { body: { to: p && p.to } }) }) },
-      konfirmasiBayar: function (p) { return dispatch('order:konfirmasiBayar', p, function () { return enrich('order:konfirmasiBayar', apiPost('/orders/' + enc(p && p.id) + '/transition', { body: { to: 'ANTRIAN', tipe_pembayaran: p && p.tipePembayaran } })) }) },
-      simpanNota: function (p) { p = p || {}; return dispatch('order:simpanNota', p, function () { return enrich('order:simpanNota', apiPost('/orders', { body: { bayar: 'NANTI', items: (p.items || []).map(function (i) { return { id_produk: i.idProduk, harga: i.harga, kuantitas: i.kuantitas } }), id_pelanggan: p.idPelanggan || null, catatan: p.catatan || null } })) }) },
-      lunasi: function (p) { return dispatch('order:lunasi', p, function () { return apiPost('/orders/' + enc(p && p.id) + '/transition', { body: { to: 'SELESAI', tipe_pembayaran: p && p.tipePembayaran } }) }) }
+      konfirmasiBayar: function (p) { return enrich(dispatch('order:konfirmasiBayar', p, function () { return apiPost('/orders/' + enc(p && p.id) + '/transition', { body: { to: 'ANTRIAN', tipe_pembayaran: p && p.tipePembayaran } }) })) },
+      simpanNota: function (p) { p = p || {}; return enrich(dispatch('order:simpanNota', p, function () { return apiPost('/orders', { body: { bayar: 'NANTI', items: (p.items || []).map(function (i) { return { id_produk: i.idProduk, harga: i.harga, kuantitas: i.kuantitas } }), id_pelanggan: p.idPelanggan || null, catatan: p.catatan || null } }) })) },
+      lunasi: function (p) { return enrich(dispatch('order:lunasi', p, function () { return apiPost('/orders/' + enc(p && p.id) + '/transition', { body: { to: 'SELESAI', tipe_pembayaran: p && p.tipePembayaran } }) })) }
     },
     table: { list: function (p) { return dispatch('table:list', p, function () { return apiGet('/tables') }) } },
     bill: {
@@ -197,7 +199,7 @@
       tambahRonde: function (p) { p = p || {}; return dispatch('bill:tambahRonde', p, function () { return apiPost('/bills/' + enc(p.id) + '/rounds', { body: { items: (p.items || []).map(function (i) { return { id_produk: i.idProduk, kuantitas: i.kuantitas, catatan: i.catatan || null } }), catatan: p.catatan || null } }) }) },
       setPax: function (p) { return dispatch('bill:setPax', p, function () { return request('PATCH', '/bills/' + enc(p && p.id), { body: { pax: p && p.pax } }) }) },
       cetak: function (p) { return dispatch('bill:cetak', p, function () { return apiGet('/bills/' + enc(p && p.id) + '/prebill') }) },
-      bayar: function (p) { return dispatch('bill:bayar', p, function () { return enrich('bill:bayar', apiPost('/bills/' + enc(p && p.id) + '/settle', { body: { tipe_pembayaran: p && p.tipePembayaran, dibayar: (p && p.dibayar != null) ? p.dibayar : null } })) }) },
+      bayar: function (p) { return enrich(dispatch('bill:bayar', p, function () { return apiPost('/bills/' + enc(p && p.id) + '/settle', { body: { tipe_pembayaran: p && p.tipePembayaran, dibayar: (p && p.dibayar != null) ? p.dibayar : null } }) })) },
       gabung: function (p) { return dispatch('bill:gabung', p, function () { return apiPost('/bills/' + enc(p && p.idUtama) + '/merge', { body: { bill_id: p && p.idGabung } }) }) },
       batal: function (p) { return dispatch('bill:batal', p, function () { return apiPost('/bills/' + enc(p && p.id) + '/void', { body: {} }) }) }
     },
@@ -232,7 +234,7 @@
       rekap: function (p) { return dispatch('sesi:rekap', p, function () { return apiGet('/sesi/' + enc(p && p.id) + '/rekap') }) }
     },
     trx: {
-      checkout: function (p) { p = p || {}; return dispatch('trx:checkout', p, function () { return enrich('trx:checkout', apiPost('/transaksi/checkout', { body: { items: (p.items || []).map(function (i) { return { id_produk: i.idProduk, harga: i.harga, kuantitas: i.kuantitas, diskon_persen: i.diskonPersen || 0, pajak_persen: i.pajakPersen || 0 } }), tipe_pembayaran: p.tipePembayaran, dibayar: p.dibayar, id_pelanggan: p.idPelanggan || null, catatan: p.catatan || null } })) }) },
+      checkout: function (p) { p = p || {}; return enrich(dispatch('trx:checkout', p, function () { return apiPost('/transaksi/checkout', { body: { items: (p.items || []).map(function (i) { return { id_produk: i.idProduk, harga: i.harga, kuantitas: i.kuantitas, diskon_persen: i.diskonPersen || 0, pajak_persen: i.pajakPersen || 0 } }), tipe_pembayaran: p.tipePembayaran, dibayar: p.dibayar, id_pelanggan: p.idPelanggan || null, catatan: p.catatan || null } }) })) },
       list: function (p) { p = p || {}; return dispatch('trx:list', p, function () { return apiGet('/transaksi', { query: { status: p.status, sesi_id: p.sesiId, tanggal_dari: p.tanggalDari, tanggal_sampai: p.tanggalSampai, dari: p.tanggalDari, sampai: p.tanggalSampai } }) }) },
       detail: function (p) { return dispatch('trx:detail', p, function () { return apiGet('/transaksi/' + enc(p && p.id)) }) },
       batal: function (p) { return dispatch('trx:batal', p, function () { return apiPost('/transaksi/' + enc(p && p.id) + '/batal', { body: {} }) }) }
