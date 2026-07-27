@@ -6,10 +6,10 @@
 import { api, firstError } from '../api.js'
 import { getState } from '../state.js'
 import { toast, icons, loadingHTML } from '../components/ui.js'
-import { esc, fmtIDR, fmtNumber, fmtDate, toISODate, daysAgo } from '../utils/format.js'
+import { esc, fmtIDR, fmtNumber, fmtDate, toISODate, daysAgo, parseAmount } from '../utils/format.js'
 import {
   ringkasPengeluaran, getHppMap, setHpp, seedDemoKeuangan,
-  hitungHPP, labaRugi, labelKategori
+  hitungHPP, labaRugi, labelKategori, getTarget, setTarget, estimasiPajak
 } from '../lib/keuangan-store.js'
 
 const PRESETS = [
@@ -33,6 +33,7 @@ export const KeuanganScreen = {
       produk: [],
       vm: null,
       showHpp: false,
+      tab: 'ringkasan',
       disposed: false
     }
     renderShell(ctx)
@@ -69,6 +70,10 @@ function renderShell(ctx) {
           <button class="btn btn--primary btn--sm" id="keu-apply" type="button">Terapkan</button>
         </div>
       </div>
+      <div class="tabs keu-tabs" role="tablist" aria-label="Bagian keuangan">
+        <button class="tabs__item is-active" type="button" role="tab" aria-selected="true" data-ktab="ringkasan">Ringkasan</button>
+        <button class="tabs__item" type="button" role="tab" aria-selected="false" data-ktab="perencanaan">Kas · Target · Pajak</button>
+      </div>
       <div id="keu-body"></div>
     </div>`
 }
@@ -98,6 +103,12 @@ function bindToolbar(ctx) {
   })
   c.querySelector('#keu-pdf').addEventListener('click', () => exportPDF(ctx))
   c.querySelector('#keu-wa').addEventListener('click', () => bagikanWA(ctx))
+  c.querySelectorAll('[data-ktab]').forEach((btn) => btn.addEventListener('click', () => {
+    if (ctx.tab === btn.dataset.ktab) return
+    ctx.tab = btn.dataset.ktab
+    c.querySelectorAll('[data-ktab]').forEach((b) => { const a = b === btn; b.classList.toggle('is-active', a); b.setAttribute('aria-selected', String(a)) })
+    if (ctx.vm) renderBody(ctx)
+  }))
 }
 
 // ---------- Rentang periode sebelumnya (untuk delta) ----------
@@ -175,6 +186,11 @@ function deltaBadge(pct) {
 }
 
 function renderBody(ctx) {
+  if (ctx.tab === 'perencanaan') renderPerencanaan(ctx)
+  else renderRingkasan(ctx)
+}
+
+function renderRingkasan(ctx) {
   const vm = ctx.vm
   const body = ctx.container.querySelector('#keu-body')
   body.innerHTML = `
@@ -213,6 +229,81 @@ function renderBody(ctx) {
     ${hppCardHTML(ctx)}`
 
   bindBody(ctx)
+}
+
+// ---------- Tab Perencanaan: Arus Kas · Target · Pajak · BEP ----------
+
+function periodeHari(dari, sampai) {
+  const d0 = new Date(dari + 'T00:00:00'); const d1 = new Date(sampai + 'T00:00:00')
+  return Math.max(1, Math.round((d1 - d0) / 86400000) + 1)
+}
+
+function renderPerencanaan(ctx) {
+  const vm = ctx.vm
+  const body = ctx.container.querySelector('#keu-body')
+  const hari = periodeHari(vm.dari, vm.sampai)
+  const rataHarian = Math.round(vm.omzet / hari)
+  const target = getTarget(ctx.tokoId)
+  const progress = target.harian > 0 ? Math.round((rataHarian / target.harian) * 1000) / 10 : 0
+  const pajak = estimasiPajak(vm.omzet)
+  const bep = vm.pnl.marginKotor > 0 ? Math.round(vm.pnl.biaya / (vm.pnl.marginKotor / 100)) : 0
+  const kasTunai = (vm.metode.items.find((x) => x.tipe === 'Tunai') || {}).total || 0
+  const kasNonTunai = vm.metode.items.filter((x) => x.tipe !== 'Tunai').reduce((s, x) => s + x.total, 0)
+  const arusTunai = kasTunai - vm.pnl.biaya
+
+  body.innerHTML = `
+    <div class="card keu-pnl">
+      <div class="card__header"><div class="card__title">Arus Kas Tunai (${esc(fmtDate(vm.dari))} – ${esc(fmtDate(vm.sampai))})</div></div>
+      <div class="card__body">
+        ${pnlRow('Kas masuk (tunai)', kasTunai)}
+        ${pnlRow('Masuk ke rekening (transfer/QRIS)', kasNonTunai, { sub: true })}
+        ${pnlRow('Kas keluar (pengeluaran)', vm.pnl.biaya, { minus: true, sub: true })}
+        ${pnlRow('Arus kas tunai bersih', arusTunai, { total: true })}
+      </div>
+    </div>
+
+    <div class="keu-grid2">
+      <div class="card"><div class="card__header"><div class="card__title">Target Penjualan</div></div>
+        <div class="card__body">
+          <div class="field"><label class="field__label" for="keu-target">Target omzet / hari</label>
+            <input type="text" inputmode="numeric" class="input" id="keu-target" value="${target.harian || ''}" placeholder="mis. 500rb" autocomplete="off" /></div>
+          ${target.harian > 0 ? `
+            <div class="keu-bar" style="margin-top:12px">
+              <div class="keu-bar__top"><span>Rata-rata aktual ${fmtIDR(rataHarian)}</span><span class="num">${fmtNumber(progress)}%</span></div>
+              <div class="keu-bar__track"><div class="keu-bar__fill keu-bar__fill--${progress >= 100 ? 'mint' : 'warn'}" style="width:${Math.min(progress, 100).toFixed(1)}%"></div></div>
+            </div>
+            <p class="field__hint">${progress >= 100 ? '🎉 Target tercapai!' : `Kurang ${fmtIDR(Math.max(target.harian - rataHarian, 0))}/hari lagi.`}</p>`
+    : '<p class="field__hint">Isi target harian untuk melihat progres vs rata-rata penjualan.</p>'}
+        </div>
+      </div>
+
+      <div class="card"><div class="card__header"><div class="card__title">Titik Impas (BEP)</div></div>
+        <div class="card__body">
+          ${bep > 0 ? `
+            <div class="stat-tile__label">Omzet impas / periode</div>
+            <div class="stat-tile__value num" style="font-size:var(--text-2xl)">${fmtIDR(bep)}</div>
+            <p class="field__hint">${vm.omzet >= bep ? `✅ Omzet ${fmtIDR(vm.omzet)} sudah di atas titik impas.` : `Perlu ${fmtIDR(bep - vm.omzet)} lagi untuk impas.`} = biaya ${fmtIDR(vm.pnl.biaya)} ÷ margin kotor ${fmtNumber(vm.pnl.marginKotor)}%.</p>`
+    : '<p class="field__hint">Isi harga modal (HPP) & pengeluaran agar titik impas terhitung.</p>'}
+        </div>
+      </div>
+    </div>
+
+    <div class="card"><div class="card__header"><div class="card__title">Estimasi Pajak UMKM (PPh Final 0,5%)</div></div>
+      <div class="card__body">
+        <div class="stat-tile stat-tile--accent" style="margin-bottom:8px">
+          <div class="stat-tile__label">Estimasi pajak periode ini</div>
+          <div class="stat-tile__value num">${fmtIDR(pajak.estimasi)}</div>
+          <div class="stat-tile__sub">0,5% × omzet ${fmtIDR(vm.omzet)}</div>
+        </div>
+        <p class="field__hint">PP 55/2022: omzet <strong>Rp500 juta pertama per tahun bebas pajak</strong> (usaha orang pribadi) — bila omzet setahun di bawah itu, pajak Rp0. Skema 0,5% berlaku sampai omzet Rp4,8 miliar/tahun. Ini estimasi, bukan perhitungan pajak resmi.</p>
+      </div>
+    </div>`
+
+  const t = body.querySelector('#keu-target')
+  if (t) t.addEventListener('change', () => {
+    setTarget(ctx.tokoId, { harian: parseAmount(t.value) })
+    renderPerencanaan(ctx)
+  })
 }
 
 function pnlRow(label, value, opts = {}) {

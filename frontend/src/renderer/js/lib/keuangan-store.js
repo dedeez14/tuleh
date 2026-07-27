@@ -63,6 +63,26 @@ export function ringkasPengeluaran(tokoId, range) {
   return { total: Math.round(total), perKategori, rows }
 }
 
+// ---------- Target penjualan (per toko) ----------
+
+const keyTarget = (tokoId) => `tuleh.target.${tokoId || 'default'}`
+export function getTarget(tokoId) { return read(keyTarget(tokoId), { harian: 0 }) }
+export function setTarget(tokoId, { harian }) {
+  write(keyTarget(tokoId), { harian: Math.max(0, Math.round(Number(harian) || 0)) })
+  return getTarget(tokoId)
+}
+
+// ---------- Pajak UMKM PPh Final 0,5% (PP 55/2022) ----------
+
+export const PAJAK_UMKM_PERSEN = 0.5
+export const BATAS_BEBAS_PAJAK_TAHUN = 500000000    // Rp500 jt/tahun pertama bebas (WP OP)
+export const BATAS_FINAL_TAHUN = 4800000000          // di atas Rp4,8 M/tahun keluar dari skema 0,5%
+
+/** Estimasi pajak periode (0,5% × omzet). Pengecualian tahunan diinfokan di UI. */
+export function estimasiPajak(omzetPeriode) {
+  return { persen: PAJAK_UMKM_PERSEN, estimasi: Math.round((Number(omzetPeriode) || 0) * PAJAK_UMKM_PERSEN / 100) }
+}
+
 // ---------- HPP / harga modal (map produkId → modal) ----------
 
 export function getHppMap(tokoId) { return read(keyHpp(tokoId), {}) }
