@@ -19,14 +19,21 @@ test('state kosong → aman, notif "sesi belum dibuka", tanpa notif langganan', 
   assert.ok(!notifs.some((n) => n.id === 'langganan'))
 })
 
-test('stok menipis muncul dan dibatasi maksimum (<= 4)', () => {
-  const produk = Array.from({ length: 10 }, (_, i) => ({
-    id: `P${i}`, nama: `Produk ${i}`, kelola_stok: true, stok: 1
+test('stok menipis/habis dari stokAlerts, dibatasi maksimum (<= 4)', () => {
+  const stokAlerts = Array.from({ length: 10 }, (_, i) => ({
+    id: `P${i}`, produk: `Produk ${i}`, stok: 1, min: 5, status: 'menipis'
   }))
-  const notifs = N.hitungNotifikasi({ produk })
+  const notifs = N.hitungNotifikasi({ stokAlerts })
   const stok = notifs.filter((n) => n.id.startsWith('stok-'))
   assert.ok(stok.length > 0)
   assert.ok(stok.length <= 4)
+})
+
+test('stok habis → notif berwarna danger', () => {
+  const notifs = N.hitungNotifikasi({ stokAlerts: [{ id: 'X', produk: 'Bakso', stok: 0, min: 5, status: 'habis' }] })
+  const s = notifs.find((n) => n.id.startsWith('stok-'))
+  assert.ok(s)
+  assert.equal(s.warna, 'danger')
 })
 
 test('sesi aktif → notif "sesi aktif", bukan "sesi tutup"', () => {

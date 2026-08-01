@@ -335,3 +335,8 @@
 .keu-print__t td:last-child { text-align: right; }
 .keu-print__tot td { font-weight: 800; border-bottom: 2px solid #000; }
 .keu-print__foot { margin-top: 12px; font-size: 11px; color: #666; }
+
+/* Stok */
+.stk-toolbar { display: flex; flex-wrap: wrap; gap: var(--sp-3); align-items: center; justify-content: space-between; margin-bottom: var(--sp-3); }
+.stk-search { max-width: 260px; flex: 1 1 180px; }
+.stk-min { width: 72px; max-width: 72px; }

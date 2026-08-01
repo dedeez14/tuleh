@@ -25,11 +25,13 @@ import { TablesScreen } from './screens/tables.js'
 import { PetaMejaScreen } from './screens/peta-meja.js'
 import { KeuanganScreen } from './screens/keuangan.js'
 import { PengeluaranScreen } from './screens/pengeluaran.js'
+import { StokScreen } from './screens/stok.js'
+import { analisisStok } from './lib/stok-store.js'
 
 const SCREENS = [
   PosScreen, HistoryScreen, SessionsScreen, ReportsScreen, SettingsScreen,
   OrdersScreen, StationsScreen, ProductsScreen, CustomersScreen, TablesScreen, PetaMejaScreen,
-  KeuanganScreen, PengeluaranScreen
+  KeuanganScreen, PengeluaranScreen, StokScreen
 ]
 const LAST_TOKO_KEY = 'mpos.lastTokoId'
 
@@ -51,20 +53,21 @@ const MODULES = {
   produk: { screen: 'products', title: 'Produk', iconKey: 'box', desc: 'Jelajahi katalog — harga, barcode, dan posisi stok.' },
   pelanggan: { screen: 'customers', title: 'Pelanggan', iconKey: 'user', desc: 'Cari, lihat, dan tambahkan pelanggan.' },
   keuangan: { screen: 'keuangan', title: 'Keuangan', iconKey: 'report', desc: 'Omzet, laba, margin, metode bayar, dan tren.' },
-  pengeluaran: { screen: 'pengeluaran', title: 'Pengeluaran', iconKey: 'wallet', desc: 'Catat biaya operasional: sewa, gaji, listrik, bahan.' }
+  pengeluaran: { screen: 'pengeluaran', title: 'Pengeluaran', iconKey: 'wallet', desc: 'Catat biaya operasional: sewa, gaji, listrik, bahan.' },
+  stok: { screen: 'stok', title: 'Stok', iconKey: 'box', desc: 'Pantau stok menipis, atur batas minimum, & saran restok.' }
 }
 
 // Modul inti selalu tampil walau manifest tidak menyebutnya (kompatibilitas)
-const CORE_MODULES = ['kasir', 'keuangan', 'riwayat', 'sesi', 'laporan', 'pengeluaran', 'pengaturan']
+const CORE_MODULES = ['kasir', 'keuangan', 'riwayat', 'sesi', 'laporan', 'pengeluaran', 'stok', 'pengaturan']
 // Urutan tampil kartu (manifest memilih modul; urutan konsisten dari sini)
-const MODULE_ORDER = ['kasir', 'keuangan', 'dapur', 'antrian', 'proses', 'meja', 'riwayat', 'sesi', 'stasiun', 'laporan', 'pengeluaran', 'produk', 'pelanggan', 'pengaturan']
+const MODULE_ORDER = ['kasir', 'keuangan', 'dapur', 'antrian', 'proses', 'meja', 'riwayat', 'sesi', 'stasiun', 'laporan', 'pengeluaran', 'produk', 'stok', 'pelanggan', 'pengaturan']
 
 // Peta id modul → token warna aksen (dipakai kartu Beranda; ikut dark via token)
 const MODULE_ACCENT = {
   kasir: 'kasir', dapur: 'dapur', antrian: 'antrian', proses: 'proses',
   meja: 'meja', stasiun: 'stasiun', riwayat: 'riwayat', sesi: 'sesi',
   laporan: 'laporan', produk: 'produk', pelanggan: 'pelanggan', pengaturan: 'pengaturan',
-  keuangan: 'laporan', pengeluaran: 'meja'
+  keuangan: 'laporan', pengeluaran: 'meja', stok: 'dapur'
 }
 
 const appRoot = document.getElementById('app')
@@ -230,12 +233,13 @@ async function switchToko() {
 // ---------- Muat data kerja setelah autentikasi ----------
 
 async function loadWorkspace() {
-  const [config, sesi, gudang, kategori, langganan] = await Promise.all([
+  const [config, sesi, gudang, kategori, langganan, stok] = await Promise.all([
     api.config.get(),
     api.sesi.aktif(),
     api.master.gudang(),
     api.master.kategori(),
-    api.langganan.status()
+    api.langganan.status(),
+    api.laporan.stok({})
   ])
 
   const patch = {}
@@ -260,6 +264,9 @@ async function loadWorkspace() {
   }
   if (kategori.ok) patch.kategori = kategori.data || []
   patch.langganan = langganan.ok ? (langganan.data || null) : null
+  if (stok.ok && Array.isArray(stok.data)) {
+    patch.stokAlerts = analisisStok(stok.data, getState().toko?.id).alerts
+  }
   setState(patch)
 }
 
@@ -448,7 +455,7 @@ function renderShell() {
     if ('session' in patch) syncSession()
     if ('online' in patch) syncConn()
     // Perubahan sesi/produk/orders/langganan dapat mengubah jumlah notifikasi
-    if ('session' in patch || 'produk' in patch || 'orders' in patch || 'langganan' in patch) {
+    if ('session' in patch || 'produk' in patch || 'orders' in patch || 'langganan' in patch || 'stokAlerts' in patch) {
       notifDismissed = false
       syncNotifDot()
     }

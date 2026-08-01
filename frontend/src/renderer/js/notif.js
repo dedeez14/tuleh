@@ -6,7 +6,6 @@ import { icons } from './components/ui.js'
 import { esc } from './utils/format.js'
 import { ringkasLangganan } from './langganan.js'
 
-const BATAS_STOK_MENIPIS = 5
 const MAKS_ITEM_STOK = 4
 
 /**
@@ -17,17 +16,17 @@ const MAKS_ITEM_STOK = 4
 export function hitungNotifikasi(state = {}) {
   const notifs = []
 
-  // Stok menipis — dari produk ber-kelola-stok (bila daftar tersedia di state)
-  const produk = Array.isArray(state.produk) ? state.produk : []
-  const menipis = produk.filter((p) => p && p.kelola_stok && Number(p.stok) <= BATAS_STOK_MENIPIS)
-  for (const p of menipis.slice(0, MAKS_ITEM_STOK)) {
+  // Stok menipis/habis — dari state.stokAlerts (dihitung di loadWorkspace / layar Stok)
+  const alerts = Array.isArray(state.stokAlerts) ? state.stokAlerts : []
+  for (const a of alerts.slice(0, MAKS_ITEM_STOK)) {
+    const habis = a.status === 'habis'
     notifs.push({
-      id: `stok-${p.id}`,
+      id: `stok-${a.id}`,
       ikon: 'box',
-      warna: 'warn',
-      judul: 'Stok menipis',
-      detail: `${p.nama || 'Produk'} tersisa ${Number(p.stok) || 0}`,
-      waktu: 'Hari ini'
+      warna: habis ? 'danger' : 'warn',
+      judul: habis ? 'Stok habis' : 'Stok menipis',
+      detail: `${a.produk || 'Produk'} tersisa ${Number(a.stok) || 0}${habis ? '' : ` (min ${a.min})`}`,
+      waktu: 'Perlu restok'
     })
   }
 

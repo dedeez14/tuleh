@@ -15,6 +15,7 @@ const state = {
   session: null,       // SesiRekap aktif atau null
   sessionId: null,     // id sesi aktif (dari /sesi/aktif — bila API sertakan id)
   langganan: null,     // status langganan tenant {status, sisa_hari, ...} (Sistem Mitra §6.5)
+  stokAlerts: [],      // produk stok menipis/habis [{id,produk,stok,min,status}] utk lonceng
   gudang: [],          // [{id, kode, nama}]
   gudangError: null,   // pesan error bila GET /gudang gagal (mis. 500 — known issue server)
   kategori: [],
