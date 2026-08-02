@@ -60,6 +60,48 @@ function pickServerTime(data) {
   return formatted === '—' ? String(raw) : formatted
 }
 
+// Hak Akses (§4.4) — peran pemohon (dari pos_role); kelola user tetap di ERP.
+function hakAksesCardHTML() {
+  const { user, posRole } = getState()
+  const label = { OWNER: 'Owner', MANAGER: 'Manager', KASIR: 'Kasir' }[posRole] || (posRole || '—')
+  const warna = posRole === 'OWNER' ? 'mint' : (posRole === 'MANAGER' ? 'info' : 'neutral')
+  return `
+    <section class="card">
+      <div class="card__header"><h2 class="card__title">Hak Akses</h2></div>
+      <div class="card__body">
+        <div class="set-def">
+          ${defRow('Pengguna', `<span>${esc(user?.name || '—')}</span>`)}
+          ${defRow('Peran (pos_role)', `<span class="badge badge--${warna}">${esc(label)}</span>`)}
+        </div>
+        <div class="field__hint">Peran menentukan menu yang tampil. Tambah/ubah pengguna &amp; peran dilakukan di tatreport.com (ERP).</div>
+      </div>
+    </section>`
+}
+
+// Kartu fitur premium (§4.4) — dari manifest.premium_features. enabled:false →
+// "Segera Hadir" + Hubungi CS. Menyala kelak hanya lewat perubahan flag server.
+function premiumCardHTML() {
+  const feats = getState().manifest?.premiumFeatures || []
+  if (!feats.length) return ''
+  return `
+    <section class="card set-premium">
+      <div class="card__header"><h2 class="card__title">Fitur Premium</h2></div>
+      <div class="card__body">
+        <div class="set-premium__grid">
+          ${feats.map((f) => `
+            <div class="set-premium__item${f.enabled ? ' is-on' : ''}">
+              <div class="set-premium__head">
+                <span class="set-premium__name">${esc(f.label || '')}</span>
+                ${f.enabled ? '<span class="badge badge--success">Aktif</span>' : '<span class="badge badge--warn">Segera Hadir</span>'}
+              </div>
+              <p class="set-premium__desc">${esc(f.deskripsi || '')}</p>
+              ${f.enabled ? '' : '<button type="button" class="btn btn--outline btn--sm" data-cs-contact>Hubungi CS</button>'}
+            </div>`).join('')}
+        </div>
+      </div>
+    </section>`
+}
+
 export const SettingsScreen = {
   id: 'settings',
   title: 'Pengaturan',
@@ -99,6 +141,10 @@ export const SettingsScreen = {
 
           ${accountCardHTML()}
 
+          ${hakAksesCardHTML()}
+
+          ${premiumCardHTML()}
+
           <section class="card">
             <div class="card__header"><h2 class="card__title">Aplikasi</h2></div>
             <div class="card__body">
@@ -136,6 +182,13 @@ export const SettingsScreen = {
     const btnPing = container.querySelector('#set-ping')
     const btnTunnel = container.querySelector('#set-tunnel-btn')
     let tunnelAktif = false
+
+    // Fitur premium (Segera Hadir) → Hubungi CS via /kontak-cs
+    container.querySelectorAll('[data-cs-contact]').forEach((b) => b.addEventListener('click', async () => {
+      const r = await api.cs.kontak()
+      if (r.ok && r.data && r.data.wa_link) window.open(r.data.wa_link, '_blank')
+      else toast(firstError(r) || 'Kontak CS belum tersedia.', 'error')
+    }))
 
     function syncTunnelUI(tr) {
       tunnelAktif = !!(tr && tr.publicUrl)
