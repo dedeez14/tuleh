@@ -67,18 +67,32 @@ var routeTable = []route{
 	{method: "GET", pattern: "/auth/me"},
 	{method: "POST", pattern: "/auth/logout", purge: []string{""}}, // "" = semua cache token ini
 
-	// Produk & master
+	// Produk & master (+ CRUD manajemen — O/M; mutasi menyegarkan katalog & laporan stok)
 	{method: "GET", pattern: "/produk", cache: 15 * time.Second},
+	{method: "POST", pattern: "/produk", purge: []string{apiPrefix + "/produk", apiPrefix + "/laporan"}},
 	{method: "GET", pattern: "/produk/barcode/{barcode}", cache: 15 * time.Second},
 	{method: "GET", pattern: "/produk/{id}", cache: 15 * time.Second},
+	{method: "PATCH", pattern: "/produk/{id}", purge: []string{apiPrefix + "/produk", apiPrefix + "/laporan"}},
+	{method: "DELETE", pattern: "/produk/{id}", purge: []string{apiPrefix + "/produk", apiPrefix + "/laporan"}},
 	{method: "GET", pattern: "/kategori", cache: 5 * time.Minute},
 	{method: "GET", pattern: "/gudang", cache: 5 * time.Minute},
 	{method: "GET", pattern: "/satuan", cache: 5 * time.Minute},
 
-	// Pelanggan
+	// Pelanggan (+ quick add — semua peran; kebutuhan operasional kasir)
 	{method: "GET", pattern: "/pelanggan", cache: 15 * time.Second},
 	{method: "POST", pattern: "/pelanggan", purge: []string{apiPrefix + "/pelanggan"}},
+	{method: "POST", pattern: "/pelanggan/quick", purge: []string{apiPrefix + "/pelanggan"}},
 	{method: "GET", pattern: "/pelanggan/{id}", cache: time.Minute},
+
+	// Inventory (kelola stok — O/M). Mutasi menyegarkan katalog & laporan.
+	{method: "POST", pattern: "/inventory/stok-masuk", purge: []string{apiPrefix + "/produk", apiPrefix + "/laporan"}},
+	{method: "POST", pattern: "/inventory/opname", purge: []string{apiPrefix + "/produk", apiPrefix + "/laporan"}},
+	{method: "GET", pattern: "/inventory/riwayat"}, // selalu segar (poll realtime ~10 dtk)
+
+	// Pengeluaran (kas keluar — O/M). Mutasi menyegarkan laporan keuangan.
+	{method: "GET", pattern: "/pengeluaran", cache: 15 * time.Second},
+	{method: "POST", pattern: "/pengeluaran", purge: []string{apiPrefix + "/pengeluaran", apiPrefix + "/laporan"}},
+	{method: "DELETE", pattern: "/pengeluaran/{id}", purge: []string{apiPrefix + "/pengeluaran", apiPrefix + "/laporan"}},
 
 	// Sesi kasir — selalu segar (tanpa cache)
 	{method: "GET", pattern: "/sesi/aktif"},
@@ -95,11 +109,13 @@ var routeTable = []route{
 	{method: "GET", pattern: "/transaksi/{id}/struk"},
 	{method: "POST", pattern: "/transaksi/{id}/batal", purge: []string{apiPrefix + "/produk", apiPrefix + "/laporan"}},
 
-	// Laporan
+	// Laporan (O/M sejak rilis peran — gateway hanya meneruskan; penegakan di server)
 	{method: "GET", pattern: "/laporan/penjualan-harian", cache: 30 * time.Second},
 	{method: "GET", pattern: "/laporan/penjualan-produk", cache: 30 * time.Second},
 	{method: "GET", pattern: "/laporan/stok", cache: 30 * time.Second},
 	{method: "GET", pattern: "/laporan/rekap-kasir", cache: 30 * time.Second},
+	{method: "GET", pattern: "/laporan/keuangan", cache: 30 * time.Second},
+	{method: "GET", pattern: "/laporan/tahapan", cache: 30 * time.Second},
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {
