@@ -83,7 +83,10 @@ contextBridge.exposeInMainWorld('iposAPI', {
   produk: {
     list: invoke('produk:list'),
     byBarcode: invoke('produk:barcode'),
-    detail: invoke('produk:detail')
+    detail: invoke('produk:detail'),
+    create: invoke('produk:create'),
+    update: invoke('produk:update'),
+    remove: invoke('produk:remove')
   },
   master: {
     kategori: invoke('master:kategori'),

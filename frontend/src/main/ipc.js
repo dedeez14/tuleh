@@ -398,6 +398,34 @@ function registerIpcHandlers(getMainWindow) {
       query: { gudang_id: str(gudangId) }
     })))
 
+  // Produk CRUD (manajemen — O/M; server menolak KASIR dgn 403)
+  handle('produk:create', ({ nama, tipe, hargaBeli, hargaJual, barcode, kelolaStok }) =>
+    withAuthWatch(api.post('/produk', {
+      body: {
+        nama: str(nama, { required: true, max: 190 }),
+        tipe: str(tipe, { max: 10 }) || 'PRODUK',
+        harga_beli: num(hargaBeli),
+        harga_jual: num(hargaJual, { required: true }),
+        barcode: str(barcode, { max: 60 }),
+        kelola_stok: kelolaStok === undefined ? undefined : !!kelolaStok
+      }
+    })))
+
+  // PATCH kirim HANYA field yang berubah (renderer mengisi yang berubah saja)
+  handle('produk:update', ({ id, nama, hargaBeli, hargaJual, barcode, kelolaStok }) =>
+    withAuthWatch(api.request('PATCH', `/produk/${encodeURIComponent(str(id, { required: true }))}`, {
+      body: {
+        nama: str(nama, { max: 190 }),
+        harga_beli: num(hargaBeli),
+        harga_jual: num(hargaJual),
+        barcode: str(barcode, { max: 60 }),
+        kelola_stok: kelolaStok === undefined ? undefined : !!kelolaStok
+      }
+    })))
+
+  handle('produk:remove', ({ id }) =>
+    withAuthWatch(api.request('DELETE', `/produk/${encodeURIComponent(str(id, { required: true }))}`)))
+
   handle('master:kategori', () => withAuthWatch(api.get('/kategori')))
   handle('master:gudang', () => withAuthWatch(api.get('/gudang')))
   handle('master:satuan', () => withAuthWatch(api.get('/satuan')))

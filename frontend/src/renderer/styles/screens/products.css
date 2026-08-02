@@ -106,3 +106,12 @@
 .cst-nama {
   font-weight: 600;
 }
+
+/* Manajemen Produk & Jasa — aksi baris + form tambah/edit */
+.prd-aksi { white-space: nowrap; }
+.prd-aksi .btn { margin-right: 4px; }
+.prd-form { display: flex; flex-direction: column; gap: var(--sp-3); min-width: min(420px, 80vw); }
+.prd-form__row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); }
+@media (max-width: 520px) { .prd-form__row { grid-template-columns: 1fr; } }
+.prd-form__check { display: flex; align-items: center; gap: 8px; font-size: var(--text-sm); color: var(--text-2); cursor: pointer; }
+.prd-form__check input { width: 16px; height: 16px; }

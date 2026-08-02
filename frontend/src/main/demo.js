@@ -1013,7 +1013,10 @@ const handlers = {
     const size = Math.min(Number(perPage) || 50, 100)
     const halaman = Math.max(Number(page) || 1, 1)
     const mulai = (halaman - 1) * size
-    return ok(rows.slice(mulai, mulai + size), {
+    let slice = rows.slice(mulai, mulai + size)
+    // Rahasia dagang: KASIR tak melihat harga beli (cermin server).
+    if (demoRole() === 'KASIR') slice = slice.map((p) => ({ ...p, harga_beli: null }))
+    return ok(slice, {
       current_page: halaman,
       last_page: Math.max(Math.ceil(rows.length / size), 1),
       per_page: size,
@@ -1029,6 +1032,50 @@ const handlers = {
   'produk:detail': ({ id } = {}) => {
     const p = produkAktif().find((x) => x.id === id)
     return p ? ok(p) : err(404, 'Produk tidak ditemukan.')
+  },
+
+  // ---------- Produk CRUD (manajemen — §4.1) ----------
+
+  'produk:create': ({ nama, tipe, hargaBeli, hargaJual, barcode, kelolaStok } = {}) => {
+    if (!nama || !String(nama).trim()) return err(422, 'Nama item wajib diisi.')
+    const t = tipe === 'JASA' ? 'JASA' : 'PRODUK'
+    const jual = Number(hargaJual)
+    if (!Number.isFinite(jual) || jual < 0) return err(422, 'Harga jual tidak valid.')
+    const kelola = t === 'JASA' ? false : (kelolaStok !== false) // JASA otomatis tak berstok
+    counter.prod = (counter.prod || 0) + 1
+    const kat = kategoriToko(activeTokoId)[0]
+    const baru = {
+      id: `NEW-${activeTokoId}-${counter.prod}`,
+      kode: `USR-${String(counter.prod).padStart(3, '0')}`,
+      nama: String(nama).trim(),
+      barcode: barcode ? String(barcode) : null,
+      tipe: t,
+      harga_jual: Math.round(jual),
+      harga_beli: t === 'JASA' ? null : (Number.isFinite(Number(hargaBeli)) ? Math.round(Number(hargaBeli)) : 0),
+      pajak_persen: 0, satuan: 'Pcs', satuan_id: null,
+      kategori: kat ? kat.nama : '-', kelola_stok: kelola, stok: 0, gambar: null
+    }
+    produkAktif().unshift(baru)
+    return ok(baru)
+  },
+
+  'produk:update': ({ id, nama, hargaBeli, hargaJual, barcode, kelolaStok } = {}) => {
+    const p = produkAktif().find((x) => x.id === id)
+    if (!p) return err(404, 'Produk tidak ditemukan.')
+    if (nama !== undefined && String(nama).trim()) p.nama = String(nama).trim()
+    if (hargaJual !== undefined) { const v = Number(hargaJual); if (Number.isFinite(v) && v >= 0) p.harga_jual = Math.round(v) }
+    if (hargaBeli !== undefined && p.tipe !== 'JASA') { const v = Number(hargaBeli); if (Number.isFinite(v) && v >= 0) p.harga_beli = Math.round(v) }
+    if (barcode !== undefined) p.barcode = barcode ? String(barcode) : null
+    if (kelolaStok !== undefined && p.tipe !== 'JASA') p.kelola_stok = !!kelolaStok
+    return ok(p)
+  },
+
+  'produk:remove': ({ id } = {}) => {
+    const arr = produkAktif()
+    const idx = arr.findIndex((x) => x.id === id)
+    if (idx === -1) return err(404, 'Produk tidak ditemukan.')
+    arr.splice(idx, 1) // demo: hapus; server: dinonaktifkan (riwayat tetap utuh)
+    return ok({ id })
   },
 
   'master:kategori': () => ok(kategoriToko(activeTokoId)),

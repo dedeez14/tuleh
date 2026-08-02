@@ -228,10 +228,18 @@ function renderPos(container) {
     }
     if (!append) gridEl.innerHTML = loadingHTML('Memuat produk…')
 
+    // Bidang JASA (salon/laundry/bengkel/konter): katalog kasir ikut sertakan
+    // layanan (?tipe=SEMUA). Retail biarkan default (kontrak §4.1).
+    const st = getState()
+    const bidang = st.toko?.bidang_usaha || {}
+    const sinyalJasa = `${bidang.kategori || ''} ${bidang.archetype || st.manifest?.archetype || ''} ${bidang.code || st.manifest?.verticalCode || ''}`.toLowerCase()
+    const isJasa = /jasa|service|laundry|salon|bengkel|konter|barber|doorsmeer|car.?wash|petshop|cuci/.test(sinyalJasa)
+
     const result = await api.produk.list({
       q: query || undefined,
       kategoriId: kategoriId || undefined,
       gudangId: getState().session?.gudang_id,
+      tipe: isJasa ? 'SEMUA' : undefined,
       perPage: PER_PAGE,
       page
     })

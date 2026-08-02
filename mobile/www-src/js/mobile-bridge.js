@@ -214,7 +214,10 @@
     produk: {
       list: function (p) { p = p || {}; return dispatch('produk:list', p, function () { return apiGet('/produk', { query: { q: p.q, kategori_id: p.kategoriId, gudang_id: p.gudangId, tipe: p.tipe, include_habis: p.includeHabis ? 1 : undefined, per_page: p.perPage || 50, page: p.page || 1 } }) }) },
       byBarcode: function (p) { p = p || {}; return dispatch('produk:barcode', p, function () { return apiGet('/produk/barcode/' + enc(p.barcode), { query: { gudang_id: p.gudangId } }) }) },
-      detail: function (p) { p = p || {}; return dispatch('produk:detail', p, function () { return apiGet('/produk/' + enc(p.id), { query: { gudang_id: p.gudangId } }) }) }
+      detail: function (p) { p = p || {}; return dispatch('produk:detail', p, function () { return apiGet('/produk/' + enc(p.id), { query: { gudang_id: p.gudangId } }) }) },
+      create: function (p) { p = p || {}; return dispatch('produk:create', p, function () { return apiPost('/produk', { body: { nama: p.nama, tipe: p.tipe || 'PRODUK', harga_beli: p.hargaBeli, harga_jual: p.hargaJual, barcode: p.barcode, kelola_stok: p.kelolaStok } }) }) },
+      update: function (p) { p = p || {}; return dispatch('produk:update', p, function () { return request('PATCH', '/produk/' + enc(p.id), { body: { nama: p.nama, harga_beli: p.hargaBeli, harga_jual: p.hargaJual, barcode: p.barcode, kelola_stok: p.kelolaStok } }) }) },
+      remove: function (p) { p = p || {}; return dispatch('produk:remove', p, function () { return request('DELETE', '/produk/' + enc(p.id)) }) }
     },
     master: {
       kategori: function (p) { return dispatch('master:kategori', p, function () { return apiGet('/kategori') }) },
