@@ -12,7 +12,7 @@
   var API_PREFIX = '/api/pos/v1'
   var TIMEOUT_MS = 15000
   var DEFAULT_BASE = 'https://tatreport.com'
-  var APP_VERSION = '0.5.2'
+  var APP_VERSION = '0.6.0'
 
   var baseUrl = DEFAULT_BASE
   var token = null
