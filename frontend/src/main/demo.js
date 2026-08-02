@@ -35,7 +35,8 @@ let orders = []        // pesanan hidup (POS universal), semua toko
 let bills = []         // bon meja hidup (open bill dine-in), semua toko
 let stations = []      // stasiun kerja (kasir/dapur/mesin), semua toko
 let stokRiwayat = []   // riwayat perubahan stok (+toko_id): PENJUALAN/MASUK/OPNAME, terbaru dulu
-let counter = { trx: 0, sesi: 0, cust: 0, order: 0, station: 0, bill: 0, inv: 0 }
+let pengeluaranDemo = [] // pengeluaran/kas keluar (+toko_id): {id, tanggal, keterangan, nominal}
+let counter = { trx: 0, sesi: 0, cust: 0, order: 0, station: 0, bill: 0, inv: 0, exp: 0 }
 let antrianCounter = {}          // per toko: nomor antrian berjalan
 let activeTokoId = 'TOKO-1'      // toko terpilih (di-set renderer via toko:select)
 
@@ -305,7 +306,8 @@ function seed() {
   sesiList = []
   transaksi = []
   stokRiwayat = []
-  counter = { trx: 0, sesi: 0, cust: pelanggan.length, order: 0, station: 0, bill: 0, inv: 0 }
+  pengeluaranDemo = []
+  counter = { trx: 0, sesi: 0, cust: pelanggan.length, order: 0, station: 0, bill: 0, inv: 0, exp: 0 }
 
   // Lengkapi produk demo dgn tipe (PRODUK/JASA) & harga_beli (rahasia dagang, null
   // utk JASA) agar konsisten di kasir, inventory, & manajemen. Laundry = JASA.
@@ -326,6 +328,23 @@ function seed() {
       })
     })
   }
+  // Pengeluaran bulan berjalan (demo) — modest agar laba tetap positif
+  const bulanIni = isoDate(new Date()).slice(0, 7)
+  const contohBiaya = [
+    { keterangan: 'LISTRIK & AIR', nominal: 85000, hariLalu: 1 },
+    { keterangan: 'BELANJA BAHAN', nominal: 60000, hariLalu: 2 },
+    { keterangan: 'KEBERSIHAN', nominal: 40000, hariLalu: 3 }
+  ]
+  for (const toko of TOKOS) {
+    for (const b of contohBiaya) {
+      const t = new Date(); t.setDate(t.getDate() - b.hariLalu)
+      const tgl = isoDate(t)
+      if (tgl.slice(0, 7) !== bulanIni) continue // jaga konsisten dgn laporan bulan ini
+      counter.exp += 1
+      pengeluaranDemo.push({ id: `EXP-${counter.exp}`, toko_id: toko.id, tanggal: tgl, keterangan: b.keterangan, nominal: b.nominal })
+    }
+  }
+
   const rand = mulberry32(20260703)
   const pick = (arr) => arr[Math.floor(rand() * arr.length)]
   const metode = ['TUNAI', 'TUNAI', 'TUNAI', 'QRIS', 'QRIS', 'TRANSFER']
@@ -1089,6 +1108,45 @@ const handlers = {
       current_page: hal, per_page: size, total: rows.length,
       last_page: Math.max(Math.ceil(rows.length / size), 1)
     })
+  },
+
+  // ---------- Pengeluaran & Laporan Keuangan (§4.3) ----------
+
+  'pengeluaran:list': ({ bulan } = {}) => {
+    const bln = bulan || isoDate(new Date()).slice(0, 7)
+    const rows = pengeluaranDemo
+      .filter((e) => e.toko_id === activeTokoId && String(e.tanggal).slice(0, 7) === bln)
+      .sort((a, b) => (a.tanggal < b.tanggal ? 1 : -1))
+    const total = rows.reduce((s, e) => s + (Number(e.nominal) || 0), 0)
+    return ok(rows.map((e) => ({ id: e.id, tanggal: e.tanggal, keterangan: e.keterangan, nominal: e.nominal })),
+      { bulan: bln, total, jumlah: rows.length })
+  },
+
+  'pengeluaran:create': ({ keterangan, nominal, tanggal } = {}) => {
+    const ket = String(keterangan || '').trim()
+    if (!ket) return err(422, 'Keterangan wajib diisi.')
+    const n = Number(nominal)
+    if (!Number.isFinite(n) || n <= 0) return err(422, 'Nominal harus lebih dari 0.')
+    const tgl = tanggal && /^\d{4}-\d{2}-\d{2}$/.test(tanggal) ? tanggal : isoDate(new Date())
+    counter.exp += 1
+    const baru = { id: `EXP-${counter.exp}`, toko_id: activeTokoId, tanggal: tgl, keterangan: ket, nominal: Math.round(n) }
+    pengeluaranDemo.unshift(baru)
+    return ok({ id: baru.id, tanggal: baru.tanggal, keterangan: baru.keterangan, nominal: baru.nominal })
+  },
+
+  'pengeluaran:remove': ({ id } = {}) => {
+    const idx = pengeluaranDemo.findIndex((e) => e.id === id && e.toko_id === activeTokoId)
+    if (idx === -1) return err(404, 'Pengeluaran tidak ditemukan.')
+    pengeluaranDemo.splice(idx, 1)
+    return ok({ id })
+  },
+
+  'laporan:keuangan': ({ bulan } = {}) => {
+    const bln = bulan || isoDate(new Date()).slice(0, 7)
+    const trxBln = transaksi.filter((t) => t.toko_id === activeTokoId && String(t.tanggal).slice(0, 7) === bln && String(t.status).toUpperCase() !== 'DIBATALKAN')
+    const omset = round2(trxBln.reduce((s, t) => s + (Number(t.grand_total) || 0), 0))
+    const pengeluaran = pengeluaranDemo.filter((e) => e.toko_id === activeTokoId && String(e.tanggal).slice(0, 7) === bln).reduce((s, e) => s + (Number(e.nominal) || 0), 0)
+    return ok({ bulan: bln, omset, jumlah_transaksi: trxBln.length, pengeluaran, laba: round2(omset - pengeluaran) })
   },
 
   'sesi:aktif': () => ok(sesiAktif()),

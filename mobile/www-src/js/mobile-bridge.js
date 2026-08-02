@@ -232,6 +232,11 @@
       opname: function (p) { p = p || {}; return dispatch('inventory:opname', p, function () { return apiPost('/inventory/opname', { body: { id_produk: p.idProduk, jumlah: p.jumlah, keterangan: p.keterangan } }) }) },
       riwayat: function (p) { p = p || {}; return dispatch('inventory:riwayat', p, function () { return apiGet('/inventory/riwayat', { query: { page: p.page || 1, per_page: p.perPage || 25 } }) }) }
     },
+    pengeluaran: {
+      list: function (p) { p = p || {}; return dispatch('pengeluaran:list', p, function () { return apiGet('/pengeluaran', { query: { bulan: p.bulan } }) }) },
+      create: function (p) { p = p || {}; return dispatch('pengeluaran:create', p, function () { return apiPost('/pengeluaran', { body: { keterangan: p.keterangan, nominal: p.nominal, tanggal: p.tanggal } }) }) },
+      remove: function (p) { p = p || {}; return dispatch('pengeluaran:remove', p, function () { return request('DELETE', '/pengeluaran/' + enc(p.id)) }) }
+    },
     sesi: {
       aktif: function (p) { return dispatch('sesi:aktif', p, function () { return apiGet('/sesi/aktif') }) },
       list: function (p) { p = p || {}; return dispatch('sesi:list', p, function () { return apiGet('/sesi', { query: { tanggal_dari: p.tanggalDari, tanggal_sampai: p.tanggalSampai } }) }) },
@@ -249,7 +254,8 @@
       penjualanHarian: function (p) { p = p || {}; return dispatch('laporan:penjualanHarian', p, function () { return apiGet('/laporan/penjualan-harian', { query: { tanggal_dari: p.tanggalDari, tanggal_sampai: p.tanggalSampai } }) }) },
       penjualanProduk: function (p) { p = p || {}; return dispatch('laporan:penjualanProduk', p, function () { return apiGet('/laporan/penjualan-produk', { query: { tanggal_dari: p.tanggalDari, tanggal_sampai: p.tanggalSampai } }) }) },
       stok: function (p) { p = p || {}; return dispatch('laporan:stok', p, function () { return apiGet('/laporan/stok', { query: { tanggal_dari: p.tanggalDari, tanggal_sampai: p.tanggalSampai } }) }) },
-      rekapKasir: function (p) { p = p || {}; return dispatch('laporan:rekapKasir', p, function () { return apiGet('/laporan/rekap-kasir', { query: { tanggal_dari: p.tanggalDari, tanggal_sampai: p.tanggalSampai } }) }) }
+      rekapKasir: function (p) { p = p || {}; return dispatch('laporan:rekapKasir', p, function () { return apiGet('/laporan/rekap-kasir', { query: { tanggal_dari: p.tanggalDari, tanggal_sampai: p.tanggalSampai } }) }) },
+      keuangan: function (p) { p = p || {}; return dispatch('laporan:keuangan', p, function () { return apiGet('/laporan/keuangan', { query: { bulan: p.bulan } }) }) }
     }
   }
 })()

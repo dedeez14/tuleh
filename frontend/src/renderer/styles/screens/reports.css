@@ -389,3 +389,8 @@
 
 .inv-jml--in { color: #0f9d58; font-weight: 700; }
 .inv-jml--out { color: #e5533c; font-weight: 700; }
+
+/* Field inline (label + input sebaris) — mis. pemilih bulan di header */
+.field--inline { flex-direction: row; align-items: center; gap: 8px; }
+.field--inline .field__label { margin: 0; white-space: nowrap; }
+.field--inline .input { width: auto; }

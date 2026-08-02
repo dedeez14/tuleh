@@ -453,6 +453,23 @@ function registerIpcHandlers(getMainWindow) {
       query: { page: intBetween(page, 1, 100000, 1), per_page: intBetween(perPage, 1, 100, 25) }
     })))
 
+  // ---------- Pengeluaran (kas keluar — O/M) ----------
+
+  handle('pengeluaran:list', ({ bulan }) =>
+    withAuthWatch(api.get('/pengeluaran', { query: { bulan: str(bulan, { max: 7 }) } })))
+
+  handle('pengeluaran:create', ({ keterangan, nominal, tanggal }) =>
+    withAuthWatch(api.post('/pengeluaran', {
+      body: {
+        keterangan: str(keterangan, { required: true, max: 190 }),
+        nominal: num(nominal, { required: true }),
+        tanggal: str(tanggal, { max: 10 })
+      }
+    })))
+
+  handle('pengeluaran:remove', ({ id }) =>
+    withAuthWatch(api.request('DELETE', `/pengeluaran/${encodeURIComponent(str(id, { required: true }))}`)))
+
   // ---------- Sesi kasir ----------
 
   handle('sesi:aktif', () => withAuthWatch(api.get('/sesi/aktif')))
@@ -547,6 +564,9 @@ function registerIpcHandlers(getMainWindow) {
     withAuthWatch(api.get('/laporan/rekap-kasir', {
       query: { tanggal_dari: str(tanggalDari, { max: 10 }), tanggal_sampai: str(tanggalSampai, { max: 10 }) }
     })))
+
+  handle('laporan:keuangan', ({ bulan }) =>
+    withAuthWatch(api.get('/laporan/keuangan', { query: { bulan: str(bulan, { max: 7 }) } })))
 }
 
 module.exports = { registerIpcHandlers }

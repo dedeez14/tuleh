@@ -101,6 +101,11 @@ contextBridge.exposeInMainWorld('iposAPI', {
     opname: invoke('inventory:opname'),
     riwayat: invoke('inventory:riwayat')
   },
+  pengeluaran: {
+    list: invoke('pengeluaran:list'),
+    create: invoke('pengeluaran:create'),
+    remove: invoke('pengeluaran:remove')
+  },
   sesi: {
     aktif: invoke('sesi:aktif'),
     list: invoke('sesi:list'),
@@ -118,6 +123,7 @@ contextBridge.exposeInMainWorld('iposAPI', {
     penjualanHarian: invoke('laporan:penjualanHarian'),
     penjualanProduk: invoke('laporan:penjualanProduk'),
     stok: invoke('laporan:stok'),
-    rekapKasir: invoke('laporan:rekapKasir')
+    rekapKasir: invoke('laporan:rekapKasir'),
+    keuangan: invoke('laporan:keuangan')
   }
 })
