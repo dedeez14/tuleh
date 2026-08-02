@@ -26,12 +26,13 @@ import { PetaMejaScreen } from './screens/peta-meja.js'
 import { KeuanganScreen } from './screens/keuangan.js'
 import { PengeluaranScreen } from './screens/pengeluaran.js'
 import { StokScreen } from './screens/stok.js'
+import { InventoryScreen } from './screens/inventory.js'
 import { analisisStok } from './lib/stok-store.js'
 
 const SCREENS = [
   PosScreen, HistoryScreen, SessionsScreen, ReportsScreen, SettingsScreen,
   OrdersScreen, StationsScreen, ProductsScreen, CustomersScreen, TablesScreen, PetaMejaScreen,
-  KeuanganScreen, PengeluaranScreen, StokScreen
+  KeuanganScreen, PengeluaranScreen, StokScreen, InventoryScreen
 ]
 const LAST_TOKO_KEY = 'mpos.lastTokoId'
 

@@ -374,12 +374,15 @@ function registerIpcHandlers(getMainWindow) {
 
   // ---------- Produk & master ----------
 
-  handle('produk:list', ({ q, kategoriId, gudangId, perPage, page }) =>
+  handle('produk:list', ({ q, kategoriId, gudangId, tipe, includeHabis, perPage, page }) =>
     withAuthWatch(api.get('/produk', {
       query: {
         q: str(q, { max: 190 }),
         kategori_id: str(kategoriId),
         gudang_id: str(gudangId),
+        // tipe: PRODUK | JASA | SEMUA (layar manajemen & katalog jasa)
+        tipe: str(tipe, { max: 10 }),
+        include_habis: includeHabis ? 1 : undefined,
         per_page: intBetween(perPage, 1, 100, 50),
         page: intBetween(page, 1, 100000, 1)
       }
@@ -415,6 +418,40 @@ function registerIpcHandlers(getMainWindow) {
 
   handle('pelanggan:detail', ({ id }) =>
     withAuthWatch(api.get(`/pelanggan/${encodeURIComponent(str(id, { required: true }))}`)))
+
+  // Quick add customer (nama + no WhatsApp) — semua peran; server normalkan nomor.
+  handle('pelanggan:quick', ({ nama, noWhatsapp }) =>
+    withAuthWatch(api.post('/pelanggan/quick', {
+      body: {
+        nama: str(nama, { required: true, max: 190 }),
+        no_whatsapp: str(noWhatsapp, { max: 30 })
+      }
+    })))
+
+  // ---------- Inventory (kelola stok — layar Inventory O/M) ----------
+
+  handle('inventory:stokMasuk', ({ idProduk, jumlah, keterangan }) =>
+    withAuthWatch(api.post('/inventory/stok-masuk', {
+      body: {
+        id_produk: str(idProduk, { required: true }),
+        jumlah: num(jumlah, { required: true }),
+        keterangan: str(keterangan, { max: 300 })
+      }
+    })))
+
+  handle('inventory:opname', ({ idProduk, jumlah, keterangan }) =>
+    withAuthWatch(api.post('/inventory/opname', {
+      body: {
+        id_produk: str(idProduk, { required: true }),
+        jumlah: num(jumlah, { required: true }),
+        keterangan: str(keterangan, { max: 300 })
+      }
+    })))
+
+  handle('inventory:riwayat', ({ page, perPage }) =>
+    withAuthWatch(api.get('/inventory/riwayat', {
+      query: { page: intBetween(page, 1, 100000, 1), per_page: intBetween(perPage, 1, 100, 25) }
+    })))
 
   // ---------- Sesi kasir ----------
 

@@ -34,7 +34,8 @@ let transaksi = []     // struk penuh (+toko_id) + tanggal ISO, terbaru dulu
 let orders = []        // pesanan hidup (POS universal), semua toko
 let bills = []         // bon meja hidup (open bill dine-in), semua toko
 let stations = []      // stasiun kerja (kasir/dapur/mesin), semua toko
-let counter = { trx: 0, sesi: 0, cust: 0, order: 0, station: 0, bill: 0 }
+let stokRiwayat = []   // riwayat perubahan stok (+toko_id): PENJUALAN/MASUK/OPNAME, terbaru dulu
+let counter = { trx: 0, sesi: 0, cust: 0, order: 0, station: 0, bill: 0, inv: 0 }
 let antrianCounter = {}          // per toko: nomor antrian berjalan
 let activeTokoId = 'TOKO-1'      // toko terpilih (di-set renderer via toko:select)
 
@@ -303,7 +304,28 @@ function seed() {
   pelanggan = PELANGGAN_AWAL.map((c) => ({ ...c }))
   sesiList = []
   transaksi = []
-  counter = { trx: 0, sesi: 0, cust: pelanggan.length, order: 0, station: 0, bill: 0 }
+  stokRiwayat = []
+  counter = { trx: 0, sesi: 0, cust: pelanggan.length, order: 0, station: 0, bill: 0, inv: 0 }
+
+  // Lengkapi produk demo dgn tipe (PRODUK/JASA) & harga_beli (rahasia dagang, null
+  // utk JASA) agar konsisten di kasir, inventory, & manajemen. Laundry = JASA.
+  for (const [tid, cat] of Object.entries(catalogs)) {
+    const jasa = tid === 'TOKO-3'
+    for (const p of cat.produk) {
+      if (p.tipe == null) p.tipe = jasa ? 'JASA' : 'PRODUK'
+      if (p.harga_beli === undefined) p.harga_beli = jasa ? null : Math.round(p.harga_jual * 0.65)
+    }
+    // Beberapa entri MASUK awal agar Riwayat Stok tak kosong (restok beberapa hari lalu)
+    cat.produk.filter((p) => p.kelola_stok).slice(0, 3).forEach((p, i) => {
+      counter.inv += 1
+      const t = new Date(); t.setDate(t.getDate() - (i + 1)); t.setHours(9, 0, 0, 0)
+      stokRiwayat.push({
+        id: `INV-${counter.inv}`, toko_id: tid, item: p.nama, tanggal: t.toISOString(),
+        tipe: 'MASUK', jumlah: 20 + i * 10, stok_sekarang: p.stok,
+        sesi_kasir: null, oleh: USER.name, keterangan: 'Stok awal / restok'
+      })
+    })
+  }
   const rand = mulberry32(20260703)
   const pick = (arr) => arr[Math.floor(rand() * arr.length)]
   const metode = ['TUNAI', 'TUNAI', 'TUNAI', 'QRIS', 'QRIS', 'TRANSFER']
@@ -497,6 +519,34 @@ function demoLangganan() {
     case 'segera': return { ...base, status: 'AKTIF', periode_akhir: '2026-07-27', sisa_hari: 5 }
     default: return { ...base, status: 'AKTIF', periode_akhir: '2026-08-12', sisa_hari: 21 }
   }
+}
+
+// Catat perubahan stok ke riwayat gabungan (§4.2). jumlah bertanda: keluar negatif.
+function catatStok(tokoId, produk, tipe, jumlah, keterangan) {
+  counter.inv += 1
+  const sesi = sesiAktif(tokoId)
+  stokRiwayat.unshift({
+    id: `INV-${counter.inv}`,
+    toko_id: tokoId,
+    item: produk.nama,
+    tanggal: new Date().toISOString(),
+    tipe,
+    jumlah,
+    stok_sekarang: produk.stok,
+    sesi_kasir: sesi ? sesi.nomor : null,
+    oleh: USER.name,
+    keterangan: keterangan || null
+  })
+}
+
+// Normalkan no HP Indonesia → 62… (kontrak §4.2 Card 3: 08…/+62… → 62…).
+function normalizeWa(raw) {
+  let s = String(raw || '').replace(/[^\d+]/g, '')
+  if (s.startsWith('+')) s = s.slice(1)
+  if (s.startsWith('0')) s = '62' + s.slice(1)
+  else if (s.startsWith('8')) s = '62' + s
+  else if (s && !s.startsWith('62')) s = '62' + s
+  return s
 }
 
 // ---------- Handler per channel IPC ----------
@@ -926,8 +976,10 @@ const handlers = {
     modules: { multi_satuan: false }
   }),
 
-  'produk:list': ({ q, kategoriId, perPage = 50, page = 1 } = {}) => {
+  'produk:list': ({ q, kategoriId, tipe, perPage = 50, page = 1 } = {}) => {
     let rows = produkAktif()
+    // tipe: 'PRODUK' | 'JASA' | 'SEMUA' (default: semua — demo tak menyembunyikan jasa)
+    if (tipe && tipe !== 'SEMUA') rows = rows.filter((p) => (p.tipe || 'PRODUK') === tipe)
     if (kategoriId) {
       const kat = kategoriToko(activeTokoId).find((k) => k.id === kategoriId)
       if (kat) rows = rows.filter((p) => p.kategori === kat.nama)
@@ -987,6 +1039,56 @@ const handlers = {
   'pelanggan:detail': ({ id } = {}) => {
     const c = pelanggan.find((x) => x.id === id)
     return c ? ok(c) : err(404, 'Pelanggan tidak ditemukan.')
+  },
+
+  // Quick add customer (§4.2 Card 3) — semua peran; nomor dipakai ulang bila ada.
+  'pelanggan:quick': ({ nama, noWhatsapp } = {}) => {
+    if (!nama || !String(nama).trim()) return err(422, 'Nama pelanggan wajib diisi.')
+    const telepon = normalizeWa(noWhatsapp)
+    const existing = telepon ? pelanggan.find((c) => normalizeWa(c.telepon) === telepon) : null
+    let cust = existing
+    if (!cust) {
+      counter.cust += 1
+      cust = { id: `CUST-${counter.cust}`, kode: `PLG-${String(counter.cust).padStart(3, '0')}`, nama: String(nama).trim(), telepon: telepon || null }
+      pelanggan = [cust, ...pelanggan]
+    }
+    return ok({ id: cust.id, kode: cust.kode, nama: cust.nama, telepon: cust.telepon, wa_link: cust.telepon ? `https://wa.me/${cust.telepon}` : null })
+  },
+
+  // ---------- Inventory (kelola stok — §4.2) ----------
+
+  'inventory:stokMasuk': ({ idProduk, jumlah, keterangan } = {}) => {
+    const p = produkAktif().find((x) => x.id === idProduk)
+    if (!p) return err(404, 'Produk tidak ditemukan.')
+    if (p.tipe === 'JASA' || !p.kelola_stok) return err(422, 'Item ini tidak mengelola stok (jasa / tanpa gudang).')
+    const n = Number(jumlah)
+    if (!Number.isFinite(n) || n <= 0) return err(422, 'Jumlah tambah harus lebih dari 0.')
+    p.stok = round2(p.stok + n)
+    catatStok(activeTokoId, p, 'MASUK', n, keterangan)
+    return ok({ id_produk: p.id, nama: p.nama, tipe: 'MASUK', jumlah: n, stok_sekarang: p.stok })
+  },
+
+  'inventory:opname': ({ idProduk, jumlah, keterangan } = {}) => {
+    const p = produkAktif().find((x) => x.id === idProduk)
+    if (!p) return err(404, 'Produk tidak ditemukan.')
+    if (p.tipe === 'JASA' || !p.kelola_stok) return err(422, 'Item ini tidak mengelola stok (jasa / tanpa gudang).')
+    const n = Number(jumlah)
+    if (!Number.isFinite(n) || n <= 0) return err(422, 'Jumlah rusak/hilang harus lebih dari 0.')
+    if (n > p.stok) return err(422, `Stok tidak mencukupi — stok "${p.nama}" hanya tersisa ${p.stok}.`)
+    p.stok = round2(p.stok - n)
+    catatStok(activeTokoId, p, 'OPNAME', -n, keterangan)
+    return ok({ id_produk: p.id, nama: p.nama, tipe: 'OPNAME', jumlah: -n, stok_sekarang: p.stok })
+  },
+
+  'inventory:riwayat': ({ page = 1, perPage = 25 } = {}) => {
+    const rows = stokRiwayat.filter((r) => r.toko_id === activeTokoId)
+    const size = Math.min(Number(perPage) || 25, 100)
+    const hal = Math.max(Number(page) || 1, 1)
+    const mulai = (hal - 1) * size
+    return ok(rows.slice(mulai, mulai + size), {
+      current_page: hal, per_page: size, total: rows.length,
+      last_page: Math.max(Math.ceil(rows.length / size), 1)
+    })
   },
 
   'sesi:aktif': () => ok(sesiAktif()),
@@ -1067,6 +1169,11 @@ const handlers = {
       tanggal: new Date()
     })
     if (catatan) struk.catatan = String(catatan)
+
+    // Timeline stok: penjualan item ber-stok masuk Riwayat Perubahan Stok (§4.2)
+    for (const { p, qty } of rincian) {
+      if (p.kelola_stok) catatStok(activeTokoId, p, 'PENJUALAN', -qty, `Penjualan ${struk.nomor}`)
+    }
 
     // POS universal: toko ber-lifecycle (bakso/laundry) → checkout juga
     // menerbitkan PESANAN dengan nomor antrian yang masuk papan KDS/Proses.

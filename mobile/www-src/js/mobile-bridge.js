@@ -212,7 +212,7 @@
       remove: function (p) { return dispatch('station:delete', p, function () { return request('DELETE', '/stations/' + enc(p && p.id)) }) }
     },
     produk: {
-      list: function (p) { p = p || {}; return dispatch('produk:list', p, function () { return apiGet('/produk', { query: { q: p.q, kategori_id: p.kategoriId, gudang_id: p.gudangId, per_page: p.perPage || 50, page: p.page || 1 } }) }) },
+      list: function (p) { p = p || {}; return dispatch('produk:list', p, function () { return apiGet('/produk', { query: { q: p.q, kategori_id: p.kategoriId, gudang_id: p.gudangId, tipe: p.tipe, include_habis: p.includeHabis ? 1 : undefined, per_page: p.perPage || 50, page: p.page || 1 } }) }) },
       byBarcode: function (p) { p = p || {}; return dispatch('produk:barcode', p, function () { return apiGet('/produk/barcode/' + enc(p.barcode), { query: { gudang_id: p.gudangId } }) }) },
       detail: function (p) { p = p || {}; return dispatch('produk:detail', p, function () { return apiGet('/produk/' + enc(p.id), { query: { gudang_id: p.gudangId } }) }) }
     },
@@ -224,7 +224,13 @@
     pelanggan: {
       list: function (p) { return dispatch('pelanggan:list', p, function () { return apiGet('/pelanggan', { query: { q: p && p.q } }) }) },
       create: function (p) { p = p || {}; return dispatch('pelanggan:create', p, function () { return apiPost('/pelanggan', { body: { nama: p.nama, telepon: p.telepon, alamat: p.alamat } }) }) },
+      quick: function (p) { p = p || {}; return dispatch('pelanggan:quick', p, function () { return apiPost('/pelanggan/quick', { body: { nama: p.nama, no_whatsapp: p.noWhatsapp } }) }) },
       detail: function (p) { return dispatch('pelanggan:detail', p, function () { return apiGet('/pelanggan/' + enc(p && p.id)) }) }
+    },
+    inventory: {
+      stokMasuk: function (p) { p = p || {}; return dispatch('inventory:stokMasuk', p, function () { return apiPost('/inventory/stok-masuk', { body: { id_produk: p.idProduk, jumlah: p.jumlah, keterangan: p.keterangan } }) }) },
+      opname: function (p) { p = p || {}; return dispatch('inventory:opname', p, function () { return apiPost('/inventory/opname', { body: { id_produk: p.idProduk, jumlah: p.jumlah, keterangan: p.keterangan } }) }) },
+      riwayat: function (p) { p = p || {}; return dispatch('inventory:riwayat', p, function () { return apiGet('/inventory/riwayat', { query: { page: p.page || 1, per_page: p.perPage || 25 } }) }) }
     },
     sesi: {
       aktif: function (p) { return dispatch('sesi:aktif', p, function () { return apiGet('/sesi/aktif') }) },

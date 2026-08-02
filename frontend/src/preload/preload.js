@@ -93,7 +93,13 @@ contextBridge.exposeInMainWorld('iposAPI', {
   pelanggan: {
     list: invoke('pelanggan:list'),
     create: invoke('pelanggan:create'),
+    quick: invoke('pelanggan:quick'),
     detail: invoke('pelanggan:detail')
+  },
+  inventory: {
+    stokMasuk: invoke('inventory:stokMasuk'),
+    opname: invoke('inventory:opname'),
+    riwayat: invoke('inventory:riwayat')
   },
   sesi: {
     aktif: invoke('sesi:aktif'),
