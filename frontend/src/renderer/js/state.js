@@ -3,6 +3,7 @@
 
 const state = {
   user: null,          // { id, name, email, is_admin }
+  posRole: null,       // 'OWNER' | 'MANAGER' | 'KASIR' — dari data.pos_role login/me (kontrak peran)
   company: null,       // { nama, alamat, telepon, npwp, logo }
   branch: null,
   permissions: [],
@@ -49,6 +50,7 @@ export function subscribe(listener) {
 export function resetAuthState() {
   setState({
     user: null,
+    posRole: null,
     company: null,
     branch: null,
     permissions: [],

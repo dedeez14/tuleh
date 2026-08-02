@@ -112,9 +112,22 @@ const TOKOS = [
   }
 ]
 
+// Peran per menu (cermin filter server §3.2): menu manajemen hanya OWNER/MANAGER,
+// sisanya operasional (semua peran). demo.js memfilter menus per peran aktif.
+const ALL_ROLES = ['OWNER', 'MANAGER', 'KASIR']
+const OM_ROLES = ['OWNER', 'MANAGER']
+const MANAGEMENT_MENUS = new Set(['dashboard', 'inventory', 'pelanggan', 'pengeluaran', 'laporan', 'pengaturan', 'stasiun'])
 const menuItem = (id, label, order) => ({
-  id, label, icon: id, route_key: id, capability: id, required_permission: 'pos.view', order
+  id, label, icon: id, route_key: id, capability: id, required_permission: 'pos.view', order,
+  roles: MANAGEMENT_MENUS.has(id) ? OM_ROLES : ALL_ROLES
 })
+
+// Fitur premium (semua nonaktif; menyala kelak hanya lewat perubahan flag server).
+const PREMIUM_FEATURES = [
+  { kode: 'multi_cabang', label: 'Multi Cabang', deskripsi: 'Dashboard terpusat banyak lokasi.', enabled: false },
+  { kode: 'absensi_payroll', label: 'Absensi & Payroll', deskripsi: 'Catat jam kerja & gaji staf.', enabled: false },
+  { kode: 'crm_membership', label: 'CRM & Membership', deskripsi: 'Sistem poin loyalitas & voucher.', enabled: false }
+]
 
 const MANIFESTS = {
   'TOKO-1': {
@@ -122,14 +135,18 @@ const MANIFESTS = {
     schema_version: 1,
     min_app_build: 1,
     menus: [
-      menuItem('kasir', 'Kasir', 1),
-      menuItem('produk', 'Produk', 2),
-      menuItem('riwayat', 'Riwayat', 3),
-      menuItem('sesi', 'Sesi Kasir', 4),
-      menuItem('pelanggan', 'Pelanggan', 5),
-      menuItem('laporan', 'Laporan', 6),
-      menuItem('pengaturan', 'Pengaturan', 9)
+      menuItem('dashboard', 'Dashboard', 1),
+      menuItem('kasir', 'Kasir', 2),
+      menuItem('produk', 'Produk & Jasa', 3),
+      menuItem('inventory', 'Inventory', 4),
+      menuItem('riwayat', 'Riwayat', 5),
+      menuItem('sesi', 'Sesi Kasir', 6),
+      menuItem('pelanggan', 'Pelanggan', 7),
+      menuItem('pengeluaran', 'Pengeluaran', 8),
+      menuItem('laporan', 'Laporan', 9),
+      menuItem('pengaturan', 'Pengaturan', 10)
     ],
+    premium_features: PREMIUM_FEATURES,
     capabilities: ['catalog_grid', 'barcode_scan', 'cart', 'payment', 'receipt_print', 'inventory_fifo'],
     transaction_flow: ['SELECT_ITEMS', 'PAYMENT', 'PRINT'],
     lifecycle: { states: ['SELESAI'], transitions: [] },
@@ -145,16 +162,22 @@ const MANIFESTS = {
     schema_version: 1,
     min_app_build: 1,
     menus: [
-      menuItem('kasir', 'Kasir', 1),
-      menuItem('dapur', 'Dapur (KDS)', 2),
-      menuItem('antrian', 'Antrian', 3),
-      menuItem('meja', 'Meja & QR', 4),
-      menuItem('riwayat', 'Riwayat', 5),
-      menuItem('sesi', 'Sesi Kasir', 6),
-      menuItem('stasiun', 'Stasiun', 7),
-      menuItem('laporan', 'Laporan', 8),
-      menuItem('pengaturan', 'Pengaturan', 9)
+      menuItem('dashboard', 'Dashboard', 1),
+      menuItem('kasir', 'Kasir', 2),
+      menuItem('dapur', 'Dapur (KDS)', 3),
+      menuItem('antrian', 'Antrian', 4),
+      menuItem('meja', 'Meja & QR', 5),
+      menuItem('produk', 'Produk & Jasa', 6),
+      menuItem('inventory', 'Inventory', 7),
+      menuItem('riwayat', 'Riwayat', 8),
+      menuItem('sesi', 'Sesi Kasir', 9),
+      menuItem('stasiun', 'Stasiun', 10),
+      menuItem('pelanggan', 'Pelanggan', 11),
+      menuItem('pengeluaran', 'Pengeluaran', 12),
+      menuItem('laporan', 'Laporan', 13),
+      menuItem('pengaturan', 'Pengaturan', 14)
     ],
+    premium_features: PREMIUM_FEATURES,
     capabilities: ['catalog_grid', 'cart', 'payment', 'receipt_print', 'kitchen', 'queue', 'tables_qr', 'customer_tracking', 'open_bill'],
     transaction_flow: ['OPEN_BILL', 'SELECT_ITEMS', 'KITCHEN_QUEUE', 'READY', 'SERVE', 'PAYMENT'],
     lifecycle: {
@@ -179,14 +202,20 @@ const MANIFESTS = {
     schema_version: 1,
     min_app_build: 1,
     menus: [
-      menuItem('kasir', 'Kasir / Penerimaan', 1),
-      menuItem('proses', 'Papan Proses', 2),
-      menuItem('riwayat', 'Riwayat', 3),
-      menuItem('sesi', 'Sesi Kasir', 4),
-      menuItem('stasiun', 'Stasiun', 5),
-      menuItem('laporan', 'Laporan', 6),
-      menuItem('pengaturan', 'Pengaturan', 9)
+      menuItem('dashboard', 'Dashboard', 1),
+      menuItem('kasir', 'Kasir / Penerimaan', 2),
+      menuItem('proses', 'Papan Proses', 3),
+      menuItem('produk', 'Layanan & Produk', 4),
+      menuItem('inventory', 'Inventory', 5),
+      menuItem('riwayat', 'Riwayat', 6),
+      menuItem('sesi', 'Sesi Kasir', 7),
+      menuItem('stasiun', 'Stasiun', 8),
+      menuItem('pelanggan', 'Pelanggan', 9),
+      menuItem('pengeluaran', 'Pengeluaran', 10),
+      menuItem('laporan', 'Laporan', 11),
+      menuItem('pengaturan', 'Pengaturan', 12)
     ],
+    premium_features: PREMIUM_FEATURES,
     capabilities: ['cart', 'payment', 'receipt_print', 'stages', 'queue', 'self_service', 'customer_tracking', 'weighing', 'labels'],
     transaction_flow: ['INTAKE', 'PAYMENT_OR_LATER', 'STAGES', 'PICKUP'],
     lifecycle: {

@@ -447,12 +447,29 @@ function isActive() {
   return active
 }
 
+// Baca env dengan AMAN — di WebView Android (Capacitor) global `process` tak ada,
+// mengaksesnya langsung melempar ReferenceError. `typeof` aman utk var tak dideklarasi.
+function readEnv(name) {
+  try { return (typeof process !== 'undefined' && process.env && process.env[name]) || '' }
+  catch (e) { return '' }
+}
+
+// Peran demo. Default OWNER (lihat semua menu). Env IPOS_SMOKE_ROLE=OWNER|MANAGER|
+// KASIR memaksa peran untuk uji filter menu (kriteria terima Tahap 1: kasir hanya
+// melihat kasir/produk/riwayat/sesi + antrian bidang F&B/jasa).
+const PERAN_SAH = ['OWNER', 'MANAGER', 'KASIR']
+function demoRole() {
+  const r = String(readEnv('IPOS_SMOKE_ROLE')).toUpperCase()
+  return PERAN_SAH.includes(r) ? r : 'OWNER'
+}
+
 function start() {
   seed()
   active = true
   demoStartedAt = Date.now()
   return ok({
     user: USER,
+    pos_role: demoRole(),
     company: COMPANY,
     branch: BRANCH,
     permissions: ['pos.semua'],
@@ -474,7 +491,7 @@ function demoLangganan() {
     plan_kode: 'TULEH_PRO', plan_nama: 'Tuléh Pro', periode_mulai: '2026-07-01',
     modul_aktif: MODUL_AKTIF_DEMO, perpanjang_url: 'https://tatreport.com/langganan'
   }
-  switch (process.env.IPOS_SMOKE_LANGGANAN) {
+  switch (readEnv('IPOS_SMOKE_LANGGANAN')) {
     case 'kedaluwarsa': return { ...base, status: 'KEDALUWARSA', periode_akhir: '2026-07-18', sisa_hari: 0 }
     case 'grace': return { ...base, status: 'GRACE', periode_akhir: '2026-07-20', sisa_hari: 0 }
     case 'segera': return { ...base, status: 'AKTIF', periode_akhir: '2026-07-27', sisa_hari: 5 }
@@ -497,7 +514,7 @@ const handlers = {
 
   'auth:hasToken': () => ok({ hasToken: true }),
 
-  'auth:me': () => ok({ user: USER, company: COMPANY, branch: BRANCH, sesi_aktif: sesiAktif() }),
+  'auth:me': () => ok({ user: USER, pos_role: demoRole(), company: COMPANY, branch: BRANCH, sesi_aktif: sesiAktif() }),
 
   'auth:logout': () => {
     stop()
@@ -508,7 +525,11 @@ const handlers = {
 
   'toko:manifest': ({ id } = {}) => {
     const manifest = MANIFESTS[id]
-    return manifest ? ok(manifest) : err(404, 'Manifest toko tidak ditemukan.')
+    if (!manifest) return err(404, 'Manifest toko tidak ditemukan.')
+    // Cermin server: menus dikirim SUDAH terfilter peran aktif; app tak memfilter ulang.
+    const role = demoRole()
+    const menus = (manifest.menus || []).filter((m) => !m.roles || m.roles.includes(role))
+    return ok({ ...manifest, menus, role })
   },
 
   'toko:select': ({ id } = {}) => {

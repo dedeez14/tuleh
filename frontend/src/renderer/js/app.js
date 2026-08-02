@@ -51,22 +51,30 @@ const MODULES = {
   meja: { screen: 'peta-meja', title: 'Meja', iconKey: 'store', desc: 'Buka meja, catat pesanan, dan bayar saat pulang.' },
   stasiun: { screen: 'stations', title: 'Stasiun', iconKey: 'station', desc: 'Atur jumlah & status stasiun kerja di toko ini.' },
   produk: { screen: 'products', title: 'Produk', iconKey: 'box', desc: 'Jelajahi katalog — harga, barcode, dan posisi stok.' },
+  inventory: { screen: 'inventory', title: 'Inventory', iconKey: 'box', desc: 'Tambah/kurangi stok, opname, & riwayat perubahan stok.' },
   pelanggan: { screen: 'customers', title: 'Pelanggan', iconKey: 'user', desc: 'Cari, lihat, dan tambahkan pelanggan.' },
   keuangan: { screen: 'keuangan', title: 'Keuangan', iconKey: 'report', desc: 'Omzet, laba, margin, metode bayar, dan tren.' },
   pengeluaran: { screen: 'pengeluaran', title: 'Pengeluaran', iconKey: 'wallet', desc: 'Catat biaya operasional: sewa, gaji, listrik, bahan.' },
   stok: { screen: 'stok', title: 'Stok', iconKey: 'box', desc: 'Pantau stok menipis, atur batas minimum, & saran restok.' }
 }
 
-// Modul inti selalu tampil walau manifest tidak menyebutnya (kompatibilitas)
-const CORE_MODULES = ['kasir', 'keuangan', 'riwayat', 'sesi', 'laporan', 'pengeluaran', 'stok', 'pengaturan']
-// Urutan tampil kartu (manifest memilih modul; urutan konsisten dari sini)
-const MODULE_ORDER = ['kasir', 'keuangan', 'dapur', 'antrian', 'proses', 'meja', 'riwayat', 'sesi', 'stasiun', 'laporan', 'pengeluaran', 'produk', 'stok', 'pelanggan', 'pengaturan']
+// Fitur ekstra khas app (DI LUAR manifest server) — analisis keuangan UMKM.
+// Ditampilkan SETELAH menu manifest, hanya utk peran manajemen. Server tidak
+// mengelola menu ini; keputusan pemilik (2 Agu 2026) mempertahankannya sbg
+// nilai tambah app. Bukan pelanggaran "menu dari manifest" (itu soal filter peran).
+const APP_EXTRA_MODULES = ['keuangan', 'stok']
+const MANAGEMENT_ROLES = new Set(['OWNER', 'MANAGER'])
+// Route_key yang bukan kartu Beranda (dashboard = Beranda itu sendiri).
+const NON_CARD_ROUTES = new Set(['dashboard', 'home'])
+// Fallback bila manifest tak menyertakan menus (server lama / tanpa /manifest):
+// tampilkan set inti agar app tetap terpakai — bukan filter peran, murni kompatibilitas.
+const DEFAULT_MENU_IDS = ['kasir', 'riwayat', 'sesi', 'produk', 'pelanggan', 'laporan', 'pengaturan']
 
 // Peta id modul → token warna aksen (dipakai kartu Beranda; ikut dark via token)
 const MODULE_ACCENT = {
   kasir: 'kasir', dapur: 'dapur', antrian: 'antrian', proses: 'proses',
   meja: 'meja', stasiun: 'stasiun', riwayat: 'riwayat', sesi: 'sesi',
-  laporan: 'laporan', produk: 'produk', pelanggan: 'pelanggan', pengaturan: 'pengaturan',
+  laporan: 'laporan', produk: 'produk', inventory: 'produk', pelanggan: 'pelanggan', pengaturan: 'pengaturan',
   keuangan: 'laporan', pengeluaran: 'meja', stok: 'dapur'
 }
 
@@ -78,18 +86,29 @@ let notifDismissed = false
 
 // ---------- Manifest: normalisasi & daftar modul ----------
 
-/** Bentuk server (menus objek, capabilities array string) → bentuk internal. */
+/** Bentuk server (menus objek, capabilities array string) → bentuk internal.
+ *  Menu SUDAH terfilter peran & terurut oleh server (kontrak Bidang-Usaha-Role);
+ *  app merender apa adanya — tanpa memfilter ulang. `route_key` menentukan layar. */
 function normalizeManifest(raw, toko) {
   if (!raw || typeof raw !== 'object') return null
   const menus = (Array.isArray(raw.menus) ? raw.menus : [])
     .map((m) => (typeof m === 'string' ? { id: m } : m))
     .filter((m) => m && typeof m.id === 'string')
-    .map((m) => ({ id: m.id, label: m.label || '', order: Number(m.order) || 0 }))
+    .map((m) => ({
+      id: m.id,
+      routeKey: m.route_key || m.id,
+      label: m.label || '',
+      icon: m.icon || '',
+      roles: Array.isArray(m.roles) ? m.roles : null,
+      order: Number(m.order) || 0
+    }))
   return {
     verticalCode: raw.vertical_code || toko?.bidang_usaha?.code || null,
     verticalName: toko?.bidang_usaha?.nama || '',
     archetype: toko?.bidang_usaha?.archetype || null,
     menus,
+    role: raw.role || null,
+    premiumFeatures: Array.isArray(raw.premium_features) ? raw.premium_features : [],
     capabilities: Array.isArray(raw.capabilities) ? raw.capabilities : [],
     stationTypes: Array.isArray(raw.station_types) ? raw.station_types : [],
     transactionFlow: Array.isArray(raw.transaction_flow) ? raw.transaction_flow : [],
@@ -99,22 +118,38 @@ function normalizeManifest(raw, toko) {
   }
 }
 
-/** Daftar modul yang tampil di Beranda (manifest ∪ modul inti, urutan tetap). */
+/** Kartu Beranda: menu DARI manifest (sudah terfilter peran & terurut server) +
+ *  fitur ekstra app utk peran manajemen. Bila manifest tanpa menus → set default
+ *  (kompatibilitas server lama). App tidak memfilter ulang berdasarkan peran. */
 function moduleList() {
-  const { manifest } = getState()
-  const wanted = new Set(CORE_MODULES)
-  const labels = {}
-  if (manifest) {
-    for (const menu of manifest.menus) {
-      if (MODULES[menu.id]) {
-        wanted.add(menu.id)
-        if (menu.label) labels[menu.id] = menu.label
-      }
-    }
+  const { manifest, posRole } = getState()
+  const out = []
+  const seen = new Set()
+
+  const push = (key, label, appExtra = false) => {
+    if (!key || NON_CARD_ROUTES.has(key) || seen.has(key)) return
+    const mod = MODULES[key]
+    if (!mod) return // route_key yang app belum kenal → jangan render kartu rusak
+    seen.add(key)
+    out.push({ id: key, ...mod, title: label || mod.title, appExtra })
   }
-  return MODULE_ORDER
-    .filter((id) => wanted.has(id))
-    .map((id) => ({ id, ...MODULES[id], title: labels[id] || MODULES[id].title }))
+
+  const menus = manifest && Array.isArray(manifest.menus) ? manifest.menus : []
+  if (menus.length > 0) {
+    for (const menu of [...menus].sort((a, b) => (a.order || 0) - (b.order || 0))) {
+      push(menu.routeKey || menu.id, menu.label)
+    }
+  } else {
+    for (const id of DEFAULT_MENU_IDS) push(id, '')
+  }
+
+  // Fitur ekstra app (keuangan, stok) — hanya manajemen; bila peran tak diketahui
+  // (server lama/manifest kosong) tetap tampil agar tak ada regresi fitur.
+  if (!posRole || MANAGEMENT_ROLES.has(posRole)) {
+    for (const key of APP_EXTRA_MODULES) push(key, '', true)
+  }
+
+  return out
 }
 
 // ---------- Pemilihan toko ----------
@@ -501,7 +536,7 @@ function homeCardHTML(mod) {
             data-module="${mod.id}"${accentStyle}>
       <span class="home-card__icon">${moduleIcon(mod)}</span>
       <span class="home-card__body">
-        <span class="home-card__title">${esc(mod.title)}</span>
+        <span class="home-card__title">${esc(mod.title)}${mod.appExtra ? '<span class="home-card__tag">Fitur app</span>' : ''}</span>
         <span class="home-card__desc">${esc(mod.desc)}</span>
       </span>
       <span class="home-card__arrow" aria-hidden="true">
@@ -602,8 +637,8 @@ function renderHome(container) {
 // ---------- Navigasi layar ----------
 
 export async function showScreen(id) {
-  const screen = id === 'home' ? null : SCREENS.find((s) => s.id === id)
-  if (id !== 'home' && !screen) return
+  const isHome = id === 'home'
+  const screen = isHome ? null : SCREENS.find((s) => s.id === id)
 
   if (typeof currentCleanup === 'function') {
     try {
@@ -615,17 +650,37 @@ export async function showScreen(id) {
   }
 
   setState({ screen: id })
-  setTopbarScreen(screen)
+  // Layar yang belum dibangun (mis. route_key manifest yang lebih baru dari app)
+  // ditampilkan sbg "segera hadir" — jangan diam saja / crash.
+  setTopbarScreen(isHome ? null : (screen || { title: 'Segera hadir' }))
 
   const root = appRoot.querySelector('#screen-root')
   if (!root) return
   root.innerHTML = ''
   try {
-    currentCleanup = screen ? (await screen.render(root)) || null : renderHome(root)
+    if (isHome) currentCleanup = renderHome(root)
+    else if (screen) currentCleanup = (await screen.render(root)) || null
+    else currentCleanup = renderComingSoon(root)
   } catch (err) {
     console.error(`Gagal memuat layar ${id}:`, err)
     root.innerHTML = `<div class="screen-page"><p class="u-muted">Terjadi kesalahan saat memuat layar. Kembali ke Beranda lalu coba lagi.</p></div>`
   }
+}
+
+/** Placeholder untuk route_key yang belum punya layar di versi app ini. */
+function renderComingSoon(root) {
+  root.innerHTML = `
+    <div class="screen-page">
+      <div class="coming-soon">
+        <div class="coming-soon__icon">${icons.box}</div>
+        <h2 class="coming-soon__title">Segera hadir</h2>
+        <p class="u-muted">Menu ini belum tersedia di versi aplikasi ini. Perbarui aplikasi untuk memakainya.</p>
+        <button type="button" class="btn btn--ghost" data-goto-home>Kembali ke Beranda</button>
+      </div>
+    </div>`
+  const back = root.querySelector('[data-goto-home]')
+  if (back) back.addEventListener('click', () => showScreen('home'))
+  return null
 }
 
 // ---------- Autentikasi ----------
@@ -656,9 +711,10 @@ function enterLogin() {
 }
 
 async function enterApp(identity) {
-  // identity: { user, company, branch, permissions, modules, payment_methods, demo? }
+  // identity: { user, pos_role, company, branch, permissions, modules, payment_methods, demo? }
   setState({
     user: identity.user || null,
+    posRole: identity.pos_role || null,
     company: identity.company || null,
     branch: identity.branch || null,
     permissions: identity.permissions || [],
@@ -754,6 +810,7 @@ async function boot() {
     if (me.ok && me.data && me.data.user) {
       setState({
         user: me.data.user,
+        posRole: me.data.pos_role || null,
         company: me.data.company || null,
         branch: me.data.branch || null,
         session: me.data.sesi_aktif || null,
