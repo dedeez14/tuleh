@@ -12,7 +12,7 @@
   var API_PREFIX = '/api/pos/v1'
   var TIMEOUT_MS = 15000
   var DEFAULT_BASE = 'https://tatreport.com'
-  var APP_VERSION = '0.7.0'
+  var APP_VERSION = '0.7.1'
 
   var baseUrl = DEFAULT_BASE
   var token = null
@@ -187,7 +187,17 @@
     config: { get: function (p) { return dispatch('config:get', p, function () { return apiGet('/config') }) } },
     langganan: {
       status: function (p) { return dispatch('langganan:status', p, function () { return apiGet('/langganan/status') }) },
-      bayar: function (p) { return dispatch('langganan:bayar', p, function () { return apiPost('/langganan/bayar', { body: {} }) }) }
+      bayar: function (p) { return dispatch('langganan:bayar', p, function () { return apiPost('/langganan/bayar', { body: {} }) }) },
+      // Android tak punya BrowserWindow → buka di peramban perangkat + tandai 'external'
+      // (renderer lanjut ke alur poll + "Saya sudah bayar").
+      jendelaBayar: function (p) {
+        var dh = demo && demo.handlers
+        if (demoActive && dh && dh['langganan:jendelaBayar']) { try { return Promise.resolve(dh['langganan:jendelaBayar'](p || {})) } catch (e) {} }
+        var u = (p && p.url) || ''
+        if (!/^https:\/\//i.test(u)) return notAvailable('URL pembayaran tidak valid.')
+        try { window.open(u, '_system') } catch (e) { try { window.open(u, '_blank') } catch (e2) {} }
+        return ok({ result: 'external' })
+      }
     },
     cs: { kontak: function (p) { return dispatch('cs:kontak', p, function () { return apiGet('/kontak-cs') }) } },
     toko: {

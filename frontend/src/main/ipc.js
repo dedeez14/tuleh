@@ -1,7 +1,7 @@
 'use strict'
 
 const os = require('node:os')
-const { app, ipcMain, shell } = require('electron')
+const { app, ipcMain, shell, BrowserWindow } = require('electron')
 const api = require('./api-client')
 const authStore = require('./auth-store')
 const settingsStore = require('./settings-store')
@@ -252,6 +252,47 @@ function registerIpcHandlers(getMainWindow) {
   // Buat/ambil tagihan pembayaran (Midtrans Snap). Tanpa body; idempoten di server
   // (dipanggil berulang → tagihan & link sama). Respons: {invoice, pembayaran}.
   handle('langganan:bayar', () => withAuthWatch(api.post('/langganan/bayar', { body: {} })))
+
+  // Buka halaman pembayaran Midtrans DI DALAM aplikasi (BrowserWindow modal,
+  // Chromium penuh → 3-D Secure & QRIS jalan). Pantau navigasi: saat Midtrans
+  // mengarahkan ke URL selesai (mengandung transaction_status atau ke domain
+  // tatreport.com/bayar), kembalikan hasilnya. result:
+  // settlement|capture|pending|deny|cancel|expire|finished|closed.
+  handle('langganan:jendelaBayar', ({ url }) => {
+    const u = str(url, { required: true, max: 2000 })
+    if (!/^https:\/\//i.test(u)) return fail('URL pembayaran tidak valid.')
+    const parent = getMainWindow()
+    return new Promise((resolve) => {
+      const win = new BrowserWindow({
+        width: 480, height: 760,
+        parent: parent && !parent.isDestroyed() ? parent : undefined,
+        modal: !!parent, title: 'Pembayaran Langganan', autoHideMenuBar: true,
+        webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true }
+      })
+      let done = false
+      const finish = (result) => {
+        if (done) return
+        done = true
+        resolve({ ok: true, data: { result } })
+        if (!win.isDestroyed()) win.close()
+      }
+      const inspect = (navUrl) => {
+        try {
+          const p = new URL(navUrl)
+          const ts = p.searchParams.get('transaction_status')
+          if (ts) return finish(ts) // sinyal Midtrans langsung
+          // Halaman selesai merchant (mis. pos.tatreport.com/bayar/selesai)
+          if (/(^|\.)tatreport\.com$/i.test(p.host) && /bayar|selesai|finish|callback|return/i.test(p.pathname)) return finish('finished')
+        } catch { /* abaikan URL non-standar */ }
+      }
+      win.webContents.on('will-redirect', (_e, navUrl) => inspect(navUrl))
+      win.webContents.on('did-navigate', (_e, navUrl) => inspect(navUrl))
+      win.webContents.on('did-navigate-in-page', (_e, navUrl) => inspect(navUrl))
+      win.on('closed', () => { if (!done) { done = true; resolve({ ok: true, data: { result: 'closed' } }) } })
+      win.loadURL(u).catch(() => finish('error'))
+    })
+  })
+
   handle('cs:kontak', () => withAuthWatch(api.get('/kontak-cs')))
 
   // ---------- Toko & manifest (POS universal) ----------

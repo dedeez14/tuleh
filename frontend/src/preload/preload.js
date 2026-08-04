@@ -38,7 +38,8 @@ contextBridge.exposeInMainWorld('iposAPI', {
   },
   langganan: {
     status: invoke('langganan:status'),
-    bayar: invoke('langganan:bayar')
+    bayar: invoke('langganan:bayar'),
+    jendelaBayar: invoke('langganan:jendelaBayar')
   },
   cs: {
     kontak: invoke('cs:kontak')

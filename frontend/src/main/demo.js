@@ -607,6 +607,13 @@ const handlers = {
     })
   },
 
+  // Simulasi jendela bayar in-app: anggap pengguna langsung menyelesaikan
+  // pembayaran → 'settlement'. Status jadi AKTIF stlh jeda webhook (DEMO_BAYAR_DELAY).
+  'langganan:jendelaBayar': () => {
+    demoLunasAt = Date.now()
+    return ok({ result: 'settlement' })
+  },
+
   'cs:kontak': () => ok({
     sumber: 'CS_MITRA',
     nama: 'Mitra Taufiq (Demo)',

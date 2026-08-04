@@ -35,6 +35,15 @@ test('setelah jeda webhook → status AKTIF, periode diperpanjang', async () => 
   assert.ok(s.periode_akhir) // periode baru terisi
 })
 
+test('jendelaBayar (in-app) → settlement & memicu status lunas setelah jeda', async () => {
+  const r = H['langganan:jendelaBayar']()
+  assert.equal(r.ok, true)
+  assert.equal(r.data.result, 'settlement')
+  await new Promise((x) => setTimeout(x, 3100))
+  assert.equal(H['langganan:status']().data.status, 'AKTIF')
+  assert.equal(H['langganan:status']().data.sisa_hari, 30)
+})
+
 test('reset demo membersihkan status "lunas"', async () => {
   H['langganan:bayar']()
   await new Promise((r) => setTimeout(r, 3100))
