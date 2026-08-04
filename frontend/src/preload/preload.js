@@ -9,7 +9,8 @@ const invoke = (channel) => (payload) => ipcRenderer.invoke(channel, payload)
 contextBridge.exposeInMainWorld('iposAPI', {
   app: {
     info: invoke('app:info'),
-    print: invoke('app:print')
+    print: invoke('app:print'),
+    openExternal: invoke('app:openExternal')
   },
   settings: {
     get: invoke('settings:get'),
@@ -36,7 +37,8 @@ contextBridge.exposeInMainWorld('iposAPI', {
     get: invoke('config:get')
   },
   langganan: {
-    status: invoke('langganan:status')
+    status: invoke('langganan:status'),
+    bayar: invoke('langganan:bayar')
   },
   cs: {
     kontak: invoke('cs:kontak')

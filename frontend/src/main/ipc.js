@@ -1,7 +1,7 @@
 'use strict'
 
 const os = require('node:os')
-const { app, ipcMain } = require('electron')
+const { app, ipcMain, shell } = require('electron')
 const api = require('./api-client')
 const authStore = require('./auth-store')
 const settingsStore = require('./settings-store')
@@ -131,6 +131,15 @@ function registerIpcHandlers(getMainWindow) {
     }
   }))
 
+  // Buka URL di browser sistem (halaman pembayaran Midtrans — WAJIB browser penuh,
+  // bukan webview: 3-D Secure & deep link e-wallet kerap gagal di webview).
+  handle('app:openExternal', async ({ url }) => {
+    const u = str(url, { required: true, max: 2000 })
+    if (!/^https:\/\//i.test(u)) return fail('Hanya URL https yang boleh dibuka.')
+    await shell.openExternal(u)
+    return { ok: true, data: null }
+  })
+
   handle('app:print', () => {
     const win = getMainWindow()
     if (!win || win.isDestroyed()) return fail('Jendela tidak tersedia.')
@@ -240,6 +249,9 @@ function registerIpcHandlers(getMainWindow) {
   // Gateway harus meng-allowlist path ini (lihat Tiket-Server-Backend T-11) —
   // Mode Demo meng-intersep keduanya via demo.js.
   handle('langganan:status', () => withAuthWatch(api.get('/langganan/status')))
+  // Buat/ambil tagihan pembayaran (Midtrans Snap). Tanpa body; idempoten di server
+  // (dipanggil berulang → tagihan & link sama). Respons: {invoice, pembayaran}.
+  handle('langganan:bayar', () => withAuthWatch(api.post('/langganan/bayar', { body: {} })))
   handle('cs:kontak', () => withAuthWatch(api.get('/kontak-cs')))
 
   // ---------- Toko & manifest (POS universal) ----------

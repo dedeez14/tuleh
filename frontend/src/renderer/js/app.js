@@ -9,6 +9,7 @@ import { toast, icons, confirmDialog } from './components/ui.js'
 import { applyTheme, getEffectiveTheme, cycleTheme } from './theme.js'
 import { hitungNotifikasi, renderPanelNotifikasi } from './notif.js'
 import { ringkasLangganan } from './langganan.js'
+import { mulaiPembayaran } from './langganan-bayar.js'
 import { esc, fmtIDR, fmtNumber, toISODate } from './utils/format.js'
 import { LOGO_DATA_URI } from './assets/logo.js'
 import { renderLogin } from './screens/login.js'
@@ -328,12 +329,9 @@ async function contactCS() {
   }
 }
 
-/** Buka halaman perpanjang langganan; jika URL tak ada, arahkan ke CS. */
+/** Mulai alur pembayaran langganan (Midtrans Snap → browser sistem). */
 function openPerpanjang() {
-  const { langganan } = getState()
-  const url = langganan && langganan.perpanjang_url
-  if (url) window.open(url, '_blank')
-  else contactCS()
+  mulaiPembayaran()
 }
 
 // ---------- Shell: top bar + area layar ----------

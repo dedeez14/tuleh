@@ -3,7 +3,8 @@
 import { api, firstError } from '../api.js'
 import { getState } from '../state.js'
 import { icons, toast, confirmDialog } from '../components/ui.js'
-import { esc, fmtDateTime } from '../utils/format.js'
+import { esc, fmtDateTime, fmtDate } from '../utils/format.js'
+import { mulaiPembayaran } from '../langganan-bayar.js'
 
 const DASH = '<span class="u-faint">—</span>'
 
@@ -78,6 +79,30 @@ function hakAksesCardHTML() {
     </section>`
 }
 
+// Kartu Langganan — status + tombol Perpanjang Sekarang (alur Midtrans Snap).
+function langgananCardHTML() {
+  const l = getState().langganan
+  if (!l) return ''
+  const status = String(l.status || '').toUpperCase()
+  const warna = status === 'AKTIF' ? 'success' : (status === 'GRACE' ? 'warn' : 'danger')
+  const labelStatus = { AKTIF: 'Aktif', GRACE: 'Masa tenggang', KEDALUWARSA: 'Kedaluwarsa' }[status] || (status || '—')
+  return `
+    <section class="card">
+      <div class="card__header"><h2 class="card__title">Langganan</h2></div>
+      <div class="card__body">
+        <div class="set-def">
+          ${defRow('Paket', `<span>${esc(l.plan_nama || '—')}</span>`)}
+          ${defRow('Status', `<span class="badge badge--${warna}">${esc(labelStatus)}</span>`)}
+          ${l.periode_akhir ? defRow('Berlaku sampai', `<span>${esc(fmtDate(l.periode_akhir))}</span>`) : ''}
+          ${l.sisa_hari != null ? defRow('Sisa hari', `<span class="num">${esc(String(l.sisa_hari))}</span>`) : ''}
+        </div>
+        <div class="set-actions">
+          <button class="btn btn--primary" id="set-perpanjang" type="button">Perpanjang Sekarang</button>
+        </div>
+      </div>
+    </section>`
+}
+
 // Kartu fitur premium (§4.4) — dari manifest.premium_features. enabled:false →
 // "Segera Hadir" + Hubungi CS. Menyala kelak hanya lewat perubahan flag server.
 function premiumCardHTML() {
@@ -143,6 +168,8 @@ export const SettingsScreen = {
 
           ${hakAksesCardHTML()}
 
+          ${langgananCardHTML()}
+
           ${premiumCardHTML()}
 
           <section class="card">
@@ -182,6 +209,10 @@ export const SettingsScreen = {
     const btnPing = container.querySelector('#set-ping')
     const btnTunnel = container.querySelector('#set-tunnel-btn')
     let tunnelAktif = false
+
+    // Perpanjang langganan (alur pembayaran Midtrans)
+    const perpanjangBtn = container.querySelector('#set-perpanjang')
+    if (perpanjangBtn) perpanjangBtn.addEventListener('click', () => mulaiPembayaran())
 
     // Fitur premium (Segera Hadir) → Hubungi CS via /kontak-cs
     container.querySelectorAll('[data-cs-contact]').forEach((b) => b.addEventListener('click', async () => {

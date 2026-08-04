@@ -27,6 +27,7 @@ var routeTable = []route{
 
 	// Langganan & Kontak CS (Sistem Mitra §6.5) — info tenant
 	{method: "GET", pattern: "/langganan/status", cache: 60 * time.Second},
+	{method: "POST", pattern: "/langganan/bayar"}, // buat/ambil tagihan Midtrans Snap — TANPA cache (idempoten di server)
 	{method: "GET", pattern: "/kontak-cs", cache: 5 * time.Minute},
 
 	// Toko POS (multi-vertical MOVERA)

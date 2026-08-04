@@ -680,3 +680,23 @@
   font-size: var(--text-sm);
   margin-top: 2px;
 }
+
+/* Alur pembayaran langganan (modal Midtrans Snap) — rgba (bukan color-mix) agar
+   latar badge tetap tampil di WebView lama Android 10. */
+.bayar-flow { min-width: min(340px, 78vw); }
+.bayar-flow__center { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px; padding: 8px 4px; }
+.bayar-flow__center p { margin: 0; color: var(--text-2); }
+.bayar-flow__title { font-family: var(--font-display); font-weight: 800; font-size: var(--text-lg); color: var(--text); }
+.bayar-flow__hint { font-size: var(--text-sm); }
+.bayar-flow__spin { width: 40px; height: 40px; border-radius: 50%; border: 3px solid var(--surface-3); border-top-color: var(--accent); animation: bayar-spin 0.8s linear infinite; }
+@keyframes bayar-spin { to { transform: rotate(360deg); } }
+.bayar-flow__badge { width: 52px; height: 52px; display: grid; place-items: center; border-radius: 50%; }
+.bayar-flow__badge svg { width: 28px; height: 28px; }
+.bayar-flow__badge--ok { color: #0f9d58; background: rgba(15,157,88,0.13); }
+.bayar-flow__badge--err { color: #e5533c; background: rgba(229,83,60,0.13); }
+.bayar-flow__actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 8px; }
+.bayar-flow__actions--stack { flex-direction: column; align-items: stretch; }
+.bayar-flow__confirm { display: flex; flex-direction: column; gap: 10px; }
+.bayar-flow__row { display: flex; justify-content: space-between; gap: 12px; font-size: var(--text-sm); color: var(--text-2); }
+.bayar-flow__total { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding-top: 8px; border-top: 1px solid var(--surface-3); }
+.bayar-flow__total strong { font-family: var(--font-display); font-size: var(--text-xl); }

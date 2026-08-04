@@ -27,6 +27,8 @@ const STAGE_LABELS = {
 let active = false
 let demoStartedAt = 0                     // waktu mulai demo (ms) untuk reset TTL
 const DEMO_TTL_MS = 24 * 60 * 60 * 1000   // demo di-reset tiap 24 jam (cegah pakai sbg POS gratis)
+let demoLunasAt = 0                       // waktu "bayar langganan" demo → status jadi AKTIF stlh delay
+const DEMO_BAYAR_DELAY_MS = 3000          // simulasi jeda webhook Midtrans (~ agar "Menunggu" tampil)
 let catalogs = {}      // tokoId → { produk: [], kategori: [] } — wajah kasir per toko
 let pelanggan = []
 let sesiList = []      // rekap penuh (+toko_id), terbaru dulu
@@ -307,6 +309,7 @@ function seed() {
   transaksi = []
   stokRiwayat = []
   pengeluaranDemo = []
+  demoLunasAt = 0
   counter = { trx: 0, sesi: 0, cust: pelanggan.length, order: 0, station: 0, bill: 0, inv: 0, exp: 0 }
 
   // Lengkapi produk demo dgn tipe (PRODUK/JASA) & harga_beli (rahasia dagang, null
@@ -528,6 +531,15 @@ function stop() {
 // IPOS_SMOKE_LANGGANAN=segera|grace|kedaluwarsa memaksa keadaan untuk uji tampilan.
 const MODUL_AKTIF_DEMO = ['kasir', 'dapur', 'antrian', 'proses', 'meja', 'riwayat', 'sesi', 'stasiun', 'laporan', 'produk', 'pelanggan']
 function demoLangganan() {
+  // Setelah "pembayaran" demo + jeda (simulasi webhook): langganan AKTIF, periode baru.
+  if (demoLunasAt && (Date.now() - demoLunasAt) >= DEMO_BAYAR_DELAY_MS) {
+    const akhir = new Date(); akhir.setDate(akhir.getDate() + 30)
+    return {
+      plan_kode: 'TULEH_PRO', plan_nama: 'Tuléh Pro', status: 'AKTIF',
+      periode_mulai: isoDate(new Date()), periode_akhir: isoDate(akhir), sisa_hari: 30,
+      auto_renew: false, modul_aktif: MODUL_AKTIF_DEMO, perpanjang_url: 'https://tatreport.com/langganan'
+    }
+  }
   const base = {
     plan_kode: 'TULEH_PRO', plan_nama: 'Tuléh Pro', periode_mulai: '2026-07-01',
     modul_aktif: MODUL_AKTIF_DEMO, perpanjang_url: 'https://tatreport.com/langganan'
@@ -574,6 +586,26 @@ const handlers = {
   'net:ping': () => ok({ app: 'Tuléh Demo', version: 'demo', time: new Date().toISOString() }),
 
   'langganan:status': () => ok(demoLangganan()),
+
+  // Simulasi buat tagihan Midtrans (§2). Set penanda "menunggu"; status berubah
+  // AKTIF sendiri setelah DEMO_BAYAR_DELAY_MS (cermin webhook). redirect_url demo
+  // = simulator sandbox Midtrans (halaman nyata & aman).
+  'langganan:bayar': () => {
+    demoLunasAt = Date.now()
+    const jt = new Date(); jt.setHours(jt.getHours() + 24)
+    return ok({
+      invoice: {
+        nomor: 'INV-DEMO-' + String(Date.now()).slice(-6),
+        jenis: 'PERPANJANGAN', status: 'MENUNGGU',
+        harga_dpp: 99000, ppn: 0, harga_total: 99000,
+        jatuh_tempo: jt.toISOString()
+      },
+      pembayaran: {
+        redirect_url: 'https://simulator.sandbox.midtrans.com/',
+        token: 'demo', kedaluwarsa: jt.toISOString()
+      }
+    })
+  },
 
   'cs:kontak': () => ok({
     sumber: 'CS_MITRA',

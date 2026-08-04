@@ -12,7 +12,7 @@
   var API_PREFIX = '/api/pos/v1'
   var TIMEOUT_MS = 15000
   var DEFAULT_BASE = 'https://tatreport.com'
-  var APP_VERSION = '0.6.1'
+  var APP_VERSION = '0.7.0'
 
   var baseUrl = DEFAULT_BASE
   var token = null
@@ -150,7 +150,15 @@
   window.iposAPI = {
     app: {
       info: function () { return ok({ version: APP_VERSION, platform: 'android', gateway: { ok: false, running: false, external: false }, tracking: { running: false, baseUrl: baseUrl }, smokeDemo: false, smokeTokoIndex: null, smokeScreen: null, smokeTheme: null, smokeOpenBill: false, smokeFlow: null }) },
-      print: function () { return printStruk() }
+      print: function () { return printStruk() },
+      // Buka URL di browser sistem (halaman bayar Midtrans). Capacitor membuka URL
+      // lintas-origin (https) di peramban perangkat, bukan di webview app.
+      openExternal: function (p) {
+        var u = (p && p.url) || ''
+        if (!/^https:\/\//i.test(u)) return notAvailable('Hanya URL https yang boleh dibuka.')
+        try { window.open(u, '_system') } catch (e) { try { window.open(u, '_blank') } catch (e2) {} }
+        return ok(null)
+      }
     },
     settings: {
       get: function () { return ready.then(function () { return { ok: true, status: 200, data: { baseUrl: baseUrl, hasToken: token != null }, meta: null, message: '' } }) },
@@ -177,7 +185,10 @@
       onExpired: function (cb) { expiredCb = cb; return function () { if (expiredCb === cb) expiredCb = null } }
     },
     config: { get: function (p) { return dispatch('config:get', p, function () { return apiGet('/config') }) } },
-    langganan: { status: function (p) { return dispatch('langganan:status', p, function () { return apiGet('/langganan/status') }) } },
+    langganan: {
+      status: function (p) { return dispatch('langganan:status', p, function () { return apiGet('/langganan/status') }) },
+      bayar: function (p) { return dispatch('langganan:bayar', p, function () { return apiPost('/langganan/bayar', { body: {} }) }) }
+    },
     cs: { kontak: function (p) { return dispatch('cs:kontak', p, function () { return apiGet('/kontak-cs') }) } },
     toko: {
       list: function (p) { return dispatch('toko:list', p, function () { return apiGet('/tokos') }) },
