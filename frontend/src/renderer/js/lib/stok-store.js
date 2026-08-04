@@ -17,6 +17,27 @@ export function setMin(tokoId, id, min) {
 }
 
 /**
+ * gabungStokKatalog(laporan, katalog) → rows [{id, kode, produk, stok}]
+ * Laporan stok (/laporan/stok) = sumber utama. Produk katalog (/produk) ber-
+ * `kelola_stok` yang KODE-nya belum ada di laporan ditambahkan — mis. produk baru
+ * dibuat yang belum punya catatan stok, sehingga absen dari /laporan/stok. Stok
+ * diambil dari katalog (0 utk produk baru → tampil "Habis"/perlu restok).
+ * Dedup berdasarkan KODE karena id laporan ≠ id produk di server.
+ */
+export function gabungStokKatalog(laporan, katalog) {
+  const rows = Array.isArray(laporan) ? laporan.slice() : []
+  const adaKode = new Set(rows.map((r) => String(r.kode || '').trim()).filter(Boolean))
+  for (const p of Array.isArray(katalog) ? katalog : []) {
+    if (!p || !p.kelola_stok) continue
+    const kode = String(p.kode || '').trim()
+    if (kode && adaKode.has(kode)) continue
+    rows.push({ id: p.id, kode: p.kode || '', produk: p.nama, stok: Number(p.stok) || 0 })
+    if (kode) adaKode.add(kode)
+  }
+  return rows
+}
+
+/**
  * analisisStok(rows, tokoId) → { habis, menipis, aman, alerts }
  * rows: [{id, kode, produk, stok}] dari laporan:stok. alerts = habis + menipis,
  * tiap item + { status, min, saran (qty restok utk capai 2× min) }.

@@ -5,7 +5,7 @@ import { api, firstError } from '../api.js'
 import { getState, setState } from '../state.js'
 import { toast, icons, loadingHTML, emptyStateHTML } from '../components/ui.js'
 import { esc, fmtNumber, debounce } from '../utils/format.js'
-import { analisisStok, setMin } from '../lib/stok-store.js'
+import { analisisStok, setMin, gabungStokKatalog } from '../lib/stok-store.js'
 
 const FILTERS = [
   { key: 'menipis', label: 'Perlu restok' },
@@ -53,7 +53,13 @@ function bind(ctx) {
 async function load(ctx, force) {
   const body = ctx.container.querySelector('#stk-body')
   if (!ctx.analisis || force) body.innerHTML = loadingHTML('Memuat stok…')
-  const result = await api.laporan.stok({})
+  // Laporan stok = sumber utama; katalog produk digabung agar produk yang BARU
+  // dibuat (belum punya catatan stok → absen dari /laporan/stok) tetap muncul di
+  // sini dengan stok 0. Katalog bersifat opsional: bila gagal, pakai laporan saja.
+  const [result, katalog] = await Promise.all([
+    api.laporan.stok({}),
+    api.produk.list({ tipe: 'PRODUK', includeHabis: true, perPage: 100 })
+  ])
   if (ctx.disposed) return
   if (!result.ok) {
     body.innerHTML = `<div class="empty-state"><div class="empty-state__icon">${icons.alert}</div>
@@ -62,7 +68,10 @@ async function load(ctx, force) {
     body.querySelector('#stk-retry')?.addEventListener('click', () => load(ctx, true))
     return
   }
-  ctx.rows = Array.isArray(result.data) ? result.data : []
+  ctx.rows = gabungStokKatalog(
+    Array.isArray(result.data) ? result.data : [],
+    katalog.ok && Array.isArray(katalog.data) ? katalog.data : []
+  )
   ctx.analisis = analisisStok(ctx.rows, ctx.tokoId)
   // Segarkan peringatan lonceng
   setState({ stokAlerts: ctx.analisis.alerts })

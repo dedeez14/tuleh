@@ -1,33 +1,35 @@
-# Buat aset ikon & splash Android dari logo aplikasi (frontend/build/icon.png).
-# Hasil ke mobile/assets/ lalu dipakai `npx capacitor-assets generate --android`.
+# Buat aset ikon Android (adaptive foreground/background + legacy) dari wordmark
+# Tuléh (logo-dashboard.png) dengan latar MINT #7AE2CF.
+# CATATAN: splash.png / splash-dark.png TIDAK disentuh di sini — splash dikelola
+# terpisah (dari logo-sharelink). Jalankan dari mobile/:  python gen-icons.py
 from PIL import Image
 import os
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.dirname(HERE)
-SRC = os.path.join(REPO, "frontend", "build", "icon.png")   # logo Tuléh (sama dgn .exe)
-OUT = os.path.join(HERE, "assets")
+SRC = r"C:\Users\legio\OneDrive\Documents\CLIENT\POS_TAUFIQ\logo-dashboard.png"  # wordmark Tuléh
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
 os.makedirs(OUT, exist_ok=True)
-logo = Image.open(SRC).convert("RGBA")
+MINT = (122, 226, 207, 255)   # #7AE2CF (brand)
 
-def canvas(size, bg):
-    return Image.new("RGBA", (size, size), bg if bg else (0, 0, 0, 0))
+wm = Image.open(SRC).convert("RGBA")
+wm = wm.crop(wm.getbbox())
 
-def center(base, target_w):
-    w, h = logo.size
-    s = target_w / max(w, h)
-    lw, lh = int(w * s), int(h * s)
-    rl = logo.resize((lw, lh), Image.LANCZOS)
-    base.alpha_composite(rl, ((base.width - lw) // 2, (base.height - lh) // 2))
-    return base
+def canvas(size, color):
+    return Image.new("RGBA", (size, size), color if color else (0, 0, 0, 0))
 
-WHITE = (255, 255, 255, 255)
-LIGHT = (243, 250, 248, 255)   # --bg terang
-DARK = (14, 22, 38, 255)       # --bg gelap
+def place(base, frac):
+    out = base.copy()
+    w, h = wm.size
+    tw = int(base.width * frac); th = int(h * tw / w)
+    out.alpha_composite(wm.resize((tw, th), Image.LANCZOS),
+                        ((base.width - tw) // 2, (base.height - th) // 2))
+    return out
 
-center(canvas(1024, None), int(1024 * 0.60)).save(os.path.join(OUT, "icon-foreground.png"))
-canvas(1024, WHITE).save(os.path.join(OUT, "icon-background.png"))
-center(canvas(1024, WHITE), int(1024 * 0.76)).save(os.path.join(OUT, "icon-only.png"))
-center(canvas(2732, LIGHT), 760).save(os.path.join(OUT, "splash.png"))
-center(canvas(2732, DARK), 760).save(os.path.join(OUT, "splash-dark.png"))
-print("OK icons →", OUT)
+# Adaptive: foreground (wordmark ~64% = dalam safe-zone lingkaran) + background mint
+place(canvas(1024, None), 0.64).save(os.path.join(OUT, "icon-foreground.png"))
+canvas(1024, MINT).save(os.path.join(OUT, "icon-background.png"))
+# Legacy square: wordmark ~72% pada mint
+place(canvas(1024, MINT), 0.72).save(os.path.join(OUT, "icon-only.png"))
+
+print("OK ikon (wordmark mint) →", OUT)
+for f in ("icon-foreground.png", "icon-background.png", "icon-only.png"):
+    print(" ", f, Image.open(os.path.join(OUT, f)).size)

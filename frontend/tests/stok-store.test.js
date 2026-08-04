@@ -53,3 +53,32 @@ test('saran restok positif untuk item menipis & habis; alerts terurut stok naik'
 test('getMin default 5 bila belum diatur', () => {
   assert.equal(S.getMin('TOKO-Y', 'apapun'), 5)
 })
+
+test('gabungStokKatalog: produk katalog baru (kode belum di laporan) ditambahkan stok 0', () => {
+  const laporan = [{ id: 'L1', kode: 'A1', produk: 'Lama', stok: 10 }]
+  const katalog = [
+    { id: 'P1', kode: 'A1', nama: 'Lama', kelola_stok: true, stok: 10 },      // sudah ada (dedup by kode)
+    { id: 'P2', kode: 'BARU-1', nama: 'Produk Baru', kelola_stok: true, stok: 0 } // baru → ditambah
+  ]
+  const rows = S.gabungStokKatalog(laporan, katalog)
+  assert.equal(rows.length, 2)
+  const baru = rows.find((r) => r.kode === 'BARU-1')
+  assert.ok(baru, 'produk baru harus muncul')
+  assert.equal(baru.produk, 'Produk Baru')
+  assert.equal(baru.stok, 0)
+  // baris laporan dipertahankan apa adanya (id laporan, bukan id produk)
+  assert.equal(rows.find((r) => r.kode === 'A1').id, 'L1')
+})
+
+test('gabungStokKatalog: item non-kelola_stok (mis. JASA) tidak ditambahkan', () => {
+  const rows = S.gabungStokKatalog([], [
+    { id: 'J1', kode: 'JASA-1', nama: 'Cuci', kelola_stok: false, stok: 0 }
+  ])
+  assert.equal(rows.length, 0)
+})
+
+test('gabungStokKatalog: katalog kosong/gagal → pakai laporan apa adanya', () => {
+  const laporan = [{ id: 'L1', kode: 'A1', produk: 'X', stok: 5 }]
+  assert.deepEqual(S.gabungStokKatalog(laporan, []), laporan)
+  assert.deepEqual(S.gabungStokKatalog(laporan, null), laporan)
+})
