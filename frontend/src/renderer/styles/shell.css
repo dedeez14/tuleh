@@ -501,13 +501,62 @@
 .home {
   overflow-y: auto;
   height: 100%;
-  background: var(--bg);
+  background:
+    radial-gradient(1200px 420px at 50% -8%, color-mix(in srgb, var(--accent) 12%, var(--bg)), transparent 70%),
+    var(--bg);
+  display: flex;
+  flex-direction: column;
 }
 
 .home__inner {
+  position: relative;
+  flex: 1 0 auto;
+  width: 100%;
   max-width: 1080px;
   margin: 0 auto;
-  padding: var(--sp-10) var(--sp-8) var(--sp-12);
+  padding: var(--sp-10) var(--sp-8) var(--sp-10);
+}
+
+/* Watermark logo Tuléh monokrom, berulang & sangat samar (di belakang konten). */
+.home__inner::before {
+  content: "";
+  position: absolute;
+  inset: 0 -6vw;
+  background-image: var(--home-watermark);
+  background-repeat: repeat;
+  background-size: 250px auto;
+  opacity: 0.05;
+  z-index: 0;
+  pointer-events: none;
+}
+.home__inner > * { position: relative; z-index: 1; }
+
+/* Ombak kaki Beranda — tiga lapis (mint → langit → biru) untuk kedalaman. */
+.home__waves {
+  position: relative;
+  flex: 0 0 auto;
+  width: 100%;
+  height: 132px;
+  margin-top: var(--sp-6);
+  pointer-events: none;
+  overflow: hidden;
+}
+.home__wave {
+  position: absolute;
+  left: -2%;
+  bottom: -1px;
+  width: 104%;
+  height: 100%;
+  display: block;
+}
+.home__wave--back  { fill: var(--mint-400); opacity: 0.28; transform: translateY(16px) scaleY(0.9); }
+.home__wave--mid   { fill: #38bdf8;         opacity: 0.42; transform: translateY(7px); }
+.home__wave--front { fill: #0099ff;         opacity: 0.92; }
+
+/* Dark: balikkan watermark grayscale agar tetap terlihat samar di latar gelap. */
+:root[data-theme="dark"] .home__inner::before { filter: invert(1); opacity: 0.06; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .home__inner::before { filter: invert(1); opacity: 0.06; }
 }
 
 .home__head {
@@ -920,4 +969,11 @@
 .picker__bidang {
   font-size: var(--text-sm);
   color: var(--text-2);
+}
+
+/* --- Polish: mikro-interaksi ikon kartu Beranda --- */
+.home-card__icon { transition: transform var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease); }
+.home-card:hover .home-card__icon {
+  transform: scale(1.07) rotate(-3deg);
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--mod, var(--mint-400)) 32%, transparent);
 }

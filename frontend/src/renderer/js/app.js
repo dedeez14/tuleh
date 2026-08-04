@@ -12,6 +12,7 @@ import { ringkasLangganan } from './langganan.js'
 import { mulaiPembayaran } from './langganan-bayar.js'
 import { esc, fmtIDR, fmtNumber, toISODate } from './utils/format.js'
 import { LOGO_DATA_URI } from './assets/logo.js'
+import { DASHBOARD_WATERMARK } from './assets/dashboard-bg.js'
 import { renderLogin } from './screens/login.js'
 import { PosScreen } from './screens/pos.js'
 import { HistoryScreen } from './screens/history.js'
@@ -80,11 +81,39 @@ const MODULE_ACCENT = {
   keuangan: 'laporan', pengeluaran: 'meja', stok: 'dapur'
 }
 
+// Ombak dekoratif kaki Beranda — tiga lapis (mint→langit→biru) untuk kedalaman.
+const WAVE_PATH = 'M0,192L48,170.7C96,149,192,107,288,112C384,117,480,171,576,181.3C672,192,768,160,864,170.7C960,181,1056,235,1152,240C1248,245,1344,203,1392,181.3L1440,160L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z'
+const HOME_WAVES = `
+  <div class="home__waves" aria-hidden="true">
+    <svg class="home__wave home__wave--back" viewBox="0 108 1440 212" preserveAspectRatio="none"><path d="${WAVE_PATH}"/></svg>
+    <svg class="home__wave home__wave--mid" viewBox="0 108 1440 212" preserveAspectRatio="none"><path d="${WAVE_PATH}"/></svg>
+    <svg class="home__wave home__wave--front" viewBox="0 108 1440 212" preserveAspectRatio="none"><path d="${WAVE_PATH}"/></svg>
+  </div>`
+
 const appRoot = document.getElementById('app')
 let currentCleanup = null
 let unsubscribeShell = null
 // Notifikasi dianggap terbaca sesi ini setelah pengguna menekan "tandai terbaca".
 let notifDismissed = false
+
+// Splash: durasi minimum agar animasi terlihat, lalu fade-out saat app siap.
+const SPLASH_START = Date.now()
+const SPLASH_MIN_MS = 2800
+// Dorong logo splash ter-decode sedini mungkin. Paint gambar tetap ditunda WebView
+// sampai boot selesai (~2.5s), jadi durasi minimum splash menjamin logo cukup lama tampil.
+try {
+  const _logo = document.querySelector('#splash .splash-logo')
+  if (_logo && typeof _logo.decode === 'function') _logo.decode().catch(() => {})
+} catch (e) { /* abaikan */ }
+function hideSplash() {
+  const el = document.getElementById('splash')
+  if (!el) return
+  const wait = Math.max(0, SPLASH_MIN_MS - (Date.now() - SPLASH_START))
+  setTimeout(() => {
+    el.classList.add('is-hidden')
+    setTimeout(() => { if (el.parentNode) el.remove() }, 600)
+  }, wait)
+}
 
 // ---------- Manifest: normalisasi & daftar modul ----------
 
@@ -600,6 +629,7 @@ function renderHome(container) {
           ${moduleList().map(homeCardHTML).join('')}
         </div>
       </div>
+      ${HOME_WAVES}
     </div>`
 
   container.querySelectorAll('[data-module]').forEach((el) => {
@@ -707,6 +737,7 @@ function enterLogin() {
   }
   resetAuthState()
   renderLogin(appRoot, { onSuccess: enterApp })
+  hideSplash()
 }
 
 async function enterApp(identity) {
@@ -727,6 +758,7 @@ async function enterApp(identity) {
   await loadWorkspace()
   renderShell()
   await showScreen('home')
+  hideSplash()
 }
 
 // ---------- Pemantau koneksi & pintasan global ----------
@@ -819,12 +851,18 @@ async function boot() {
       await loadWorkspace()
       renderShell()
       await showScreen('home')
+      hideSplash()
       return
     }
   }
   enterLogin()
 }
 
+// Watermark Beranda (logo Tuléh monokrom berulang) sebagai custom property CSS.
+document.documentElement.style.setProperty('--home-watermark', `url("${DASHBOARD_WATERMARK}")`)
+
 // Terapkan tema tersimpan sedini mungkin agar tidak ada kedip warna saat boot.
 applyTheme()
-boot()
+boot().catch((err) => { console.error('Boot gagal:', err); hideSplash() })
+// Jaring pengaman: jangan biarkan splash tersangkut bila boot lama/gagal.
+setTimeout(hideSplash, 15000)

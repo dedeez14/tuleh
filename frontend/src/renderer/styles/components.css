@@ -344,21 +344,25 @@
   top: 0;
   z-index: 1;
   text-align: left;
-  padding: 11px 16px;
+  padding: 12px 16px;
   font-size: var(--text-xs);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--text-3);
+  color: var(--text-2);
   background: var(--surface-2);
-  border-bottom: 1px solid var(--line);
+  border-bottom: 2px solid color-mix(in srgb, var(--mint-400) 42%, var(--line));
   white-space: nowrap;
 }
 
 .table td {
-  padding: 11px 16px;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--line);
   vertical-align: middle;
+}
+
+.table tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--surface-2) 45%, var(--surface));
 }
 
 .table tbody tr:last-child td {
@@ -366,11 +370,14 @@
 }
 
 .table tbody tr {
-  transition: background var(--dur-fast) var(--ease);
+  transition: background var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
 }
 
-.table tbody tr:hover {
+.table tbody tr:hover td {
   background: var(--mint-50);
+}
+.table tbody tr:hover td:first-child {
+  box-shadow: inset 3px 0 0 var(--mint-400);
 }
 
 .table tbody tr.is-clickable {
@@ -670,15 +677,30 @@
 }
 
 .page-head__title {
+  position: relative;
+  padding-left: 15px;
   font-size: var(--text-2xl);
   font-weight: 800;
   letter-spacing: -0.01em;
 }
 
+/* Aksen gradien di kiri judul — konsisten di semua layar (senada kartu hero). */
+.page-head__title::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.18em;
+  bottom: 0.14em;
+  width: 4px;
+  border-radius: 4px;
+  background: linear-gradient(180deg, var(--accent), var(--accent-2));
+}
+
 .page-head__desc {
   color: var(--text-2);
   font-size: var(--text-sm);
-  margin-top: 2px;
+  margin-top: 3px;
+  padding-left: 15px;
 }
 
 /* Alur pembayaran langganan (modal Midtrans Snap) — rgba (bukan color-mix) agar
