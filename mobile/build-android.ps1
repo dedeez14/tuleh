@@ -8,7 +8,7 @@ $srcMain  = Join-Path $repo 'frontend\src\main'
 $www      = Join-Path $mobile 'www'
 
 Write-Host '1/5 Dependencies…'
-if (-not (Test-Path (Join-Path $mobile 'node_modules'))) { Push-Location $mobile; npm install; Pop-Location }
+Push-Location $mobile; npm install --no-audit --no-fund; Pop-Location
 
 Write-Host '2/5 Merakit www/ (renderer + qrcode + demo + overlay mobile)…'
 if (Test-Path $www) { Remove-Item $www -Recurse -Force }
@@ -24,7 +24,13 @@ function Wrap-Cjs([string]$name, [string]$src, [string]$dest) {
 }
 Wrap-Cjs 'demo-data' (Join-Path $srcMain 'demo-data.js') (Join-Path $www 'js\demo-data.js')
 Wrap-Cjs 'demo'      (Join-Path $srcMain 'demo.js')      (Join-Path $www 'js\demo.js')
-Copy-Item (Join-Path $mobile 'www-src\*') $www -Recurse -Force   # overlay: index.html + mobile-bridge.js
+Copy-Item (Join-Path $mobile 'www-src\*') $www -Recurse -Force   # overlay: index.html + mobile-bridge.js + polyfills.js
+
+Write-Host '2b/5 Transpile www/js → es2017 (kompatibel Android 10 / WebView Chrome 77)…'
+Push-Location $mobile
+node transpile.mjs "www\js"
+if ($LASTEXITCODE -ne 0) { throw 'transpile gagal' }
+Pop-Location
 
 Write-Host '3/5 Capacitor sync + ikon/splash…'
 Push-Location $mobile
@@ -32,6 +38,16 @@ if (Test-Path (Join-Path $mobile 'android')) { npx cap sync android } else { npx
 # assets/ sudah ada di repo; regenerasi dari logo bila perlu: python gen-icons.py
 npx capacitor-assets generate --android
 Pop-Location
+
+# minSdk = 29 (Android 10). variables.gradle dibuat ulang oleh `cap add`, jadi
+# tambal setiap build sebelum gradle membacanya.
+$varsFile = Join-Path $mobile 'android\variables.gradle'
+if (Test-Path $varsFile) {
+  $vg = (Get-Content $varsFile -Raw) -replace 'minSdkVersion = \d+', 'minSdkVersion = 29'
+  # WriteAllText tanpa BOM — Gradle/Groovy gagal parse bila ada BOM ("startup failed")
+  [IO.File]::WriteAllText($varsFile, $vg, (New-Object Text.UTF8Encoding($false)))
+  Write-Host 'minSdkVersion = 29 (Android 10) diterapkan.'
+}
 
 Write-Host '4/5 Gradle assembleDebug…'
 $env:JAVA_HOME    = 'C:\Program Files\Android\Android Studio\jbr'

@@ -1,6 +1,6 @@
 {
   "name": "tuleh-mobile",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "private": true,
   "description": "Tuléh POS — Android (Capacitor wrapper of the Tuléh web UI)",
   "dependencies": {
@@ -10,6 +10,7 @@
   },
   "devDependencies": {
     "@capacitor/assets": "^3.0.5",
-    "@capacitor/cli": "^7.0.0"
+    "@capacitor/cli": "^7.0.0",
+    "esbuild": "^0.24.0"
   }
 }

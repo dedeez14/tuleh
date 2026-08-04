@@ -112,11 +112,16 @@ jobs:
       - name: Install deps (mobile)
         working-directory: mobile
         run: npm install --no-audit --no-fund
+      - name: Transpile www/js → es2017 (kompatibel Android 10 / WebView Chrome 77)
+        working-directory: mobile
+        run: node transpile.mjs www/js
       - name: Capacitor add android + ikon/splash
         working-directory: mobile
         run: |
           npx cap add android
           npx capacitor-assets generate --android
+      - name: minSdk = 29 (Android 10)
+        run: sed -i 's/minSdkVersion = [0-9]\+/minSdkVersion = 29/' mobile/android/variables.gradle
       - name: Gradle assembleDebug
         working-directory: mobile/android
         run: |

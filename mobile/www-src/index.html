@@ -31,6 +31,9 @@
   <!-- Area khusus cetak struk — lihat receipt.js & base.css @media print -->
   <div id="print-root" aria-hidden="true"></div>
 
+  <!-- Polyfill runtime WebView Android lama (WAJIB paling awal) -->
+  <script src="./js/polyfills.js"></script>
+
   <!-- Shim CommonJS minimal agar demo.js (Node/CJS) berjalan di browser -->
   <script>
     (function () {
