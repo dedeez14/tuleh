@@ -795,3 +795,25 @@
   gap: var(--sp-3);
   width: 100%;
 }
+
+/* ---------- Bayar lapis dasar: QRIS statis & Transfer ---------- */
+.pos-pay__qris { display: flex; flex-direction: column; align-items: center; gap: 10px; margin: var(--sp-3) 0; }
+.pos-pay__qris-img {
+  width: 240px; max-width: 72%; aspect-ratio: 1 / 1; object-fit: contain;
+  border: 1px solid var(--border, var(--surface-3)); border-radius: 14px; background: #fff; padding: 10px;
+}
+.pos-pay__qris-total { font-size: var(--text-2xl, 1.6rem); font-weight: 800; letter-spacing: -0.01em; }
+.pos-pay__note { font-size: var(--text-sm); color: var(--text-2); text-align: center; line-height: 1.45; }
+.pos-pay__note--warn {
+  background: var(--warn-bg, #fef3c7); color: var(--warn, #92400e);
+  padding: var(--sp-3); border-radius: 10px; text-align: left;
+}
+.pos-pay__banks { display: flex; flex-direction: column; gap: 8px; margin: var(--sp-3) 0; }
+.pos-pay__bank {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  border: 1px solid var(--border, var(--surface-3)); border-radius: 12px; padding: var(--sp-3); background: var(--surface-2);
+}
+.pos-pay__bank-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pos-pay__bank-name { font-weight: 700; }
+.pos-pay__bank-rek { font-size: var(--text-lg); letter-spacing: 0.02em; }
+.pos-pay__bank-nama { font-size: var(--text-sm); color: var(--text-2); }

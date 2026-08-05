@@ -569,6 +569,50 @@ function renderPos(container) {
 
   // ---------- Modal pembayaran ----------
 
+  // Lapis DASAR: QRIS statis (gambar QR merchant) — tampil saat metode QRIS.
+  function qrisStatisHTML(total) {
+    const pb = getState().pembayaran || {}
+    if (!pb.qr_statis) {
+      return `<div class="pos-pay__note pos-pay__note--warn"><b>QRIS statis belum diunggah.</b> Owner/Manager: buka <b>Pengaturan → Pembayaran</b> untuk mengunggah gambar QRIS usaha.</div>`
+    }
+    return `
+      <div class="pos-pay__qris">
+        <img class="pos-pay__qris-img" src="${esc(pb.qr_statis)}" alt="QRIS statis" />
+        <div class="pos-pay__qris-total num">${fmtIDR(total)}</div>
+        <div class="pos-pay__note">Tunjukkan QR ke pelanggan. Setelah pelanggan membayar &amp; Anda cek, tekan <b>Sudah Bayar</b>.</div>
+      </div>`
+  }
+
+  // Lapis DASAR: daftar rekening transfer merchant — tampil saat metode TRANSFER.
+  function transferHTML() {
+    const banks = (getState().pembayaran && getState().pembayaran.bank) || []
+    if (!banks.length) {
+      return `<div class="pos-pay__note pos-pay__note--warn">Belum ada rekening. Owner/Manager: tambahkan di <b>Pengaturan → Pembayaran</b>.</div>`
+    }
+    return `
+      <div class="pos-pay__banks">
+        ${banks.map((b) => `
+          <div class="pos-pay__bank">
+            <div class="pos-pay__bank-main">
+              <span class="pos-pay__bank-name">${esc(b.bank)}</span>
+              <span class="pos-pay__bank-rek mono">${esc(b.rekening)}</span>
+              <span class="pos-pay__bank-nama">a.n. ${esc(b.atas_nama)}</span>
+            </div>
+            <button type="button" class="btn btn--outline btn--sm pos-pay__bank-salin" data-rek="${esc(b.rekening)}">Salin</button>
+          </div>`).join('')}
+      </div>
+      <div class="pos-pay__note">Pelanggan transfer ke salah satu rekening. Setelah dana masuk, tekan <b>Sudah Bayar</b>.</div>`
+  }
+
+  function bindSalinRekening(container) {
+    container.querySelectorAll('.pos-pay__bank-salin').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        try { await navigator.clipboard.writeText(btn.dataset.rek); toast('No. rekening disalin.', 'success') }
+        catch { toast('Gagal menyalin. Silakan salin manual.', 'error') }
+      })
+    })
+  }
+
   function openPaymentModal() {
     if (!cart.length || document.querySelector('.modal-overlay')) return
 
@@ -590,14 +634,17 @@ function renderPos(container) {
         <span class="pos-pay__bill-label">Total tagihan</span>
         <span class="pos-pay__bill-amount num">${fmtIDR(grandTotal)}</span>
       </div>
-      <div class="field">
-        <label class="field__label" for="pay-input">Dibayar</label>
-        <input class="input input--lg num" id="pay-input" type="text" inputmode="numeric"
-               placeholder="0" autocomplete="off" />
-        <div class="field__hint num" id="pay-fmt">${fmtIDR(0)}</div>
+      <div id="pay-method-extra"></div>
+      <div id="pay-cash-block">
+        <div class="field">
+          <label class="field__label" for="pay-input">Dibayar</label>
+          <input class="input input--lg num" id="pay-input" type="text" inputmode="numeric"
+                 placeholder="0" autocomplete="off" />
+          <div class="field__hint num" id="pay-fmt">${fmtIDR(0)}</div>
+        </div>
+        <div class="pos-pay__quick" id="pay-quick"></div>
+        <div class="pos-pay__status" id="pay-status"></div>
       </div>
-      <div class="pos-pay__quick" id="pay-quick"></div>
-      <div class="pos-pay__status" id="pay-status"></div>
       <div class="field">
         <label class="field__label" for="pay-note">Catatan (opsional)</label>
         <textarea class="textarea" id="pay-note" rows="2" placeholder="Misal: pesanan dibungkus"></textarea>
@@ -654,22 +701,35 @@ function renderPos(container) {
       submitBtn.disabled = kurang > 0
     }
 
+    const extraEl = body.querySelector('#pay-method-extra')
+    const cashBlock = body.querySelector('#pay-cash-block')
+
     function applyMetode() {
       body.querySelectorAll('.pos-pay__method').forEach((btn) => {
         btn.classList.toggle('is-active', btn.dataset.metode === metode)
       })
       if (metode === 'TUNAI') {
+        // Lapis TUNAI: input uang diterima + nominal cepat + kembalian.
+        extraEl.innerHTML = ''
+        cashBlock.classList.remove('u-hidden')
         quickEl.classList.remove('u-hidden')
         quickEl.innerHTML = quickCashOptions(grandTotal)
           .map((v) => `<button type="button" class="pos-pay__cash num" data-value="${v}">${Number(v) === grandTotal ? 'Uang Pas' : fmtIDR(v)}</button>`)
           .join('')
+        submitBtn.textContent = 'Selesaikan Transaksi'
+        updateStatus()
+        payInput.focus()
+        payInput.select()
       } else {
-        quickEl.classList.add('u-hidden')
+        // Lapis DASAR non-tunai (QRIS statis / Transfer): tampilkan QR / rekening;
+        // pembayaran pas → sembunyikan input uang & kembalian. Tombol "Sudah Bayar".
+        cashBlock.classList.add('u-hidden')
         payInput.value = fmtNumber(grandTotal)
+        extraEl.innerHTML = metode === 'QRIS' ? qrisStatisHTML(grandTotal) : transferHTML()
+        if (metode === 'TRANSFER') bindSalinRekening(extraEl)
+        submitBtn.textContent = 'Sudah Bayar'
+        submitBtn.disabled = false
       }
-      updateStatus()
-      payInput.focus()
-      payInput.select()
     }
 
     body.querySelector('#pay-methods').addEventListener('click', (e) => {
@@ -743,7 +803,7 @@ function renderPos(container) {
 
       if (!result.ok) {
         submitBtn.disabled = false
-        submitBtn.textContent = 'Selesaikan Transaksi'
+        submitBtn.textContent = metode === 'TUNAI' ? 'Selesaikan Transaksi' : 'Sudah Bayar'
         errorEl.textContent = firstError(result)
         errorEl.classList.remove('u-hidden')
         if (result.status === 409 && !footer.querySelector('#pay-goto-session')) {

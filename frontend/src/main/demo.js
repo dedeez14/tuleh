@@ -64,7 +64,7 @@ let demoQrisSeq = 0
 function pembayaranDemo () {
   if (!demoPembayaran) {
     demoPembayaran = {
-      qr_statis: null,
+      qr_statis: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAWgAAAFoAQAAAABSnlx4AAACuElEQVR4nO1bQY6rMAz1C5WYHd39JdwkvRn0ZnATuAHsQIL6ywY0qiJNGY3UgvDbFNK3sOw6ebZTMP0C7jdkMnYI80kI80kI80kI80kI88lffULMzI/1JZU3Xci5JeIy7devclk3f4fYXSxzDWGR9pGqG8whJUr7+XFh7Mdudyp2BYCI4kGj8aB7ppGrJVTA5Y2WbIPbyDszO2IAcJTXnQb3c5b8DGO/9MmwZiA16UhA9iP7BYz9GZ94PfAoHuUlngDfxExe9lhm1lWLzqf0yQLVJ76NH5TXyWha84CxfAIRxSI7W5GdayGxYD92O2OHkBA9KC8lDQsJHVEyB07zUhY8j0shYR4M8S6fgKsvOd7awRE1iBm3Bo74fn23Ja/hNnBOyQYjbyNmZIMUC10yoUh5APk6nkC+iScUO7R7M9ypTsBSnrWjQr7VRwku1wTbNQ/FZsm6iOmeaQ2YqFRNBoiamcBld1HG7uw+S6YViyjpdU3qhjXTBInpkyPF0s8VA2kNOPeoRWvOjDayHvVRYvlYzr587qtIihZp+13rW14eS80kcw04Epe63daJCBtRM5aXO9CakWRary3OHku3xUumyd5pFfqBtKZvJzAg9bz2qLlKZQOVel7qQ6sBD6VMx6UG5FWfRktlKDuq5eVx8pJlj5Vx7kXG8YlMJ2gCbvItcuvN7GPe0H/XgCo7l6a1ZdqBMm1BFo8S3C5inbVzSdLc9nYCHvHOGT+jfBom2ezow3fOBoAqHRU11wmiNSHzBrtzdkB2PBJuslXeMykKSW7qavX+dktewNib7px5mR1RKimZV19gqmDzhiP8qi7Lp5//SxbLR/dPrzlFI1W67Nur25vd7kzsu0rNQk5A3JIO4EpPQNlAcaPosVO7N8Kdgg37t+aOo+OMHcB8EsJ8EsJ8EsJ8QgH+A2ioKQvIpEc9AAAAAElFTkSuQmCC',
       bank: [{ bank: 'BCA', rekening: '8880123456', atas_nama: 'Tuleh Demo' }],
       midtrans_aktif: true,
       midtrans: {
