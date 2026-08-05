@@ -499,6 +499,7 @@
 /* ---------- Beranda ---------- */
 
 .home {
+  overflow-x: hidden;      /* cegah overflow horizontal (mis. watermark -6vw) → ombak tak "terputus" di kanan */
   overflow-y: auto;
   height: 100%;
   background:
@@ -506,6 +507,15 @@
     var(--bg);
   display: flex;
   flex-direction: column;
+  scrollbar-width: thin; /* Firefox: scrollbar tipis → gutter kanan minim */
+}
+/* Scrollbar tipis & halus (WebKit/Chromium) supaya tepi kanan tidak menyisakan
+   celah putih lebar di samping ombak. */
+.home::-webkit-scrollbar { width: 8px; }
+.home::-webkit-scrollbar-track { background: transparent; }
+.home::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text-2, #64748b) 30%, transparent);
+  border-radius: 999px;
 }
 
 .home__inner {
