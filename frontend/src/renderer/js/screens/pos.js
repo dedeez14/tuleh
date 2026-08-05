@@ -156,6 +156,7 @@ function renderPos(container) {
           </div>
           <div class="pos-cart__head-act">
             <button type="button" class="btn btn--ghost btn--sm" id="pos-cust-display" aria-pressed="false" title="Tampilkan pesanan ke pelanggan">Display</button>
+            <button type="button" class="btn btn--ghost btn--icon btn--sm" id="pos-cust-cfg" title="Pengaturan Display Pelanggan (video promosi & URL LAN)">${icons.settings}</button>
             <button type="button" class="btn btn--ghost btn--sm" id="pos-clear">Kosongkan</button>
           </div>
         </div>
@@ -204,14 +205,19 @@ function renderPos(container) {
       const lt = lineTotals({ harga, kuantitas: qty, diskonPersen: Number(l.diskonPersen) || 0, pajakPersen: Number(l.produk.pajak_persen) || 0 })
       return { nama: l.produk.nama, qty, satuan: l.produk.satuan || '', harga, subtotal: lt.bruto }
     })
-    return { store: cdStore(), items, totals, payment: cdPayment, done: false }
+    return { store: cdStore(), items, totals, payment: cdPayment, done: false, promoVideo: promoVideoUrl() }
+  }
+
+  function promoVideoUrl() {
+    try { return localStorage.getItem('tuleh_promo_video') || '' } catch { return '' }
   }
 
   function pushCustomerDisplay() {
-    if (!cdOn) return
     const state = buildCustomerState()
-    if (cdSupported) api.customerDisplay.update(state)                 // desktop → IPC ke jendela kedua
-    else if (cdOverlay) cdOverlay.querySelector('.cd-overlay__view').innerHTML = customerViewHTML(state) // Android → overlay
+    // Desktop: SELALU relay ke tracker (halaman LAN /display) + jendela kedua bila
+    // terbuka. Android: hanya render overlay bila overlay sedang dibuka.
+    if (cdSupported) api.customerDisplay.update(state)
+    else if (cdOverlay) cdOverlay.querySelector('.cd-overlay__view').innerHTML = customerViewHTML(state)
   }
 
   function setCdBtn() {
@@ -249,17 +255,58 @@ function renderPos(container) {
     setCdBtn()
   }
 
+  const custCfgBtn = container.querySelector('#pos-cust-cfg')
+
   if (custDisplayBtn && api.customerDisplay) {
     custDisplayBtn.addEventListener('click', toggleCustomerDisplay)
+    if (custCfgBtn) custCfgBtn.addEventListener('click', openCustomerDisplayConfig)
     // Deteksi kapabilitas: desktop = jendela kedua; selain itu overlay dalam-app.
     api.customerDisplay.status().then((r) => {
       cdSupported = !!(r && r.ok && r.data && r.data.supported)
       cdOn = !!(r && r.ok && r.data && r.data.open) // jendela mungkin sudah terbuka
       setCdBtn()
-      if (cdOn) pushCustomerDisplay()
+      pushCustomerDisplay() // seed state ke tracker (LAN /display) + window bila terbuka
     }).catch(() => {})
   } else if (custDisplayBtn) {
     custDisplayBtn.classList.add('u-hidden') // fitur tak tersedia (preload lama)
+    if (custCfgBtn) custCfgBtn.classList.add('u-hidden')
+  }
+
+  // Pengaturan Display Pelanggan: video promosi (idle) + URL LAN /display.
+  async function openCustomerDisplayConfig() {
+    const info = await api.app.info()
+    const tracking = info.ok ? info.data?.tracking : null
+    const lanDisplay = tracking?.running ? `${tracking.baseUrl}/display` : ''
+    const body = document.createElement('div')
+    body.className = 'cd-cfg'
+    body.innerHTML = `
+      <div class="field">
+        <label class="field__label" for="cd-promo">URL Video Promosi (saat idle)</label>
+        <input class="input" id="cd-promo" type="url" value="${esc(promoVideoUrl())}" placeholder="https://…/promo.mp4" />
+        <div class="field__hint">Video .mp4/.webm diputar bisu &amp; berulang di Display Pelanggan saat tak ada transaksi. Kosongkan untuk layar sambutan biasa.</div>
+      </div>
+      ${lanDisplay ? `
+        <div class="field">
+          <label class="field__label">Buka di monitor/TV pelanggan (LAN)</label>
+          <div class="cd-cfg__url"><span class="mono" id="cd-lan">${esc(lanDisplay)}</span>
+            <button type="button" class="btn btn--outline btn--sm" id="cd-copy">Salin</button></div>
+          <div class="field__hint">Buka URL ini di browser monitor/TV pelanggan (satu Wi-Fi). Beda dari “jendela kedua” di PC ini.</div>
+        </div>`
+        : `<div class="field__hint">Server LAN belum aktif — URL Display Pelanggan LAN muncul saat sesi/demo berjalan.</div>`}`
+    const footer = document.createElement('div')
+    footer.innerHTML = `<button type="button" class="btn btn--primary btn--block" id="cd-save">Simpan</button>`
+    const { close } = showModal({ title: 'Display Pelanggan', body, footer })
+    const copyBtn = body.querySelector('#cd-copy')
+    if (copyBtn) copyBtn.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(lanDisplay); toast('URL disalin.', 'success') } catch { toast('Gagal menyalin.', 'error') }
+    })
+    footer.querySelector('#cd-save').addEventListener('click', () => {
+      const v = body.querySelector('#cd-promo').value.trim()
+      try { if (v) localStorage.setItem('tuleh_promo_video', v); else localStorage.removeItem('tuleh_promo_video') } catch { /* abaikan */ }
+      pushCustomerDisplay() // segarkan display bila sedang idle
+      toast('Pengaturan Display Pelanggan disimpan.', 'success')
+      close()
+    })
   }
 
   // ---------- Katalog produk ----------
@@ -803,7 +850,7 @@ function renderPos(container) {
       }
       submitBtn.disabled = kurang > 0
       // Cerminkan uang diterima & kembalian ke Display Pelanggan (live, saat TUNAI).
-      if (cdOn && metode === 'TUNAI') {
+      if (metode === 'TUNAI') {
         cdPayment = payInput.value.trim() && kurang <= 0
           ? { metode: 'TUNAI', dibayar, kembalian: kembalian(dibayar, grandTotal) }
           : null
@@ -902,19 +949,17 @@ function renderPos(container) {
     // Bersihkan keranjang + segarkan katalog, lalu tampilkan struk sukses.
     function finalizeSuccess(struk) {
       // Snapshot "Terima kasih" utk Display Pelanggan (keranjang akan dikosongkan).
-      if (cdOn) {
-        cdDone = true
-        cdDoneData = {
-          store: cdStore(),
-          items: [],
-          totals: { grandTotal: Number(struk.grand_total) || 0 },
-          payment: {
-            metode: struk.tipe_pembayaran || 'TUNAI',
-            dibayar: Number(struk.dibayar) || 0,
-            kembalian: Number(struk.kembalian) || 0
-          },
-          done: true
-        }
+      cdDone = true
+      cdDoneData = {
+        store: cdStore(),
+        items: [],
+        totals: { grandTotal: Number(struk.grand_total) || 0 },
+        payment: {
+          metode: struk.tipe_pembayaran || 'TUNAI',
+          dibayar: Number(struk.dibayar) || 0,
+          kembalian: Number(struk.kembalian) || 0
+        },
+        done: true
       }
       cart = []
       pelanggan = null

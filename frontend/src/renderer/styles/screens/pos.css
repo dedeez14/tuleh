@@ -266,6 +266,8 @@
   padding: var(--sp-5) var(--sp-5) var(--sp-3);
 }
 .pos-cart__head-act { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.cd-cfg__url { display: flex; align-items: center; gap: 8px; }
+.cd-cfg__url .mono { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: var(--text-sm); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r, 6px); padding: 8px 10px; }
 #pos-cust-display.is-active {
   color: var(--mint-700);
   background: var(--mint-100, rgba(122, 226, 207, 0.16));

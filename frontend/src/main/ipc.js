@@ -251,7 +251,10 @@ function registerIpcHandlers(getMainWindow) {
   handle('customer:status', () => ({ ok: true, data: { supported: true, open: customerWindow.isOpen() } }))
   handle('customer:open', () => ({ ok: true, data: customerWindow.open() }))
   handle('customer:close', () => ({ ok: true, data: customerWindow.close() }))
-  handle('customer:update', (state) => ({ ok: true, data: customerWindow.update(state) }))
+  handle('customer:update', (state) => {
+    tracker.setCustomerState(state) // relay ke halaman LAN /display
+    return { ok: true, data: customerWindow.update(state) }
+  })
 
   handle('settings:get', () => ({ ok: true, data: settingsStore.load() }))
 

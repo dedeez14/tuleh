@@ -85,6 +85,10 @@
 .cd__v { font-size: clamp(30px, 3.6vw, 60px); font-weight: 800; color: #fff; }
 .cd__v--change { color: var(--cd-mint); }
 
+/* ---------- Video promosi saat idle (layar penuh) ---------- */
+.cd--promo { padding: 0; }
+.cd__promo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #041613; }
+
 /* ---------- Overlay Android (di dalam app kasir) ---------- */
 .cd-overlay { position: fixed; inset: 0; z-index: 200; }
 .cd-overlay__close {

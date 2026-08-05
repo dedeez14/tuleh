@@ -71,6 +71,24 @@ test('done dengan kembalian menampilkan nilai kembalian', () => {
   assert.match(html, /Rp\s?20\.000/)
 })
 
+test('idle dengan promoVideo menampilkan <video> layar penuh (bukan sambutan)', () => {
+  const html = V.customerViewHTML({ store: { nama: 'X' }, promoVideo: 'https://cdn.x/promo.mp4' })
+  assert.match(html, /cd--promo/)
+  assert.match(html, /<video[^>]+src="https:\/\/cdn\.x\/promo\.mp4"/)
+  assert.match(html, /autoplay/)
+  assert.match(html, /loop/)
+  assert.doesNotMatch(html, /Selamat datang/)
+})
+
+test('promoVideo diabaikan bila keranjang berisi (tetap layar pesanan)', () => {
+  const html = V.customerViewHTML({
+    store: { nama: 'X' }, promoVideo: 'https://cdn.x/promo.mp4',
+    items: [{ nama: 'A', qty: 1, harga: 1000, subtotal: 1000 }], totals: { grandTotal: 1000 }
+  })
+  assert.match(html, /cd--order/)
+  assert.doesNotMatch(html, /<video/)
+})
+
 test('aman terhadap state kosong / undefined', () => {
   assert.doesNotThrow(() => V.customerViewHTML())
   assert.doesNotThrow(() => V.customerViewHTML({}))

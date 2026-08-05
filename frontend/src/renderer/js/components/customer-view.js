@@ -44,8 +44,14 @@ export function customerViewHTML(state) {
       </div>`
   }
 
-  // Layar sambutan (keranjang kosong)
+  // Layar sambutan (keranjang kosong). Bila ada video promosi → putar layar penuh.
   if (!items.length) {
+    if (s.promoVideo) {
+      return `
+        <div class="cd cd--promo">
+          <video class="cd__promo" src="${esc(s.promoVideo)}" autoplay muted loop playsinline></video>
+        </div>`
+    }
     return `
       <div class="cd cd--welcome">
         ${brand}

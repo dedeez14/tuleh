@@ -15,6 +15,7 @@ const REFRESH_SECONDS = 5
 
 let server = null
 let publicUrl = null // URL internet publik (tunnel) — bila aktif, diutamakan
+let customerState = null // state Display Pelanggan LIVE (di-relay dari window kasir)
 let hooks = {
   tracking: null,    // (token) => { order, states, labels, tokoNama } | null
   menu: null,        // (kodeMeja) => { tokoNama, mejaNomor, products } | null
@@ -100,6 +101,93 @@ function pageShell(title, body) {
 </head>
 <body><div class="wrap">${body}</div></body>
 </html>`
+}
+
+// Halaman Display Pelanggan (LAN) — mandiri: poll /display/data lalu render
+// keranjang/total/bayar; saat idle tampilkan video promosi bila diset. Tak pakai
+// pageShell (tanpa meta-refresh) supaya update mulus tanpa reload penuh.
+function displayPage() {
+  return `<!DOCTYPE html>
+<html lang="id"><head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Display Pelanggan — Tuléh</title>
+<style>
+  *{box-sizing:border-box;margin:0} html,body{height:100%}
+  body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;overflow:hidden;color:#eafff9;
+       background:radial-gradient(1200px 600px at 80% -10%,rgba(122,226,207,.16),transparent 60%),linear-gradient(160deg,#0a2723,#06201c 60%,#041613)}
+  #cd{position:absolute;inset:0;display:flex;flex-direction:column;padding:clamp(20px,3vw,48px)}
+  .brand{display:flex;align-items:center;gap:14px}
+  .brand img{width:clamp(38px,3.4vw,56px);height:clamp(38px,3.4vw,56px);border-radius:10px;object-fit:contain;background:rgba(255,255,255,.06);padding:4px}
+  .store{font-weight:800;font-size:clamp(20px,2vw,32px)}
+  #cd.welcome{align-items:center;justify-content:center;text-align:center;gap:10px}
+  #cd.welcome .brand{flex-direction:column;gap:18px;margin-bottom:10px}
+  #cd.welcome img{width:clamp(80px,9vw,132px);height:clamp(80px,9vw,132px);border-radius:22px}
+  .w-title{font-size:clamp(40px,6vw,92px);font-weight:800;letter-spacing:-.02em;line-height:1.05}
+  .w-sub{font-size:clamp(18px,1.8vw,28px);color:rgba(234,255,249,.66)}
+  .promo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#041613}
+  .top{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-bottom:18px;border-bottom:1px solid rgba(122,226,207,.18);flex-shrink:0}
+  .count{font-size:clamp(15px,1.4vw,22px);color:rgba(234,255,249,.66);font-weight:600}
+  .items{flex:1 1 auto;overflow-y:auto;padding:10px 0;display:flex;flex-direction:column;gap:2px}
+  .row{display:grid;grid-template-columns:1fr auto auto;align-items:baseline;gap:10px 22px;padding:clamp(9px,1vw,15px) 4px;border-bottom:1px solid rgba(255,255,255,.06)}
+  .r-name{font-size:clamp(19px,1.8vw,30px);font-weight:700}
+  .r-meta{display:flex;gap:12px;color:rgba(234,255,249,.66);font-size:clamp(14px,1.2vw,20px);white-space:nowrap}
+  .r-qty{color:#7ae2cf;font-weight:800}
+  .r-sub{font-size:clamp(18px,1.6vw,28px);font-weight:700;text-align:right;white-space:nowrap}
+  .foot{flex-shrink:0;padding-top:16px;border-top:1px solid rgba(122,226,207,.18)}
+  .line{display:flex;justify-content:space-between;font-size:clamp(16px,1.4vw,24px);color:rgba(234,255,249,.66);padding:4px 0}
+  .total{display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-top:6px}
+  .total b{font-size:clamp(20px,2vw,34px);font-weight:700}
+  .total .v{font-size:clamp(40px,5.4vw,92px);font-weight:800;letter-spacing:-.02em;color:#fff;line-height:1}
+  .pay{margin-top:14px;padding-top:12px;border-top:1px dashed rgba(122,226,207,.28)}
+  .pay .change{color:#7ae2cf;font-weight:800;font-size:clamp(18px,1.8vw,30px)}
+  #cd.thanks{align-items:center;justify-content:center;text-align:center;gap:10px}
+  .ic{width:clamp(90px,10vw,150px);height:clamp(90px,10vw,150px);display:flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(122,226,207,.16);border:3px solid #7ae2cf;color:#7ae2cf;font-size:clamp(48px,6vw,88px);font-weight:800;margin-bottom:8px}
+  .t-title{font-size:clamp(40px,6vw,84px);font-weight:800}
+  .t-grid{display:flex;gap:clamp(24px,5vw,72px);margin-top:22px}
+  .t-grid>div{display:flex;flex-direction:column;gap:4px}
+  .k{font-size:clamp(14px,1.3vw,20px);color:rgba(234,255,249,.66);text-transform:uppercase;letter-spacing:.05em}
+  .vv{font-size:clamp(30px,3.6vw,60px);font-weight:800;color:#fff}.vv.change{color:#7ae2cf}
+  .off{position:absolute;bottom:12px;left:0;right:0;text-align:center;font-size:12px;color:rgba(234,255,249,.4)}
+</style></head>
+<body>
+<div id="cd" class="welcome"><div class="brand"><span class="store">Tuléh</span></div><div class="w-title">Selamat datang</div></div>
+<div class="off" id="off" style="display:none">Menyambung ke kasir…</div>
+<script>
+  var root=document.getElementById('cd'), off=document.getElementById('off'), lastVideo='';
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+  function rp(n){return 'Rp '+(Number(n)||0).toLocaleString('id-ID')}
+  function render(s){
+    s=s||{}; var store=s.store||{}, items=s.items||[], t=s.totals||{}, pay=s.payment||null, grand=Number(t.grandTotal)||0;
+    var logo=store.logo?'<img src="'+esc(store.logo)+'" alt="">':'';
+    var brand='<div class="brand">'+logo+'<span class="store">'+esc(store.nama||'Tuléh')+'</span></div>';
+    if(s.done){
+      lastVideo='';
+      root.className='thanks';
+      root.innerHTML=brand+'<div class="ic">\\u2713</div><div class="t-title">Terima kasih!</div><div class="w-sub">Pembayaran diterima</div><div class="t-grid"><div><span class="k">Total</span><span class="vv">'+rp(grand)+'</span></div>'+(pay&&Number(pay.kembalian)>0?'<div><span class="k">Kembalian</span><span class="vv change">'+rp(pay.kembalian)+'</span></div>':'')+'</div>';
+      return;
+    }
+    if(!items.length){
+      // Video promosi hanya diganti bila URL berubah → tak restart tiap poll.
+      if(s.promoVideo){
+        if(lastVideo!==s.promoVideo){ lastVideo=s.promoVideo; root.className='welcome'; root.innerHTML='<video class="promo" src="'+esc(s.promoVideo)+'" autoplay muted loop playsinline></video>'; }
+        return;
+      }
+      lastVideo=''; root.className='welcome';
+      root.innerHTML=brand+'<div class="w-title">Selamat datang</div><div class="w-sub">Silakan, kami siap melayani Anda \\ud83d\\ude4f</div>';
+      return;
+    }
+    lastVideo=''; root.className='order';
+    var rows=items.map(function(it){return '<div class="row"><div class="r-name">'+esc(it.nama)+'</div><div class="r-meta"><span class="r-qty">'+(Number(it.qty)||0)+'\\u00d7</span><span>'+rp(it.harga)+'</span></div><div class="r-sub">'+rp(it.subtotal)+'</div></div>'}).join('');
+    var disc=Number(t.totalDiskon)>0?'<div class="line"><span>Diskon</span><span>\\u2212'+rp(t.totalDiskon)+'</span></div>':'';
+    var tax=Number(t.totalPajak)>0?'<div class="line"><span>Pajak</span><span>'+rp(t.totalPajak)+'</span></div>':'';
+    var paybox=pay?'<div class="pay"><div class="line"><span>Dibayar'+(pay.metode?' \\u00b7 '+esc(pay.metode):'')+'</span><span>'+rp(pay.dibayar)+'</span></div><div class="line"><span>Kembalian</span><span class="change">'+rp(pay.kembalian)+'</span></div></div>':'';
+    root.innerHTML='<div class="top">'+brand+'<div class="count">'+(items.reduce(function(a,i){return a+(Number(i.qty)||0)},0))+' item</div></div><div class="items">'+rows+'</div><div class="foot">'+disc+tax+'<div class="total"><b>Total</b><span class="v">'+rp(grand)+'</span></div>'+paybox+'</div>';
+  }
+  function poll(){ fetch('/display/data',{cache:'no-store'}).then(function(r){return r.json()}).then(function(s){off.style.display='none';render(s)}).catch(function(){off.style.display='block'}); }
+  poll(); setInterval(poll, 1400);
+</script>
+</body></html>`
 }
 
 function renderTracking(info) {
@@ -272,11 +360,10 @@ async function handleRequest(req, res) {
     if (!info) return notFound('Papan antrian tidak aktif', 'Toko yang sedang aktif tidak memakai antrian.')
     const kolom = info.states.map((stage, idx) => {
       const isi = info.rows.filter((r) => r.stage === stage)
-      // Kolom terakhir (tahap 'Siap') disorot agar terlihat dari kejauhan
-      const kelas = idx === info.states.length - 1 ? 'qcol qcol--siap' : 'qcol'
+      const isSiap = idx === info.states.length - 1 // kolom terakhir (Siap) disorot
       return `
-        <section class="${kelas}">
-          <h2>${escapeHtml(info.labels[stage] || stage)}</h2>
+        <section class="qcol${isSiap ? ' qcol--siap' : ''}">
+          <h2>${escapeHtml(info.labels[stage] || stage)}<span class="qcount">${isi.length}</span></h2>
           <div class="qnums">
             ${isi.length
               ? isi.map((r) => `<span class="qno${r.meja ? ' qno--meja' : ''}">${escapeHtml(r.label || r.no_antrian)}</span>`).join('')
@@ -286,27 +373,63 @@ async function handleRequest(req, res) {
     }).join('')
     res.writeHead(200)
     res.end(pageShell(`Antrian — ${info.tokoNama}`, `
-      <div class="head"><h1>Papan Antrian</h1><div class="toko">${escapeHtml(info.tokoNama)}</div></div>
+      <div class="head">
+        <div class="kicker">Papan Antrian</div>
+        <h1 class="toko">${escapeHtml(info.tokoNama)}</h1>
+      </div>
       <div class="qgrid">${kolom}</div>
-      <div class="foot">Diperbarui otomatis · Tuléh</div>
+      <div class="foot">Diperbarui otomatis tiap ${REFRESH_SECONDS} detik · Tuléh</div>
       <style>
-        .wrap { max-width: none; padding: 0 2vw; }
-        .head .toko { font-size: clamp(28px, 3.5vw, 56px); }
-        .qgrid { display: grid; grid-template-columns: repeat(${info.states.length}, 1fr); gap: 14px; }
-        .qcol { background: #fff; border: 1px solid #cde2da; border-radius: 3px; padding: 14px; }
-        .qcol h2 { font-size: clamp(16px, 1.6vw, 24px); text-transform: uppercase; letter-spacing: .06em;
-                   color: #526e66; border-bottom: 1px solid #e3efea; padding-bottom: 8px; }
-        .qcol--siap { background: #dff7f1; border-color: #2fae99; border-width: 2px; }
-        .qcol--siap h2 { color: #17695d; }
-        .qnums { display: flex; flex-wrap: wrap; gap: 10px; padding-top: 12px; }
-        .qno { font-family: ui-monospace, Consolas, monospace; font-size: clamp(34px, 4.5vw, 72px);
-               font-weight: 800; background: #dff7f1; border: 1px solid #bff0e5; border-radius: 3px;
-               padding: 6px 14px; }
-        .qno--meja { background: #e0f4f9; border-color: #b8e3ee; font-family: inherit;
-                     font-size: clamp(30px, 4vw, 64px); font-weight: 800; }
-        .qkosong { color: #64796f; font-size: 24px; padding: 8px; }
-        @media (max-width: 700px) { .qgrid { grid-template-columns: 1fr; } }
+        html, body { height: 100%; }
+        body { margin: 0; padding: 0; overflow: hidden; color: #eafff9;
+               background: radial-gradient(1200px 700px at 85% -10%, rgba(122,226,207,.14), transparent 60%),
+                           linear-gradient(160deg,#0a2723,#06201c 60%,#041613); }
+        .wrap { max-width: none; width: 100%; height: 100vh; margin: 0;
+                padding: clamp(16px,2.4vw,42px); display: flex; flex-direction: column; }
+        .head { text-align: center; margin-bottom: clamp(10px,2vh,26px); flex-shrink: 0; }
+        .head .kicker { font-size: clamp(12px,1.2vw,18px); font-weight: 700; letter-spacing:.14em;
+                        text-transform: uppercase; color: #7ae2cf; }
+        .head .toko { font-size: clamp(26px,3.4vw,52px); font-weight: 800; letter-spacing:-.01em;
+                      margin-top: 4px; color:#fff; }
+        .qgrid { flex: 1 1 auto; min-height: 0; display: grid;
+                 grid-template-columns: repeat(${info.states.length}, 1fr); gap: clamp(12px,1.4vw,20px); }
+        .qcol { display: flex; flex-direction: column; min-height: 0; border-radius: 16px;
+                padding: clamp(14px,1.4vw,22px); background: rgba(255,255,255,.04);
+                border: 1px solid rgba(122,226,207,.16); }
+        .qcol h2 { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-shrink:0;
+                   font-size: clamp(15px,1.5vw,24px); text-transform: uppercase; letter-spacing:.06em;
+                   color:#9fe9d8; padding-bottom: 12px; border-bottom: 1px solid rgba(122,226,207,.16); }
+        .qcount { font-size:.72em; color:#06201c; background:#7ae2cf; border-radius:999px; min-width:1.9em;
+                  text-align:center; padding: 2px 9px; font-weight:800; }
+        .qcol--siap { background: rgba(122,226,207,.12); border-color:#2fae99; }
+        .qcol--siap h2 { color:#7ae2cf; }
+        .qnums { flex:1 1 auto; min-height:0; overflow-y:auto; display:flex; flex-wrap:wrap;
+                 align-content:flex-start; gap: clamp(8px,1vw,14px); padding-top: 14px; }
+        .qno { font-family: ui-monospace, Consolas, monospace; font-weight:800; line-height:1;
+               font-size: clamp(30px,4vw,66px); color:#eafff9; background: rgba(122,226,207,.1);
+               border:1px solid rgba(122,226,207,.22); border-radius: 12px; padding: .18em .32em; }
+        .qcol--siap .qno { background: rgba(122,226,207,.2); border-color:#7ae2cf; color:#fff; }
+        .qno--meja { font-family: inherit; }
+        .qkosong { color: rgba(234,255,249,.4); font-size: clamp(24px,2.4vw,40px); padding: 10px; }
+        .foot { flex-shrink:0; text-align:center; margin-top: clamp(8px,1.6vh,20px);
+                font-size: clamp(11px,1vw,15px); color: rgba(234,255,249,.55); }
+        @media (max-width: 700px) { .qgrid { grid-template-columns: 1fr; overflow-y:auto; } }
       </style>`))
+    return
+  }
+
+  // Data Display Pelanggan (JSON) — di-poll oleh halaman /display
+  if (url.pathname === '/display/data' && req.method === 'GET') {
+    res.setHeader('Content-Type', 'application/json; charset=utf-8')
+    res.writeHead(200)
+    res.end(JSON.stringify(customerState || {}))
+    return
+  }
+
+  // Halaman Display Pelanggan (LAN) — buka di monitor/TV pelanggan di jaringan
+  if (url.pathname === '/display' && req.method === 'GET') {
+    res.writeHead(200)
+    res.end(displayPage())
     return
   }
 
@@ -392,6 +515,13 @@ function stop() {
     try { server.close() } catch { /* abaikan */ }
     server = null
   }
+  customerState = null
+}
+
+// Relay state Display Pelanggan dari window kasir (dipanggil ipc customer:update)
+// supaya halaman LAN /display bisa menampilkan keranjang live.
+function setCustomerState(state) {
+  customerState = state || null
 }
 
 function setPublicUrl(url) {
@@ -408,4 +538,4 @@ function status() {
   }
 }
 
-module.exports = { start, stop, status, setPublicUrl }
+module.exports = { start, stop, status, setPublicUrl, setCustomerState }
