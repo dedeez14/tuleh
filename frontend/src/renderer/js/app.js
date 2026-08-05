@@ -12,7 +12,6 @@ import { ringkasLangganan } from './langganan.js'
 import { mulaiPembayaran } from './langganan-bayar.js'
 import { esc, fmtIDR, fmtNumber, toISODate } from './utils/format.js'
 import { LOGO_DATA_URI } from './assets/logo.js'
-import { DASHBOARD_WATERMARK } from './assets/dashboard-bg.js'
 import { renderLogin } from './screens/login.js'
 import { PosScreen } from './screens/pos.js'
 import { HistoryScreen } from './screens/history.js'
@@ -870,9 +869,6 @@ async function boot() {
   }
   enterLogin()
 }
-
-// Watermark Beranda (logo Tuléh monokrom berulang) sebagai custom property CSS.
-document.documentElement.style.setProperty('--home-watermark', `url("${DASHBOARD_WATERMARK}")`)
 
 // Terapkan tema tersimpan sedini mungkin agar tidak ada kedip warna saat boot.
 applyTheme()
