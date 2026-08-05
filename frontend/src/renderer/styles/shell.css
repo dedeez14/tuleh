@@ -578,6 +578,25 @@
   margin-bottom: var(--sp-6);
 }
 
+/* Blok kiri: logo usaha (opsional) + sapaan/tanggal. */
+.home__intro {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+.home__logo {
+  width: 60px;
+  height: 60px;
+  flex: 0 0 auto;
+  object-fit: contain;
+  border-radius: 16px;
+  background: #fff;
+  border: 1px solid var(--border);
+  padding: 5px;
+  box-shadow: var(--shadow-sm, 0 6px 16px rgba(18, 70, 60, 0.08));
+}
+
 .home__date {
   font-size: var(--text-sm);
   font-weight: 600;

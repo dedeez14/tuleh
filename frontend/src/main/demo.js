@@ -41,6 +41,39 @@ let pengeluaranDemo = [] // pengeluaran/kas keluar (+toko_id): {id, tanggal, ket
 let counter = { trx: 0, sesi: 0, cust: 0, order: 0, station: 0, bill: 0, inv: 0, exp: 0 }
 let antrianCounter = {}          // per toko: nomor antrian berjalan
 let activeTokoId = 'TOKO-1'      // toko terpilih (di-set renderer via toko:select)
+let demoUsaha = null             // profil usaha demo (mutable) — lazy init dari COMPANY
+
+/** Profil usaha demo (mutable) untuk Pengaturan → Profil Usaha & Struk. */
+function usahaDemo () {
+  if (!demoUsaha) {
+    demoUsaha = {
+      nama: COMPANY.nama, alamat: COMPANY.alamat || null, telepon: COMPANY.telepon || null,
+      email: COMPANY.email || null, npwp: COMPANY.npwp || null, logo: COMPANY.logo || null,
+      struk: { logo: null, footer: null, tampil_logo: true }
+    }
+  }
+  return demoUsaha
+}
+
+/** Bytes (ArrayBuffer/Uint8Array) → data URI (untuk pratinjau logo di Mode Demo). */
+function toDataUri (bytes, mime) {
+  if (!bytes) return null
+  try {
+    const u8 = bytes instanceof ArrayBuffer ? new Uint8Array(bytes) : bytes
+    let b64
+    if (typeof Buffer !== 'undefined') {
+      b64 = Buffer.from(u8).toString('base64')
+    } else {
+      let bin = ''
+      const CH = 0x8000
+      for (let i = 0; i < u8.length; i += CH) bin += String.fromCharCode.apply(null, u8.subarray(i, i + CH))
+      b64 = (typeof btoa === 'function') ? btoa(bin) : ''
+    }
+    return b64 ? 'data:' + (mime || 'image/png') + ';base64,' + b64 : null
+  } catch (e) {
+    return null
+  }
+}
 
 const ANTRIAN_PREFIX = { 'TOKO-2': 'A', 'TOKO-3': 'L' }
 
@@ -1027,12 +1060,41 @@ const handlers = {
     return ok(order)
   },
 
-  'config:get': () => ok({
-    company: COMPANY,
-    pengaturan: { stok_minimum_tampil: 0, tampilkan_stok_habis: true },
-    payment_methods: ['TUNAI', 'TRANSFER', 'QRIS'],
-    modules: { multi_satuan: false }
-  }),
+  'config:get': () => {
+    const u = usahaDemo()
+    return ok({
+      company: { ...COMPANY, nama: u.nama, alamat: u.alamat, telepon: u.telepon, email: u.email, npwp: u.npwp, logo: u.logo },
+      struk: u.struk,
+      keamanan: { aktif: false, auto_lock_menit: 3 },
+      pengaturan: { stok_minimum_tampil: 0, tampilkan_stok_habis: true },
+      payment_methods: ['TUNAI', 'TRANSFER', 'QRIS'],
+      modules: { multi_satuan: false }
+    })
+  },
+
+  // ---- Pengaturan Usaha & Struk (Mode Demo) ----
+  'pengaturan:usahaGet': () => ok(usahaDemo()),
+  'pengaturan:usahaSimpan': (f = {}) => {
+    const u = usahaDemo()
+    const teks = (v) => (v === null || v === undefined || String(v).trim() === '' ? null : String(v).trim())
+    if ('nama' in f && teks(f.nama)) u.nama = teks(f.nama)
+    if ('alamat' in f) u.alamat = teks(f.alamat)
+    if ('telepon' in f) u.telepon = teks(f.telepon)
+    if ('email' in f) u.email = teks(f.email)
+    if ('struk_footer' in f) u.struk.footer = teks(f.struk_footer)
+    if ('struk_tampil_logo' in f) u.struk.tampil_logo = !!f.struk_tampil_logo
+    return ok(usahaDemo())
+  },
+  'pengaturan:uploadLogo': ({ bytes, mime } = {}) => {
+    const uri = toDataUri(bytes, mime)
+    if (uri) usahaDemo().logo = uri
+    return ok(usahaDemo())
+  },
+  'pengaturan:uploadLogoStruk': ({ bytes, mime } = {}) => {
+    const uri = toDataUri(bytes, mime)
+    if (uri) usahaDemo().struk.logo = uri
+    return ok(usahaDemo())
+  },
 
   'produk:list': ({ q, kategoriId, tipe, perPage = 50, page = 1 } = {}) => {
     let rows = produkAktif()

@@ -36,6 +36,12 @@ contextBridge.exposeInMainWorld('iposAPI', {
   config: {
     get: invoke('config:get')
   },
+  pengaturan: {
+    usahaGet: invoke('pengaturan:usahaGet'),
+    usahaSimpan: invoke('pengaturan:usahaSimpan'),
+    uploadLogo: invoke('pengaturan:uploadLogo'),
+    uploadLogoStruk: invoke('pengaturan:uploadLogoStruk')
+  },
   langganan: {
     status: invoke('langganan:status'),
     bayar: invoke('langganan:bayar'),

@@ -45,6 +45,20 @@ function fail(message) {
   return { ok: false, status: 0, message, errors: null }
 }
 
+// Body PUT /pengaturan/usaha — hanya kunci yang dikirim renderer (partial update).
+// Teks kosong pada field boleh-null → dikirim `null` (menghapus nilai di server).
+function usahaBody(f) {
+  const b = {}
+  const teksNull = (v, max) => (v === null || v === undefined || String(v).trim() === '' ? null : String(v).trim().slice(0, max))
+  if ('nama' in f) b.nama = str(f.nama, { required: true, max: 150 })
+  if ('alamat' in f) b.alamat = teksNull(f.alamat, 500)
+  if ('telepon' in f) b.telepon = teksNull(f.telepon, 30)
+  if ('email' in f) b.email = teksNull(f.email, 150)
+  if ('struk_footer' in f) b.struk_footer = teksNull(f.struk_footer, 300)
+  if ('struk_tampil_logo' in f) b.struk_tampil_logo = !!f.struk_tampil_logo
+  return b
+}
+
 // Handler dibungkus supaya error validasi kembali sebagai envelope, bukan exception IPC.
 // Saat Mode Demo aktif, channel yang punya simulasi dialihkan ke demo.js (tanpa jaringan).
 // Checkout toko ber-lifecycle → sisipkan URL + QR pelacakan pelanggan ke struk
@@ -243,6 +257,17 @@ function registerIpcHandlers(getMainWindow) {
   })
 
   handle('config:get', () => withAuthWatch(api.get('/config')))
+
+  // ---------- Pengaturan Usaha & Struk (profil perusahaan — O/M) ----------
+  // GET semua peran; PUT & upload logo O/M (server menolak kasir 403). Mutasi
+  // menyegarkan /config (blok company+struk); renderer refresh config setelah simpan.
+  handle('pengaturan:usahaGet', () => withAuthWatch(api.get('/pengaturan/usaha')))
+  handle('pengaturan:usahaSimpan', (f) =>
+    withAuthWatch(api.request('PUT', '/pengaturan/usaha', { body: usahaBody(f || {}) })))
+  handle('pengaturan:uploadLogo', ({ bytes, filename, mime } = {}) =>
+    withAuthWatch(api.upload('/pengaturan/usaha/logo', { file: { bytes, filename, mime } })))
+  handle('pengaturan:uploadLogoStruk', ({ bytes, filename, mime } = {}) =>
+    withAuthWatch(api.upload('/pengaturan/usaha/logo-struk', { file: { bytes, filename, mime } })))
 
   // ---------- Langganan & Kontak CS (Sistem Mitra) ----------
   // Endpoint per-tenant; kontrak di docs/Skema-API-Sistem-Mitra-Tuleh.md §6.5.

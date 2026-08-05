@@ -12,7 +12,7 @@
   var API_PREFIX = '/api/pos/v1'
   var TIMEOUT_MS = 15000
   var DEFAULT_BASE = 'https://tatreport.com'
-  var APP_VERSION = '0.7.4'
+  var APP_VERSION = '0.8.0'
 
   var baseUrl = DEFAULT_BASE
   var token = null
@@ -107,6 +107,46 @@
   function apiPost (e, o) { o = o || {}; if (o.body === undefined) o.body = {}; return request('POST', e, o) }
   function enc (v) { return encodeURIComponent(String(v == null ? '' : v)) }
 
+  // Body PUT /pengaturan/usaha (partial). Teks kosong pada field boleh-null → null.
+  function usahaBody (p) {
+    p = p || {}
+    var b = {}
+    var tn = function (v, max) { return (v === null || v === undefined || String(v).trim() === '') ? null : String(v).trim().slice(0, max) }
+    if ('nama' in p) b.nama = String(p.nama || '').trim().slice(0, 150)
+    if ('alamat' in p) b.alamat = tn(p.alamat, 500)
+    if ('telepon' in p) b.telepon = tn(p.telepon, 30)
+    if ('email' in p) b.email = tn(p.email, 150)
+    if ('struk_footer' in p) b.struk_footer = tn(p.struk_footer, 300)
+    if ('struk_tampil_logo' in p) b.struk_tampil_logo = !!p.struk_tampil_logo
+    return b
+  }
+  // Unggah logo multipart (field `logo`). CapacitorHttp mem-patch fetch → FormData
+  // dikirim sebagai multipart native (bypass CORS).
+  function uploadLogo (endpoint, p) {
+    p = p || {}
+    if (!p.bytes) return notAvailable('File tidak ada.')
+    var bytes = p.bytes instanceof ArrayBuffer ? new Uint8Array(p.bytes) : p.bytes
+    var form = new FormData()
+    form.append('logo', new Blob([bytes], { type: p.mime || 'application/octet-stream' }), p.filename || 'logo.png')
+    var headers = { Accept: 'application/json' }
+    if (token) headers.Authorization = 'Bearer ' + token
+    var url = buildUrl(endpoint, activeTokoId ? { toko_id: activeTokoId } : {})
+    return ready
+      .then(function () { return fetch(url, { method: 'POST', headers: headers, body: form }) })
+      .then(function (res) {
+        return res.text().then(function (text) {
+          var payload = null
+          try { payload = text ? JSON.parse(text) : null } catch (e) { payload = null }
+          if (!res.ok || !payload || payload.success === false) {
+            if (res.status === 401) { token = null; prefSet('token', null); if (expiredCb) { try { expiredCb() } catch (e) {} } }
+            return { ok: false, status: res.status, message: (payload && payload.message) || statusMessage(res.status), errors: (payload && payload.errors) || null }
+          }
+          return { ok: true, status: res.status, data: payload.data !== undefined ? payload.data : null, meta: payload.meta !== undefined ? payload.meta : null, message: payload.message || '' }
+        })
+      })
+      .catch(function () { return { ok: false, status: 0, message: statusMessage(0), errors: null } })
+  }
+
   // ---- QR (window.qrcode) → data URI SVG (port qr.js) ----
   function qrSvgDataUri (text) {
     if (typeof window.qrcode !== 'function') return null
@@ -185,6 +225,12 @@
       onExpired: function (cb) { expiredCb = cb; return function () { if (expiredCb === cb) expiredCb = null } }
     },
     config: { get: function (p) { return dispatch('config:get', p, function () { return apiGet('/config') }) } },
+    pengaturan: {
+      usahaGet: function (p) { return dispatch('pengaturan:usahaGet', p, function () { return apiGet('/pengaturan/usaha') }) },
+      usahaSimpan: function (p) { return dispatch('pengaturan:usahaSimpan', p, function () { return request('PUT', '/pengaturan/usaha', { body: usahaBody(p) }) }) },
+      uploadLogo: function (p) { return dispatch('pengaturan:uploadLogo', p, function () { return uploadLogo('/pengaturan/usaha/logo', p) }) },
+      uploadLogoStruk: function (p) { return dispatch('pengaturan:uploadLogoStruk', p, function () { return uploadLogo('/pengaturan/usaha/logo-struk', p) }) }
+    },
     langganan: {
       status: function (p) { return dispatch('langganan:status', p, function () { return apiGet('/langganan/status') }) },
       bayar: function (p) { return dispatch('langganan:bayar', p, function () { return apiPost('/langganan/bayar', { body: {} }) }) },

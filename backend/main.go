@@ -95,7 +95,7 @@ func main() {
 	handler := withRecover(logger,
 		withRequestID(
 			withSecurityHeaders(
-				withBodyLimit(1<<20,
+				withBodyLimit(3<<20, // 3 MB: muat unggah logo (maks 2 MB) + overhead multipart
 					withRateLimit(limiter, rateGlobalPerSec, rateGlobalBurst,
 						withLogging(logger, mux))))))
 

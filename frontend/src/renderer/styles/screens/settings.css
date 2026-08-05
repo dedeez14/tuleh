@@ -99,3 +99,19 @@
 .set-premium__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .set-premium__name { font-weight: 700; }
 .set-premium__desc { font-size: var(--text-sm); color: var(--text-2); margin: 0; flex: 1; }
+
+/* ---------- Profil Usaha & Struk ---------- */
+.pu-logo-row { display: flex; align-items: center; gap: var(--sp-4); margin-bottom: var(--sp-4); flex-wrap: wrap; }
+.pu-logo {
+  width: 76px; height: 76px; flex: 0 0 auto;
+  border: 1px solid var(--border, var(--surface-3)); border-radius: 14px;
+  background: #fff; display: grid; place-items: center; overflow: hidden; padding: 6px;
+}
+.pu-logo img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.pu-logo__ph { font-size: 11px; color: var(--text-3, #94a3b8); text-align: center; padding: 0 4px; }
+.pu-logo-info { min-width: 0; }
+.pu-logo-info .field__hint { margin-top: 4px; }
+.pu-2col { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-4); }
+.pu-check { display: flex; align-items: center; gap: 8px; margin: var(--sp-2) 0 var(--sp-4); font-weight: 600; cursor: pointer; }
+.pu-check input { width: 16px; height: 16px; }
+@media (max-width: 560px) { .pu-2col { grid-template-columns: 1fr; } }

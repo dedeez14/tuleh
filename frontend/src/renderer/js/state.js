@@ -9,6 +9,7 @@ const state = {
   permissions: [],
   paymentMethods: [],  // ['TUNAI','TRANSFER','QRIS']
   modules: {},
+  struk: null,         // { logo, footer, tampil_logo } — dari /config (kop & kaki struk)
   config: null,        // hasil /config
   tokoList: [],        // daftar toko company (GET /tokos)
   toko: null,          // toko terpilih {id, nama, bidang_usaha}
@@ -56,6 +57,7 @@ export function resetAuthState() {
     permissions: [],
     paymentMethods: [],
     modules: {},
+    struk: null,
     config: null,
     tokoList: [],
     toko: null,

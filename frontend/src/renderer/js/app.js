@@ -314,6 +314,7 @@ async function loadWorkspace() {
     patch.paymentMethods = config.data.payment_methods || []
     if (config.data.company) patch.company = config.data.company
     if (config.data.modules) patch.modules = config.data.modules
+    if (config.data.struk) patch.struk = config.data.struk
   }
   if (sesi.ok) {
     patch.session = sesi.data || null
@@ -346,6 +347,20 @@ export async function refreshActiveSession() {
     })
   }
   return sesi
+}
+
+/** Muat ulang /config (company, struk, modules) — dipakai setelah simpan Profil Usaha. */
+export async function refreshConfig() {
+  const config = await api.config.get()
+  if (config.ok && config.data) {
+    const patch = { config: config.data }
+    if (config.data.company) patch.company = config.data.company
+    if (config.data.struk) patch.struk = config.data.struk
+    if (config.data.modules) patch.modules = config.data.modules
+    if (config.data.payment_methods) patch.paymentMethods = config.data.payment_methods
+    setState(patch)
+  }
+  return config
 }
 
 /** Buka WhatsApp CS (mitra perekrut bila aktif, atau CS pusat) via /kontak-cs. */
@@ -587,10 +602,13 @@ function renderHome(container) {
     <div class="home">
       <div class="home__inner">
         <div class="home__head">
-          <div>
-            <div class="home__date">${esc(hariIni)}</div>
-            <h1 class="home__greet">Halo, ${esc((user?.name || 'Kasir').split(' ')[0])} 👋</h1>
-            <p class="home__sub">${esc(namaTempat)}${bidang ? ` <span class="home__bidang">· ${esc(bidang)}</span>` : ''}</p>
+          <div class="home__intro">
+            ${company?.logo ? `<img class="home__logo" src="${esc(company.logo)}" alt="${esc(company?.nama || 'Logo usaha')}" />` : ''}
+            <div>
+              <div class="home__date">${esc(hariIni)}</div>
+              <h1 class="home__greet">Halo, ${esc((user?.name || 'Kasir').split(' ')[0])} 👋</h1>
+              <p class="home__sub">${esc(namaTempat)}${bidang ? ` <span class="home__bidang">· ${esc(bidang)}</span>` : ''}</p>
+            </div>
           </div>
           <div class="home__stats">
             <div class="stat-tile home__stat">

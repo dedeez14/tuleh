@@ -134,4 +134,53 @@ async function request(method, endpoint, { query, body, auth = true } = {}) {
 const get = (endpoint, options) => request('GET', endpoint, options)
 const post = (endpoint, options) => request('POST', endpoint, options)
 
-module.exports = { request, get, post, setBaseUrl, setGateway, setToken, hasToken, setActiveTokoId, getActiveTokoId }
+/**
+ * Unggah file multipart (field selalu `logo`). `file` = { bytes, filename, mime }.
+ * Content-Type TIDAK di-set manual — fetch mengisi boundary multipart otomatis.
+ */
+async function upload(endpoint, { query, file, auth = true } = {}) {
+  if (auth && activeTokoId && !(query && Object.prototype.hasOwnProperty.call(query, 'toko_id'))) {
+    query = { ...(query || {}), toko_id: activeTokoId }
+  }
+  if (!file || !file.bytes) return { ok: false, status: 0, message: 'File tidak ada.', errors: null }
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS * 2) // unggah bisa lebih lama
+
+  const bytes = file.bytes instanceof ArrayBuffer ? new Uint8Array(file.bytes) : file.bytes
+  const form = new FormData()
+  form.append('logo', new Blob([bytes], { type: file.mime || 'application/octet-stream' }), file.filename || 'logo.png')
+
+  const headers = { Accept: 'application/json' }
+  if (auth && token) headers.Authorization = `Bearer ${token}`
+
+  let response
+  try {
+    response = await net.fetch(buildUrl(endpoint, query), {
+      method: 'POST', headers, body: form, signal: controller.signal
+    })
+  } catch (err) {
+    const timedOut = err && err.name === 'AbortError'
+    return { ok: false, status: 0, message: timedOut ? 'Server tidak merespons (timeout).' : statusMessage(0), errors: null }
+  } finally {
+    clearTimeout(timer)
+  }
+
+  const payload = await readJsonSafe(response)
+  if (!response.ok || !payload || payload.success === false) {
+    return {
+      ok: false,
+      status: response.status,
+      message: (payload && payload.message) || statusMessage(response.status),
+      errors: (payload && payload.errors) || null
+    }
+  }
+  return {
+    ok: true,
+    status: response.status,
+    data: payload.data !== undefined ? payload.data : null,
+    meta: payload.meta !== undefined ? payload.meta : null,
+    message: payload.message || ''
+  }
+}
+
+module.exports = { request, get, post, upload, setBaseUrl, setGateway, setToken, hasToken, setActiveTokoId, getActiveTokoId }

@@ -8,7 +8,11 @@ import { toast } from './ui.js'
 
 /** Bangun HTML struk dari objek Struk API (+ data perusahaan dari state). */
 export function buildReceiptHTML(struk) {
-  const { company, branch } = getState()
+  const { company, branch, struk: strukCfg } = getState()
+  // Kop: logo struk (fallback logo usaha); sembunyikan bila tampil_logo === false.
+  const tampilLogo = strukCfg ? strukCfg.tampil_logo !== false : true
+  const logoStruk = tampilLogo ? (strukCfg?.logo || company?.logo || '') : ''
+  const footerCfg = (strukCfg?.footer || '').trim()
   const isVoid = struk.status === 'DIBATALKAN'
   // Pra-bon (bill hitungan bon meja) — belum dibayar; sembunyikan baris bayar/kembalian
   const isPrabon = struk.status === 'BELUM DIBAYAR'
@@ -38,6 +42,7 @@ export function buildReceiptHTML(struk) {
     <div class="receipt${isVoid ? ' receipt--void' : ''}">
       ${isVoid ? '<div class="receipt__void-stamp">DIBATALKAN</div>' : ''}
       <div class="receipt__head">
+        ${logoStruk ? `<img class="receipt__logo" src="${esc(logoStruk)}" alt="" />` : ''}
         <div class="receipt__company">${esc(company?.nama || 'Tuléh')}</div>
         ${company?.alamat ? `<div class="receipt__meta">${esc(company.alamat)}</div>` : ''}
         ${company?.telepon ? `<div class="receipt__meta">Telp: ${esc(company.telepon)}</div>` : ''}
@@ -68,7 +73,9 @@ export function buildReceiptHTML(struk) {
           <img class="receipt__track-qr" src="${esc(struk.lacak_qr)}" alt="QR lacak pesanan" />
           <div class="receipt__track-label">Scan untuk lacak status pesanan</div>
         </div>` : ''}
-      <div class="receipt__foot">${isPrabon ? 'Ini bukan bukti bayar — silakan bayar di kasir' : 'Terima kasih atas kunjungan Anda'}</div>
+      <div class="receipt__foot">${isPrabon
+        ? 'Ini bukan bukti bayar — silakan bayar di kasir'
+        : esc(footerCfg || 'Terima kasih atas kunjungan Anda')}</div>
     </div>`
 }
 

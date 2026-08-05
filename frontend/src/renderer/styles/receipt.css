@@ -26,6 +26,14 @@
   margin-bottom: var(--sp-2);
 }
 
+.receipt__logo {
+  display: block;
+  max-width: 62%;
+  max-height: 76px;
+  margin: 0 auto 6px;
+  object-fit: contain;
+}
+
 .receipt__company {
   font-weight: 700;
   font-size: 14px;
@@ -102,6 +110,7 @@
   font-size: 11px;
   color: #444;
   margin-top: var(--sp-2);
+  white-space: pre-line; /* footer struk boleh multi-baris */
 }
 
 /* Stempel batal */

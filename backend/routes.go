@@ -110,6 +110,28 @@ var routeTable = []route{
 	{method: "GET", pattern: "/transaksi/{id}/struk"},
 	{method: "POST", pattern: "/transaksi/{id}/batal", purge: []string{apiPrefix + "/produk", apiPrefix + "/laporan"}},
 
+	// Pengaturan Usaha & Struk (profil perusahaan). Mutasi menyegarkan /config
+	// (blok company+struk) & /pengaturan. Upload logo = multipart (O/M).
+	{method: "GET", pattern: "/pengaturan/usaha", cache: 30 * time.Second},
+	{method: "PUT", pattern: "/pengaturan/usaha", purge: []string{apiPrefix + "/pengaturan", apiPrefix + "/config"}},
+	{method: "POST", pattern: "/pengaturan/usaha/logo", purge: []string{apiPrefix + "/pengaturan", apiPrefix + "/config"}},
+	{method: "POST", pattern: "/pengaturan/usaha/logo-struk", purge: []string{apiPrefix + "/pengaturan", apiPrefix + "/config"}},
+
+	// Keamanan (PIN / App Lock). Status juga di /config → mutasi purge /config.
+	{method: "GET", pattern: "/pengaturan/keamanan", cache: 15 * time.Second},
+	{method: "PUT", pattern: "/pengaturan/keamanan", purge: []string{apiPrefix + "/pengaturan", apiPrefix + "/config"}},
+	{method: "POST", pattern: "/keamanan/verifikasi"}, // verifikasi PIN — tanpa cache (rate-limit di server)
+
+	// Hold transaksi (parkir keranjang) — selalu segar, lintas perangkat
+	{method: "GET", pattern: "/hold"},
+	{method: "POST", pattern: "/hold"},
+	{method: "DELETE", pattern: "/hold/{id}"},
+
+	// Favorit / promo / terlaris (bahan kasir)
+	{method: "GET", pattern: "/produk/terlaris", cache: 60 * time.Second},
+	{method: "PATCH", pattern: "/produk/{id}/favorit", purge: []string{apiPrefix + "/produk"}},
+	{method: "PUT", pattern: "/produk/{id}/promo", purge: []string{apiPrefix + "/produk"}},
+
 	// Laporan (O/M sejak rilis peran — gateway hanya meneruskan; penegakan di server)
 	{method: "GET", pattern: "/laporan/penjualan-harian", cache: 30 * time.Second},
 	{method: "GET", pattern: "/laporan/penjualan-produk", cache: 30 * time.Second},
