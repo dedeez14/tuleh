@@ -5,6 +5,7 @@ import { esc, fmtIDR, fmtDateTime, fmtNumber } from '../utils/format.js'
 import { api } from '../api.js'
 import { getState } from '../state.js'
 import { toast } from './ui.js'
+import { labelPembayaranStruk } from '../lib/qris-flow.js'
 
 /** Bangun HTML struk dari objek Struk API (+ data perusahaan dari state). */
 export function buildReceiptHTML(struk) {
@@ -65,7 +66,7 @@ export function buildReceiptHTML(struk) {
       ${row('TOTAL', fmtIDR(struk.grand_total), 'receipt__row--total')}
       ${isPrabon
         ? ''
-        : `${row(esc(struk.tipe_pembayaran || 'TUNAI'), fmtIDR(struk.dibayar))}
+        : `${row(esc(labelPembayaranStruk(struk)), fmtIDR(struk.dibayar))}
       ${row('Kembalian', fmtIDR(struk.kembalian))}`}
       <div class="receipt__sep"></div>
       ${struk.lacak_qr ? `

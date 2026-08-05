@@ -7,6 +7,9 @@ import { esc, fmtIDR, fmtNumber, parseAmount, debounce } from '../utils/format.j
 import { toast, showModal, confirmDialog, emptyStateHTML, loadingHTML, icons } from '../components/ui.js'
 import { buildReceiptHTML, printReceipt } from '../components/receipt.js'
 import { lineTotals, cartTotals, kembalian, shortfall, quickCashOptions, clampQty } from '../lib/cart.js'
+import { midtransBoleh, qrisAksi, sisaDetik, formatSisa, harusFallbackStatis } from '../lib/qris-flow.js'
+
+const QRIS_POLL_MS = 4000 // interval cek status tagihan QRIS (kontrak: 3–5s)
 
 const PER_PAGE = 50
 const SEARCH_DEBOUNCE_MS = 250
@@ -618,17 +621,26 @@ function renderPos(container) {
 
     const grandTotal = cartTotals(cartLines()).grandTotal
     const stateNow = getState()
-    const methods = Array.isArray(stateNow.paymentMethods) && stateNow.paymentMethods.length
+    const baseMethods = Array.isArray(stateNow.paymentMethods) && stateNow.paymentMethods.length
       ? stateNow.paymentMethods
       : ['TUNAI', 'TRANSFER', 'QRIS']
-    let metode = methods.includes('TUNAI') ? 'TUNAI' : methods[0]
+    // Lapis DASAR selalu ada. Lapis MIDTRANS (QRIS Otomatis/terverifikasi) hanya
+    // disisipkan bila midtrans_aktif — TIDAK menggantikan QRIS statis (fallback).
+    const methodDefs = baseMethods.map((m) => ({ value: m, label: m }))
+    if (midtransBoleh(stateNow.pembayaran)) {
+      const idx = methodDefs.findIndex((d) => d.value === 'QRIS')
+      const autoDef = { value: 'QRIS_AUTO', label: 'QRIS Auto' }
+      if (idx >= 0) methodDefs.splice(idx + 1, 0, autoDef)
+      else methodDefs.push(autoDef)
+    }
+    let metode = methodDefs.some((d) => d.value === 'TUNAI') ? 'TUNAI' : methodDefs[0].value
 
     const body = document.createElement('div')
     body.className = 'pos-pay'
     body.innerHTML = `
       <div class="segmented pos-pay__methods" id="pay-methods">
-        ${methods.map((m) => `
-          <button type="button" class="segmented__item pos-pay__method" data-metode="${esc(m)}">${esc(m)}</button>`).join('')}
+        ${methodDefs.map((d) => `
+          <button type="button" class="segmented__item pos-pay__method" data-metode="${esc(d.value)}">${esc(d.label)}</button>`).join('')}
       </div>
       <div class="pos-pay__bill">
         <span class="pos-pay__bill-label">Total tagihan</span>
@@ -666,12 +678,15 @@ function renderPos(container) {
         Selesaikan Transaksi
       </button>`
 
+    let modalClosed = false // dijaga oleh kelanjutan async QRIS (await bisa selesai pasca-tutup)
     const modal = showModal({
       title: 'Pembayaran',
       body,
       footer,
       size: 'md',
       onClose: () => {
+        modalClosed = true
+        stopQris() // hentikan poll/countdown QRIS bila modal ditutup di tengah alur
         if (!disposed && document.contains(searchInput)) searchInput.focus()
       }
     })
@@ -705,6 +720,7 @@ function renderPos(container) {
     const cashBlock = body.querySelector('#pay-cash-block')
 
     function applyMetode() {
+      stopQris() // pindah metode → hentikan poll/countdown QRIS yang mungkin tersisa
       body.querySelectorAll('.pos-pay__method').forEach((btn) => {
         btn.classList.toggle('is-active', btn.dataset.metode === metode)
       })
@@ -720,6 +736,14 @@ function renderPos(container) {
         updateStatus()
         payInput.focus()
         payInput.select()
+      } else if (metode === 'QRIS_AUTO') {
+        // Lapis MIDTRANS: QRIS Otomatis (terverifikasi). Belum buat tagihan —
+        // tekan "Tampilkan QRIS" agar keranjang terkunci hanya saat QR aktif.
+        cashBlock.classList.add('u-hidden')
+        payInput.value = fmtNumber(grandTotal)
+        extraEl.innerHTML = qrisAutoIntroHTML(grandTotal)
+        submitBtn.textContent = 'Tampilkan QRIS'
+        submitBtn.disabled = false
       } else {
         // Lapis DASAR non-tunai (QRIS statis / Transfer): tampilkan QR / rekening;
         // pembayaran pas → sembunyikan input uang & kembalian. Tombol "Sudah Bayar".
@@ -780,7 +804,177 @@ function renderPos(container) {
       footer.querySelector('#pay-new').addEventListener('click', () => modal.close())
     }
 
+    // Bersihkan keranjang + segarkan katalog, lalu tampilkan struk sukses.
+    function finalizeSuccess(struk) {
+      cart = []
+      pelanggan = null
+      if (!disposed) {
+        renderCart()
+        loadProduk()
+      }
+      showSuccess(struk)
+    }
+
+    // ---------- Lapis MIDTRANS: QRIS Otomatis (dinamis, terverifikasi) ----------
+    let qrisPollTimer = null
+    let qrisCountdownTimer = null
+    function stopQris() {
+      if (qrisPollTimer) { clearInterval(qrisPollTimer); qrisPollTimer = null }
+      if (qrisCountdownTimer) { clearInterval(qrisCountdownTimer); qrisCountdownTimer = null }
+    }
+
+    function qrisAutoIntroHTML(total) {
+      return `
+        <div class="pos-pay__note pos-pay__note--warn">
+          <b>QRIS Otomatis (terverifikasi).</b> Sistem membuat QR resmi senilai
+          <b class="num">${fmtIDR(total)}</b>; pembayaran dicek otomatis dan transaksi
+          tercatat begitu dana masuk. Keranjang terkunci selama QR aktif.
+        </div>
+        <div class="pos-pay__note">Butuh internet aktif. Bila layanan sedang gangguan, gunakan metode <b>QRIS</b> statis.</div>`
+    }
+
+    // POST /qris/tagihan → render QR. 409 = Midtrans down → fallback QRIS statis.
+    async function startQrisAuto() {
+      stopQris()
+      submitBtn.disabled = true
+      submitBtn.textContent = 'Membuat QRIS…'
+      errorEl.classList.add('u-hidden')
+      const res = await api.qris.buatTagihan({ jumlah: grandTotal })
+      if (modalClosed) return // modal ditutup selagi tagihan dibuat
+      if (!res.ok) {
+        if (harusFallbackStatis(res)) {
+          toast('Layanan QRIS otomatis sedang gangguan. Beralih ke QRIS statis.', 'info')
+          metode = 'QRIS'
+          applyMetode()
+          return
+        }
+        submitBtn.disabled = false
+        submitBtn.textContent = 'Tampilkan QRIS'
+        errorEl.textContent = firstError(res)
+        errorEl.classList.remove('u-hidden')
+        return
+      }
+      renderQrisView(res.data)
+    }
+
+    // Layar QR dinamis: QR + hitung mundur + poll status. Mengambil alih body modal.
+    async function renderQrisView(tagihan) {
+      const tagihanId = tagihan.id
+      let terminal = false // sekali LUNAS/kedaluwarsa/gagal → callback tersisa jadi no-op
+      body.className = 'pos-pay'
+      body.innerHTML = `
+        <div class="pos-qris">
+          <div class="pos-pay__bill">
+            <span class="pos-pay__bill-label">Total tagihan</span>
+            <span class="pos-pay__bill-amount num">${fmtIDR(grandTotal)}</span>
+          </div>
+          <div class="pos-qris__frame" id="qris-frame">${loadingHTML('Menyiapkan QR…')}</div>
+          <div class="pos-qris__count num" id="qris-count">—</div>
+          <div class="pos-pay__note" id="qris-status">Tunjukkan QR ke pelanggan — pembayaran dicek otomatis.</div>
+          <div class="field__error u-hidden" id="qris-error"></div>
+        </div>`
+      footer.className = 'pos-pay__footer'
+      footer.innerHTML = `<button type="button" class="btn btn--outline btn--block" id="qris-cancel">Batalkan</button>`
+      // Batal = tutup dialog; tagihan kedaluwarsa sendiri di server (kontrak §5).
+      footer.querySelector('#qris-cancel').addEventListener('click', () => modal.close())
+
+      const frameEl = body.querySelector('#qris-frame')
+      const countEl = body.querySelector('#qris-count')
+      const qStatusEl = body.querySelector('#qris-status')
+      const qErrEl = body.querySelector('#qris-error')
+
+      // Render QR dari qr_string (SVG data-URI; desktop→data.uri, android→data.svg).
+      const qr = await api.qr.make({ text: tagihan.qr_string || '' })
+      if (modalClosed) return // modal ditutup selagi QR digenerate → jangan pasang timer (cegah bocor)
+      const qrUri = qr && qr.ok && qr.data ? (qr.data.uri || qr.data.svg) : ''
+      frameEl.innerHTML = qrUri
+        ? `<img class="pos-pay__qris-img" src="${esc(qrUri)}" alt="QRIS ${esc(tagihanId)}" />`
+        : `<div class="pos-pay__note pos-pay__note--warn">QR gagal ditampilkan. Batalkan lalu coba lagi.</div>`
+
+      function endWithClose(pesan) {
+        terminal = true
+        stopQris()
+        qStatusEl.className = 'pos-pay__note pos-pay__note--warn'
+        qStatusEl.textContent = pesan
+        footer.innerHTML = `<button type="button" class="btn btn--primary btn--block" id="qris-close">Tutup</button>`
+        footer.querySelector('#qris-close').addEventListener('click', () => modal.close())
+      }
+      function qrisKedaluwarsa() {
+        countEl.textContent = 'Kedaluwarsa'
+        countEl.classList.add('pos-qris__count--urgent')
+        endWithClose('QRIS kedaluwarsa. Tutup lalu buat ulang bila perlu.')
+      }
+
+      // Hitung mundur ke expired_at (≈15 menit). Habis waktu = kedaluwarsa.
+      function tick() {
+        const sisa = sisaDetik(tagihan.expired_at, Date.now())
+        countEl.textContent = 'Sisa waktu ' + formatSisa(sisa)
+        countEl.classList.toggle('pos-qris__count--urgent', sisa <= 60)
+        if (sisa <= 0) qrisKedaluwarsa()
+      }
+      tick()
+      qrisCountdownTimer = setInterval(tick, 1000)
+
+      // Poll status tiap QRIS_POLL_MS sampai LUNAS/KEDALUWARSA/GAGAL.
+      async function cekStatus() {
+        if (terminal || modalClosed) return
+        const res = await api.qris.statusTagihan({ id: tagihanId })
+        if (terminal || modalClosed) return // terminal/tutup tercapai selagi permintaan ini in-flight
+        if (!res.ok) {
+          qErrEl.textContent = firstError(res) // 5xx/jaringan sesekali: non-fatal, tetap poll
+          qErrEl.classList.remove('u-hidden')
+          return
+        }
+        qErrEl.classList.add('u-hidden')
+        const aksi = qrisAksi(res.data && res.data.status)
+        if (aksi === 'lunas') { terminal = true; stopQris(); await checkoutTerverifikasi(tagihanId, qStatusEl) }
+        else if (aksi === 'kedaluwarsa') qrisKedaluwarsa()
+        else if (aksi === 'gagal') endWithClose('Pembayaran gagal diproses. Tutup lalu coba lagi.')
+      }
+      qrisPollTimer = setInterval(cekStatus, QRIS_POLL_MS)
+    }
+
+    // LUNAS → checkout otomatis membawa qris_tagihan_id (transaksi resmi tercatat).
+    async function checkoutTerverifikasi(tagihanId, statusEl) {
+      if (statusEl) {
+        statusEl.className = 'pos-pay__note'
+        statusEl.textContent = 'Pembayaran diterima — mencatat transaksi…'
+      }
+      const result = await api.trx.checkout({
+        items: cart.map((l) => ({
+          idProduk: l.produk.id,
+          harga: Number(l.produk.harga_jual) || 0,
+          kuantitas: Number(l.kuantitas) || 0,
+          diskonPersen: Number(l.diskonPersen) || 0,
+          pajakPersen: Number(l.produk.pajak_persen) || 0
+        })),
+        tipePembayaran: 'QRIS',
+        dibayar: grandTotal,
+        idPelanggan: pelanggan ? pelanggan.id : undefined,
+        catatan: noteEl.value.trim() || undefined,
+        qrisTagihanId: tagihanId
+      })
+      if (modalClosed) return // modal ditutup selagi checkout in-flight
+      if (!result.ok) {
+        // Dana sudah masuk (LUNAS) tapi pencatatan gagal sesaat → tawarkan ULANG
+        // (qris_tagihan_id sama; server idempoten atas tagihan yang sudah lunas).
+        if (statusEl) {
+          statusEl.className = 'pos-pay__note pos-pay__note--warn'
+          statusEl.textContent = `${firstError(result)} Pembayaran sudah diterima — coba catat ulang.`
+        }
+        footer.innerHTML = `
+          <button type="button" class="btn btn--primary btn--block" id="qris-retry">Coba Catat Ulang</button>
+          <button type="button" class="btn btn--outline btn--block" id="qris-close">Tutup</button>`
+        footer.querySelector('#qris-retry').addEventListener('click', () => checkoutTerverifikasi(tagihanId, statusEl))
+        footer.querySelector('#qris-close').addEventListener('click', () => modal.close())
+        return
+      }
+      finalizeSuccess(result.data)
+    }
+
     async function submitCheckout() {
+      // QRIS Otomatis punya alurnya sendiri (buat tagihan → QR → poll → checkout).
+      if (metode === 'QRIS_AUTO') { await startQrisAuto(); return }
       const dibayar = parseAmount(payInput.value)
       if (shortfall(dibayar, grandTotal) > 0) return
       errorEl.classList.add('u-hidden')
@@ -823,13 +1017,7 @@ function renderPos(container) {
       }
 
       // Transaksi tercatat — kosongkan keranjang & segarkan stok katalog.
-      cart = []
-      pelanggan = null
-      if (!disposed) {
-        renderCart()
-        loadProduk()
-      }
-      showSuccess(result.data)
+      finalizeSuccess(result.data)
     }
 
     submitBtn.addEventListener('click', submitCheckout)

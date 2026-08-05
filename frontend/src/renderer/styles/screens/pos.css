@@ -808,6 +808,18 @@
   background: var(--warn-bg, #fef3c7); color: var(--warn, #92400e);
   padding: var(--sp-3); border-radius: 10px; text-align: left;
 }
+/* QRIS Otomatis (dinamis): QR + hitung mundur + status poll */
+.pos-qris { display: flex; flex-direction: column; align-items: center; gap: var(--sp-3); }
+.pos-qris .pos-pay__bill { width: 100%; }
+.pos-qris__frame {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 240px; width: 100%;
+}
+.pos-qris__count {
+  font-size: var(--text-lg); font-weight: 700; letter-spacing: 0.01em;
+  color: var(--text-2); font-variant-numeric: tabular-nums;
+}
+.pos-qris__count--urgent { color: var(--danger, #dc2626); }
 .pos-pay__banks { display: flex; flex-direction: column; gap: 8px; margin: var(--sp-3) 0; }
 .pos-pay__bank {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;

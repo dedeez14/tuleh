@@ -284,7 +284,7 @@ function hitungItem(p, kuantitas, diskonPersen) {
   }
 }
 
-function buatStruk({ tokoId, items, tipePembayaran, dibayar, namaPelanggan, tanggal, status = 'SELESAI' }) {
+function buatStruk({ tokoId, items, tipePembayaran, dibayar, namaPelanggan, tanggal, status = 'SELESAI', qrisTagihanId = null }) {
   const subtotal = round2(items.reduce((s, i) => s + i._bruto, 0))
   const totalDiskon = round2(items.reduce((s, i) => s + i._diskon, 0))
   const totalPajak = round2(items.reduce((s, i) => s + i._pajak, 0))
@@ -299,6 +299,7 @@ function buatStruk({ tokoId, items, tipePembayaran, dibayar, namaPelanggan, tang
     pelanggan: namaPelanggan || null,
     kasir: USER.name,
     tipe_pembayaran: tipePembayaran,
+    qris_tagihan_id: qrisTagihanId || null,
     subtotal,
     total_diskon: totalDiskon,
     total_pajak: totalPajak,
@@ -1422,7 +1423,7 @@ const handlers = {
     return sesi ? ok(sesi) : err(404, 'Sesi tidak ditemukan.')
   },
 
-  'trx:checkout': ({ items, tipePembayaran, dibayar, idPelanggan, catatan } = {}) => {
+  'trx:checkout': ({ items, tipePembayaran, dibayar, idPelanggan, catatan, qrisTagihanId } = {}) => {
     const sesi = sesiAktif()
     if (!sesi) return err(409, 'Belum ada sesi kasir terbuka.')
     if (!Array.isArray(items) || items.length === 0) return err(422, 'Keranjang masih kosong.')
@@ -1439,6 +1440,15 @@ const handlers = {
 
     const strukItems = rincian.map(({ p, qty, diskon }) => hitungItem(p, qty, diskon))
     const grand = round2(strukItems.reduce((s, i) => s + i.subtotal, 0))
+
+    // QRIS terverifikasi: tagihan wajib ada, cocok totalnya, & sudah LUNAS (kontrak §5)
+    if (qrisTagihanId) {
+      const tagihan = demoQris[qrisTagihanId]
+      if (!tagihan) return err(422, 'Tagihan QRIS tidak ditemukan.')
+      if (round2(tagihan.jumlah) !== grand) return err(422, 'Total keranjang berubah setelah QRIS dibuat. Ulangi pembayaran.')
+      if (tagihan.status !== 'LUNAS') return err(422, 'Pembayaran QRIS belum lunas.')
+    }
+
     const bayar = Number(dibayar)
     if (!Number.isFinite(bayar) || bayar < grand) return err(422, 'Jumlah dibayar kurang dari total tagihan.')
 
@@ -1453,7 +1463,8 @@ const handlers = {
       tipePembayaran: tipePembayaran || 'TUNAI',
       dibayar: bayar,
       namaPelanggan: cust ? cust.nama : null,
-      tanggal: new Date()
+      tanggal: new Date(),
+      qrisTagihanId: qrisTagihanId || null
     })
     if (catatan) struk.catatan = String(catatan)
 

@@ -231,7 +231,10 @@ function registerIpcHandlers(getMainWindow) {
   })
 
   // QR generator lokal (untuk QR meja di layar Meja)
-  handle('qr:make', ({ text }) => ({ ok: true, data: { uri: qr.svgDataUri(str(text, { required: true, max: 500 })) } }))
+  // max 1024: muat payload EMVCo QRIS dinamis Midtrans (data tambahan + CRC) yang
+  // bisa >500 char. Android (mobile-bridge qr.make) tak memotong — samakan agar QR
+  // tak terpotong & tetap terpindai di desktop.
+  handle('qr:make', ({ text }) => ({ ok: true, data: { uri: qr.svgDataUri(str(text, { required: true, max: 1024 })) } }))
 
   handle('settings:get', () => ({ ok: true, data: settingsStore.load() }))
 
@@ -652,7 +655,7 @@ function registerIpcHandlers(getMainWindow) {
 
   // ---------- Transaksi ----------
 
-  handle('trx:checkout', ({ items, tipePembayaran, dibayar, idPelanggan, catatan }) => {
+  handle('trx:checkout', ({ items, tipePembayaran, dibayar, idPelanggan, catatan, qrisTagihanId }) => {
     if (!Array.isArray(items) || items.length === 0) return fail('Keranjang masih kosong.')
     if (items.length > 200) return fail('Terlalu banyak item dalam satu transaksi.')
     const cleanItems = items.map((item) => ({
@@ -668,7 +671,9 @@ function registerIpcHandlers(getMainWindow) {
         tipe_pembayaran: str(tipePembayaran, { required: true, max: 20 }),
         dibayar: num(dibayar, { required: true }),
         id_pelanggan: str(idPelanggan) || null,
-        catatan: str(catatan, { max: 500 }) || null
+        catatan: str(catatan, { max: 500 }) || null,
+        // QRIS terverifikasi (Midtrans): id tagihan LUNAS. Hanya dikirim bila ada.
+        qris_tagihan_id: str(qrisTagihanId) || undefined
       }
     }))
   })

@@ -12,7 +12,7 @@
   var API_PREFIX = '/api/pos/v1'
   var TIMEOUT_MS = 15000
   var DEFAULT_BASE = 'https://tatreport.com'
-  var APP_VERSION = '0.9.1'
+  var APP_VERSION = '0.9.2'
 
   var baseUrl = DEFAULT_BASE
   var token = null
@@ -307,7 +307,7 @@
       gabung: function (p) { return dispatch('bill:gabung', p, function () { return apiPost('/bills/' + enc(p && p.idUtama) + '/merge', { body: { bill_id: p && p.idGabung } }) }) },
       batal: function (p) { return dispatch('bill:batal', p, function () { return apiPost('/bills/' + enc(p && p.id) + '/void', { body: {} }) }) }
     },
-    qr: { make: function (p) { var uri = qrSvgDataUri((p && p.text) || ''); return uri ? ok({ svg: uri }) : notAvailable('QR gagal dibuat.') } },
+    qr: { make: function (p) { var uri = qrSvgDataUri((p && p.text) || ''); return uri ? ok({ uri: uri, svg: uri }) : notAvailable('QR gagal dibuat.') } },
     tunnel: { start: function () { return notAvailable('Akses internet publik (tunnel) tidak tersedia di Android.') }, stop: function () { return ok(null) } },
     station: {
       list: function (p) { return dispatch('station:list', p, function () { return apiGet('/stations') }) },
@@ -352,7 +352,7 @@
       rekap: function (p) { return dispatch('sesi:rekap', p, function () { return apiGet('/sesi/' + enc(p && p.id) + '/rekap') }) }
     },
     trx: {
-      checkout: function (p) { p = p || {}; return enrich(dispatch('trx:checkout', p, function () { return apiPost('/transaksi/checkout', { body: { items: (p.items || []).map(function (i) { return { id_produk: i.idProduk, harga: i.harga, kuantitas: i.kuantitas, diskon_persen: i.diskonPersen || 0, pajak_persen: i.pajakPersen || 0 } }), tipe_pembayaran: p.tipePembayaran, dibayar: p.dibayar, id_pelanggan: p.idPelanggan || null, catatan: p.catatan || null } }) })) },
+      checkout: function (p) { p = p || {}; return enrich(dispatch('trx:checkout', p, function () { return apiPost('/transaksi/checkout', { body: { items: (p.items || []).map(function (i) { return { id_produk: i.idProduk, harga: i.harga, kuantitas: i.kuantitas, diskon_persen: i.diskonPersen || 0, pajak_persen: i.pajakPersen || 0 } }), tipe_pembayaran: p.tipePembayaran, dibayar: p.dibayar, id_pelanggan: p.idPelanggan || null, catatan: p.catatan || null, qris_tagihan_id: p.qrisTagihanId || undefined } }) })) },
       list: function (p) { p = p || {}; return dispatch('trx:list', p, function () { return apiGet('/transaksi', { query: { status: p.status, sesi_id: p.sesiId, tanggal_dari: p.tanggalDari, tanggal_sampai: p.tanggalSampai, dari: p.tanggalDari, sampai: p.tanggalSampai } }) }) },
       detail: function (p) { return dispatch('trx:detail', p, function () { return apiGet('/transaksi/' + enc(p && p.id)) }) },
       batal: function (p) { return dispatch('trx:batal', p, function () { return apiPost('/transaksi/' + enc(p && p.id) + '/batal', { body: {} }) }) }
