@@ -12,7 +12,7 @@
   var API_PREFIX = '/api/pos/v1'
   var TIMEOUT_MS = 15000
   var DEFAULT_BASE = 'https://tatreport.com'
-  var APP_VERSION = '0.9.4'
+  var APP_VERSION = '0.9.5'
 
   var baseUrl = DEFAULT_BASE
   var token = null
@@ -224,7 +224,9 @@
         if (!/^https:\/\//i.test(u)) return notAvailable('Hanya URL https yang boleh dibuka.')
         try { window.open(u, '_system') } catch (e) { try { window.open(u, '_blank') } catch (e2) {} }
         return ok(null)
-      }
+      },
+      // Papan antrian butuh server LAN (hanya ada di desktop/EXE).
+      openQueueDisplay: function () { return notAvailable('Display Antrian (TV LAN) hanya tersedia di aplikasi desktop.') }
     },
     settings: {
       get: function () { return ready.then(function () { return { ok: true, status: 200, data: { baseUrl: baseUrl, hasToken: token != null }, meta: null, message: '' } }) },
@@ -308,6 +310,15 @@
       batal: function (p) { return dispatch('bill:batal', p, function () { return apiPost('/bills/' + enc(p && p.id) + '/void', { body: {} }) }) }
     },
     qr: { make: function (p) { var uri = qrSvgDataUri((p && p.text) || ''); return uri ? ok({ uri: uri, svg: uri }) : notAvailable('QR gagal dibuat.') } },
+    // Display Pelanggan: Android tak punya jendela kedua → supported:false, kasir
+    // memakai overlay layar-penuh dalam-app (ditangani renderer pos.js).
+    customerDisplay: {
+      status: function () { return ok({ supported: false, open: false }) },
+      open: function () { return ok({ opened: false, supported: false }) },
+      close: function () { return ok({ closed: true }) },
+      update: function () { return ok(null) },
+      onState: function () { return function () {} }
+    },
     tunnel: { start: function () { return notAvailable('Akses internet publik (tunnel) tidak tersedia di Android.') }, stop: function () { return ok(null) } },
     station: {
       list: function (p) { return dispatch('station:list', p, function () { return apiGet('/stations') }) },

@@ -42,6 +42,8 @@ if (!app.requestSingleInstanceLock()) {
 
     mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'))
     mainWindow.once('ready-to-show', () => mainWindow.show())
+    // Tutup Display Pelanggan bila window kasir ditutup (agar app bisa quit).
+    mainWindow.on('closed', () => { require('./customer-window').close() })
 
     // Keamanan: tidak ada navigasi keluar dari aplikasi & tidak ada window baru.
     // Tautan https eksternal dibuka di browser OS.

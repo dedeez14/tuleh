@@ -10,6 +10,7 @@ const gateway = require('./gateway')
 const tracker = require('./tracker')
 const tunnel = require('./tunnel')
 const qr = require('./qr')
+const customerWindow = require('./customer-window')
 
 // ---------- Validasi input dari renderer (jangan percaya begitu saja) ----------
 
@@ -180,6 +181,16 @@ function registerIpcHandlers(getMainWindow) {
     return { ok: true, data: null }
   })
 
+  // Buka Papan Antrian (TV/monitor) — URL LAN dibentuk di sini (tepercaya), bukan
+  // dari renderer, jadi aman meski http (alamat LAN lokal).
+  handle('display:antrian', async () => {
+    const ts = tracker.status()
+    if (!ts.running || !ts.baseUrl) return fail('Server LAN belum aktif — papan antrian belum bisa dibuka.')
+    const url = `${ts.baseUrl}/antrian`
+    await shell.openExternal(url)
+    return { ok: true, data: { url } }
+  })
+
   handle('app:print', () => {
     const win = getMainWindow()
     if (!win || win.isDestroyed()) return fail('Jendela tidak tersedia.')
@@ -235,6 +246,12 @@ function registerIpcHandlers(getMainWindow) {
   // bisa >500 char. Android (mobile-bridge qr.make) tak memotong — samakan agar QR
   // tak terpotong & tetap terpindai di desktop.
   handle('qr:make', ({ text }) => ({ ok: true, data: { uri: qr.svgDataUri(str(text, { required: true, max: 1024 })) } }))
+
+  // Display Pelanggan (jendela kedua desktop; di monitor kedua bila ada).
+  handle('customer:status', () => ({ ok: true, data: { supported: true, open: customerWindow.isOpen() } }))
+  handle('customer:open', () => ({ ok: true, data: customerWindow.open() }))
+  handle('customer:close', () => ({ ok: true, data: customerWindow.close() }))
+  handle('customer:update', (state) => ({ ok: true, data: customerWindow.update(state) }))
 
   handle('settings:get', () => ({ ok: true, data: settingsStore.load() }))
 

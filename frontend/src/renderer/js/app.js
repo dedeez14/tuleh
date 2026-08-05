@@ -870,8 +870,14 @@ async function boot() {
   enterLogin()
 }
 
-// Terapkan tema tersimpan sedini mungkin agar tidak ada kedip warna saat boot.
-applyTheme()
-boot().catch((err) => { console.error('Boot gagal:', err); hideSplash() })
-// Jaring pengaman: jangan biarkan splash tersangkut bila boot lama/gagal.
-setTimeout(hideSplash, 15000)
+// Mode "Display Pelanggan" (jendela kedua desktop): render layar pelanggan saja,
+// tanpa boot aplikasi kasir. Dipicu oleh index.html?display=customer.
+if (new URLSearchParams(location.search).get('display') === 'customer') {
+  import('./screens/customer-display.js').then((m) => m.mountCustomerDisplay())
+} else {
+  // Terapkan tema tersimpan sedini mungkin agar tidak ada kedip warna saat boot.
+  applyTheme()
+  boot().catch((err) => { console.error('Boot gagal:', err); hideSplash() })
+  // Jaring pengaman: jangan biarkan splash tersangkut bila boot lama/gagal.
+  setTimeout(hideSplash, 15000)
+}

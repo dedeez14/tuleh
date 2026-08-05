@@ -98,7 +98,7 @@ export const OrdersScreen = {
             <p class="ord__sub">Kolom mengikuti tahapan toko — klik tombol pada kartu untuk memajukan pesanan.</p>
           </div>
           <div class="u-flex">
-            <span class="ord__tv mono u-faint u-hidden" id="ord-tv"></span>
+            <button type="button" class="btn btn--outline btn--sm u-hidden" id="ord-tv-btn">${icons.queue}<span>Display Antrian</span></button>
             <span class="ord__live"><span class="badge__dot"></span> auto-refresh ${POLL_MS / 1000} dtk</span>
             <button type="button" class="icon-btn" id="ord-refresh" title="Muat ulang">${icons.refresh}</button>
           </div>
@@ -270,10 +270,15 @@ export const OrdersScreen = {
     api.app.info().then((info) => {
       if (!alive || !info.ok) return
       const tracking = info.data?.tracking
-      const tvEl = container.querySelector('#ord-tv')
-      if (tracking?.running && tvEl) {
-        tvEl.textContent = `Layar TV: ${tracking.baseUrl}/antrian`
-        tvEl.classList.remove('u-hidden')
+      const tvBtn = container.querySelector('#ord-tv-btn')
+      if (tracking?.running && tvBtn) {
+        const url = `${tracking.baseUrl}/antrian`
+        tvBtn.classList.remove('u-hidden')
+        tvBtn.title = `Buka ${url} di TV/monitor (LAN)`
+        tvBtn.addEventListener('click', async () => {
+          const r = await api.app.openQueueDisplay()
+          if (!r.ok) toast(firstError(r), 'error')
+        })
       }
     })
 

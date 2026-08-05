@@ -8,6 +8,7 @@ import { toast, showModal, confirmDialog, emptyStateHTML, loadingHTML, icons } f
 import { buildReceiptHTML, printReceipt } from '../components/receipt.js'
 import { lineTotals, cartTotals, kembalian, shortfall, quickCashOptions, clampQty } from '../lib/cart.js'
 import { midtransBoleh, qrisAksi, sisaDetik, formatSisa, harusFallbackStatis } from '../lib/qris-flow.js'
+import { customerViewHTML } from '../components/customer-view.js'
 
 const QRIS_POLL_MS = 4000 // interval cek status tagihan QRIS (kontrak: 3–5s)
 
@@ -153,7 +154,10 @@ function renderPos(container) {
             <h2 class="pos-cart__title">Keranjang</h2>
             <div class="pos-cart__count" id="pos-count">0 item</div>
           </div>
-          <button type="button" class="btn btn--ghost btn--sm" id="pos-clear">Kosongkan</button>
+          <div class="pos-cart__head-act">
+            <button type="button" class="btn btn--ghost btn--sm" id="pos-cust-display" aria-pressed="false" title="Tampilkan pesanan ke pelanggan">Display</button>
+            <button type="button" class="btn btn--ghost btn--sm" id="pos-clear">Kosongkan</button>
+          </div>
         </div>
         <div class="pos-cart__cust" id="pos-cust"></div>
         <div class="pos-cart__items" id="pos-items"></div>
@@ -176,6 +180,87 @@ function renderPos(container) {
   const countEl = container.querySelector('#pos-count')
   const payBtn = container.querySelector('#pos-pay')
   const clearBtn = container.querySelector('#pos-clear')
+
+  // ---------- Display Pelanggan (monitor kedua desktop / overlay Android) ----------
+  const custDisplayBtn = container.querySelector('#pos-cust-display')
+  let cdSupported = false   // true = desktop (jendela kedua); false = Android (overlay)
+  let cdOn = false
+  let cdOverlay = null
+  let cdPayment = null      // { metode, dibayar, kembalian } saat modal bayar
+  let cdDone = false
+  let cdDoneData = null     // snapshot layar "Terima kasih" (dari struk, sebab keranjang sudah dikosongkan)
+
+  function cdStore() {
+    const st = getState()
+    return { nama: st.company?.nama || st.company?.name || 'Tuléh', logo: st.struk?.logo || st.company?.logo || '' }
+  }
+
+  function buildCustomerState() {
+    if (cdDone && cdDoneData) return cdDoneData // layar terima kasih pakai total dari struk
+    const totals = cartTotals(cartLines())
+    const items = cart.map((l) => {
+      const harga = Number(l.produk.harga_jual) || 0
+      const qty = Number(l.kuantitas) || 0
+      const lt = lineTotals({ harga, kuantitas: qty, diskonPersen: Number(l.diskonPersen) || 0, pajakPersen: Number(l.produk.pajak_persen) || 0 })
+      return { nama: l.produk.nama, qty, satuan: l.produk.satuan || '', harga, subtotal: lt.bruto }
+    })
+    return { store: cdStore(), items, totals, payment: cdPayment, done: false }
+  }
+
+  function pushCustomerDisplay() {
+    if (!cdOn) return
+    const state = buildCustomerState()
+    if (cdSupported) api.customerDisplay.update(state)                 // desktop → IPC ke jendela kedua
+    else if (cdOverlay) cdOverlay.querySelector('.cd-overlay__view').innerHTML = customerViewHTML(state) // Android → overlay
+  }
+
+  function setCdBtn() {
+    if (!custDisplayBtn) return
+    custDisplayBtn.classList.toggle('is-active', cdOn)
+    custDisplayBtn.setAttribute('aria-pressed', String(cdOn))
+  }
+
+  function openCustomerOverlay() {
+    cdOverlay = document.createElement('div')
+    cdOverlay.className = 'cd-overlay'
+    cdOverlay.innerHTML = `<div class="cd-overlay__view">${customerViewHTML(buildCustomerState())}</div>`
+    const closeBtn = document.createElement('button')
+    closeBtn.className = 'cd-overlay__close'
+    closeBtn.type = 'button'
+    closeBtn.textContent = '✕ Kembali ke Kasir'
+    closeBtn.addEventListener('click', () => toggleCustomerDisplay())
+    cdOverlay.appendChild(closeBtn)
+    document.body.appendChild(cdOverlay)
+  }
+  function closeCustomerOverlay() {
+    if (cdOverlay && cdOverlay.parentNode) cdOverlay.parentNode.removeChild(cdOverlay)
+    cdOverlay = null
+  }
+
+  async function toggleCustomerDisplay() {
+    if (!cdOn) {
+      cdOn = true
+      if (cdSupported) { await api.customerDisplay.open() } else { openCustomerOverlay() }
+      pushCustomerDisplay()
+    } else {
+      cdOn = false
+      if (cdSupported) { await api.customerDisplay.close() } else { closeCustomerOverlay() }
+    }
+    setCdBtn()
+  }
+
+  if (custDisplayBtn && api.customerDisplay) {
+    custDisplayBtn.addEventListener('click', toggleCustomerDisplay)
+    // Deteksi kapabilitas: desktop = jendela kedua; selain itu overlay dalam-app.
+    api.customerDisplay.status().then((r) => {
+      cdSupported = !!(r && r.ok && r.data && r.data.supported)
+      cdOn = !!(r && r.ok && r.data && r.data.open) // jendela mungkin sudah terbuka
+      setCdBtn()
+      if (cdOn) pushCustomerDisplay()
+    }).catch(() => {})
+  } else if (custDisplayBtn) {
+    custDisplayBtn.classList.add('u-hidden') // fitur tak tersedia (preload lama)
+  }
 
   // ---------- Katalog produk ----------
 
@@ -459,6 +544,7 @@ function renderPos(container) {
     renderSummary(totals)
     payBtn.disabled = cart.length === 0
     clearBtn.disabled = cart.length === 0
+    pushCustomerDisplay() // cerminkan keranjang live ke Display Pelanggan (bila aktif)
   }
 
   // ---------- Modal pelanggan ----------
@@ -687,6 +773,8 @@ function renderPos(container) {
       onClose: () => {
         modalClosed = true
         stopQris() // hentikan poll/countdown QRIS bila modal ditutup di tengah alur
+        cdPayment = null; cdDone = false; cdDoneData = null
+        pushCustomerDisplay() // kembalikan Display Pelanggan ke keranjang/sambutan
         if (!disposed && document.contains(searchInput)) searchInput.focus()
       }
     })
@@ -714,6 +802,13 @@ function renderPos(container) {
         statusEl.innerHTML = `<span>Kembalian</span><span class="num">${fmtIDR(kembalian(dibayar, grandTotal))}</span>`
       }
       submitBtn.disabled = kurang > 0
+      // Cerminkan uang diterima & kembalian ke Display Pelanggan (live, saat TUNAI).
+      if (cdOn && metode === 'TUNAI') {
+        cdPayment = payInput.value.trim() && kurang <= 0
+          ? { metode: 'TUNAI', dibayar, kembalian: kembalian(dibayar, grandTotal) }
+          : null
+        pushCustomerDisplay()
+      }
     }
 
     const extraEl = body.querySelector('#pay-method-extra')
@@ -806,6 +901,21 @@ function renderPos(container) {
 
     // Bersihkan keranjang + segarkan katalog, lalu tampilkan struk sukses.
     function finalizeSuccess(struk) {
+      // Snapshot "Terima kasih" utk Display Pelanggan (keranjang akan dikosongkan).
+      if (cdOn) {
+        cdDone = true
+        cdDoneData = {
+          store: cdStore(),
+          items: [],
+          totals: { grandTotal: Number(struk.grand_total) || 0 },
+          payment: {
+            metode: struk.tipe_pembayaran || 'TUNAI',
+            dibayar: Number(struk.dibayar) || 0,
+            kembalian: Number(struk.kembalian) || 0
+          },
+          done: true
+        }
+      }
       cart = []
       pelanggan = null
       if (!disposed) {
@@ -1200,5 +1310,6 @@ function renderPos(container) {
     disposed = true
     loadSeq += 1
     document.removeEventListener('keydown', onKeydown)
+    closeCustomerOverlay() // singkirkan overlay Android bila kasir pindah layar
   }
 }

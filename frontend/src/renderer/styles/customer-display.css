@@ -1,0 +1,97 @@
+/* ============================================================
+   Display Pelanggan — layar menghadap pelanggan (monitor kedua
+   desktop, atau overlay layar-penuh Android). Sengaja theme-
+   independent (selalu tampilan brand gelap) & berukuran besar
+   agar terbaca dari jarak. Dipakai .cd + varian.
+   ============================================================ */
+
+.cd {
+  --cd-mint: #7ae2cf;
+  --cd-ink: #eafff9;
+  --cd-dim: rgba(234, 255, 249, 0.66);
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  padding: clamp(20px, 3vw, 48px);
+  color: var(--cd-ink);
+  background:
+    radial-gradient(1200px 600px at 80% -10%, rgba(122, 226, 207, 0.16), transparent 60%),
+    linear-gradient(160deg, #0a2723 0%, #06201c 60%, #041613 100%);
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  overflow: hidden;
+}
+
+/* ---------- Brand ---------- */
+.cd__brand { display: flex; align-items: center; gap: 14px; }
+.cd__logo { width: clamp(38px, 3.4vw, 56px); height: clamp(38px, 3.4vw, 56px); border-radius: 10px; object-fit: contain; background: rgba(255, 255, 255, 0.06); padding: 4px; }
+.cd__store { font-weight: 800; font-size: clamp(20px, 2vw, 32px); letter-spacing: -0.01em; }
+
+/* ---------- Sambutan (keranjang kosong) ---------- */
+.cd--welcome { align-items: center; justify-content: center; text-align: center; gap: 8px; }
+.cd--welcome .cd__brand { flex-direction: column; gap: 18px; margin-bottom: 10px; }
+.cd--welcome .cd__logo { width: clamp(80px, 9vw, 132px); height: clamp(80px, 9vw, 132px); border-radius: 22px; }
+.cd--welcome .cd__store { font-size: clamp(26px, 3vw, 44px); }
+.cd__welcome-title { font-size: clamp(40px, 6vw, 92px); font-weight: 800; letter-spacing: -0.02em; line-height: 1.05; }
+.cd__welcome-sub { font-size: clamp(18px, 1.8vw, 28px); color: var(--cd-dim); margin-top: 6px; }
+
+/* ---------- Pesanan berjalan ---------- */
+.cd__top { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 18px; border-bottom: 1px solid rgba(122, 226, 207, 0.18); flex-shrink: 0; }
+.cd__count { font-size: clamp(15px, 1.4vw, 22px); color: var(--cd-dim); font-weight: 600; }
+
+.cd__items { flex: 1 1 auto; overflow-y: auto; padding: 10px 0; display: flex; flex-direction: column; gap: 2px; }
+.cd__items::-webkit-scrollbar { width: 8px; }
+.cd__items::-webkit-scrollbar-thumb { background: rgba(122, 226, 207, 0.3); border-radius: 999px; }
+
+.cd__row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: baseline;
+  gap: 10px 22px;
+  padding: clamp(9px, 1vw, 15px) 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.cd__row-name { font-size: clamp(19px, 1.8vw, 30px); font-weight: 700; line-height: 1.2; }
+.cd__row-meta { display: flex; align-items: baseline; gap: 12px; color: var(--cd-dim); font-size: clamp(14px, 1.2vw, 20px); white-space: nowrap; }
+.cd__row-qty { color: var(--cd-mint); font-weight: 800; }
+.cd__row-sub { font-size: clamp(18px, 1.6vw, 28px); font-weight: 700; text-align: right; white-space: nowrap; }
+
+/* ---------- Kaki: ringkasan + total + bayar ---------- */
+.cd__foot { flex-shrink: 0; padding-top: 16px; border-top: 1px solid rgba(122, 226, 207, 0.18); }
+.cd__line { display: flex; align-items: center; justify-content: space-between; font-size: clamp(16px, 1.4vw, 24px); color: var(--cd-dim); padding: 4px 0; }
+
+.cd__total { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-top: 6px; }
+.cd__total-k { font-size: clamp(20px, 2vw, 34px); font-weight: 700; }
+.cd__total-v { font-size: clamp(40px, 5.4vw, 92px); font-weight: 800; letter-spacing: -0.02em; color: #fff; line-height: 1; }
+
+.cd__pay { margin-top: 14px; padding-top: 12px; border-top: 1px dashed rgba(122, 226, 207, 0.28); }
+.cd__line--pay { color: var(--cd-ink); font-weight: 600; }
+.cd__line--change { color: var(--cd-mint); font-weight: 800; font-size: clamp(18px, 1.8vw, 30px); }
+
+/* ---------- Terima kasih ---------- */
+.cd--thanks { align-items: center; justify-content: center; text-align: center; gap: 10px; }
+.cd--thanks .cd__brand { position: absolute; top: clamp(20px, 3vw, 48px); left: clamp(20px, 3vw, 48px); }
+.cd__thanks-icon {
+  width: clamp(90px, 10vw, 150px); height: clamp(90px, 10vw, 150px);
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%; background: rgba(122, 226, 207, 0.16); border: 3px solid var(--cd-mint);
+  color: var(--cd-mint); font-size: clamp(48px, 6vw, 88px); font-weight: 800; margin-bottom: 8px;
+}
+.cd__thanks-title { font-size: clamp(40px, 6vw, 84px); font-weight: 800; letter-spacing: -0.02em; }
+.cd__thanks-sub { font-size: clamp(18px, 1.8vw, 28px); color: var(--cd-dim); }
+.cd__thanks-grid { display: flex; gap: clamp(24px, 5vw, 72px); margin-top: 22px; }
+.cd__thanks-grid > div { display: flex; flex-direction: column; gap: 4px; }
+.cd__k { font-size: clamp(14px, 1.3vw, 20px); color: var(--cd-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+.cd__v { font-size: clamp(30px, 3.6vw, 60px); font-weight: 800; color: #fff; }
+.cd__v--change { color: var(--cd-mint); }
+
+/* ---------- Overlay Android (di dalam app kasir) ---------- */
+.cd-overlay { position: fixed; inset: 0; z-index: 200; }
+.cd-overlay__close {
+  position: absolute; top: 16px; right: 16px; z-index: 2;
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 16px; border-radius: 999px; cursor: pointer;
+  border: 1px solid rgba(122, 226, 207, 0.4); background: rgba(6, 32, 28, 0.7);
+  color: var(--cd-mint, #7ae2cf); font-weight: 700; font-size: 14px;
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+}

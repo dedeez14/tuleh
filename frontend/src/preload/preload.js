@@ -10,7 +10,21 @@ contextBridge.exposeInMainWorld('iposAPI', {
   app: {
     info: invoke('app:info'),
     print: invoke('app:print'),
-    openExternal: invoke('app:openExternal')
+    openExternal: invoke('app:openExternal'),
+    openQueueDisplay: invoke('display:antrian')
+  },
+  // Display Pelanggan — window kasir memanggil open/close/update/status;
+  // window pelanggan (index.html?display=customer) berlangganan onState.
+  customerDisplay: {
+    status: invoke('customer:status'),
+    open: invoke('customer:open'),
+    close: invoke('customer:close'),
+    update: invoke('customer:update'),
+    onState(callback) {
+      const listener = (_event, state) => callback(state)
+      ipcRenderer.on('customer:state', listener)
+      return () => ipcRenderer.removeListener('customer:state', listener)
+    }
   },
   settings: {
     get: invoke('settings:get'),

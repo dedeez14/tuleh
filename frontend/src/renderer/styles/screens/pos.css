@@ -265,6 +265,11 @@
   gap: var(--sp-3);
   padding: var(--sp-5) var(--sp-5) var(--sp-3);
 }
+.pos-cart__head-act { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+#pos-cust-display.is-active {
+  color: var(--mint-700);
+  background: var(--mint-100, rgba(122, 226, 207, 0.16));
+}
 
 .pos-cart__title {
   font-size: var(--text-lg);
