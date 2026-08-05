@@ -42,6 +42,17 @@ contextBridge.exposeInMainWorld('iposAPI', {
     uploadLogo: invoke('pengaturan:uploadLogo'),
     uploadLogoStruk: invoke('pengaturan:uploadLogoStruk')
   },
+  pembayaran: {
+    get: invoke('pembayaran:get'),
+    simpan: invoke('pembayaran:simpan'),
+    uploadQr: invoke('pembayaran:uploadQr'),
+    midtransSimpan: invoke('pembayaran:midtransSimpan'),
+    midtransHapus: invoke('pembayaran:midtransHapus')
+  },
+  qris: {
+    buatTagihan: invoke('qris:buatTagihan'),
+    statusTagihan: invoke('qris:statusTagihan')
+  },
   langganan: {
     status: invoke('langganan:status'),
     bayar: invoke('langganan:bayar'),

@@ -12,7 +12,7 @@
   var API_PREFIX = '/api/pos/v1'
   var TIMEOUT_MS = 15000
   var DEFAULT_BASE = 'https://tatreport.com'
-  var APP_VERSION = '0.8.0'
+  var APP_VERSION = '0.9.0'
 
   var baseUrl = DEFAULT_BASE
   var token = null
@@ -120,14 +120,40 @@
     if ('struk_tampil_logo' in p) b.struk_tampil_logo = !!p.struk_tampil_logo
     return b
   }
+  // Body PUT /pengaturan/pembayaran — daftar bank (maks 5) + hapus_qr.
+  function pembayaranBody (p) {
+    p = p || {}
+    var b = {}
+    if (Array.isArray(p.bank)) {
+      b.bank = p.bank.slice(0, 5).map(function (r) {
+        return {
+          bank: String((r && r.bank) || '').trim().slice(0, 40),
+          rekening: String((r && r.rekening) || '').trim().slice(0, 40),
+          atas_nama: String((r && r.atas_nama) || '').trim().slice(0, 80)
+        }
+      }).filter(function (r) { return r.bank || r.rekening || r.atas_nama })
+    }
+    if (p.hapusQr) b.hapus_qr = true
+    return b
+  }
+  // Body PUT /pengaturan/pembayaran/midtrans — pasang key ATAU saklar aktif.
+  function midtransBody (p) {
+    p = p || {}
+    var b = {}
+    if ('merchant_id' in p) b.merchant_id = String(p.merchant_id || '').slice(0, 100)
+    if ('client_key' in p) b.client_key = String(p.client_key || '').slice(0, 200)
+    if ('server_key' in p) b.server_key = String(p.server_key || '').slice(0, 200)
+    if ('aktif' in p) b.aktif = !!p.aktif
+    return b
+  }
   // Unggah logo multipart (field `logo`). CapacitorHttp mem-patch fetch → FormData
   // dikirim sebagai multipart native (bypass CORS).
-  function uploadLogo (endpoint, p) {
+  function uploadLogo (endpoint, p, field) {
     p = p || {}
     if (!p.bytes) return notAvailable('File tidak ada.')
     var bytes = p.bytes instanceof ArrayBuffer ? new Uint8Array(p.bytes) : p.bytes
     var form = new FormData()
-    form.append('logo', new Blob([bytes], { type: p.mime || 'application/octet-stream' }), p.filename || 'logo.png')
+    form.append(field || 'logo', new Blob([bytes], { type: p.mime || 'application/octet-stream' }), p.filename || 'upload.png')
     var headers = { Accept: 'application/json' }
     if (token) headers.Authorization = 'Bearer ' + token
     var url = buildUrl(endpoint, activeTokoId ? { toko_id: activeTokoId } : {})
@@ -230,6 +256,17 @@
       usahaSimpan: function (p) { return dispatch('pengaturan:usahaSimpan', p, function () { return request('PUT', '/pengaturan/usaha', { body: usahaBody(p) }) }) },
       uploadLogo: function (p) { return dispatch('pengaturan:uploadLogo', p, function () { return uploadLogo('/pengaturan/usaha/logo', p) }) },
       uploadLogoStruk: function (p) { return dispatch('pengaturan:uploadLogoStruk', p, function () { return uploadLogo('/pengaturan/usaha/logo-struk', p) }) }
+    },
+    pembayaran: {
+      get: function (p) { return dispatch('pembayaran:get', p, function () { return apiGet('/pengaturan/pembayaran') }) },
+      simpan: function (p) { return dispatch('pembayaran:simpan', p, function () { return request('PUT', '/pengaturan/pembayaran', { body: pembayaranBody(p) }) }) },
+      uploadQr: function (p) { return dispatch('pembayaran:uploadQr', p, function () { return uploadLogo('/pengaturan/pembayaran/qr', p, 'qr') }) },
+      midtransSimpan: function (p) { return dispatch('pembayaran:midtransSimpan', p, function () { return request('PUT', '/pengaturan/pembayaran/midtrans', { body: midtransBody(p) }) }) },
+      midtransHapus: function (p) { return dispatch('pembayaran:midtransHapus', p, function () { return request('DELETE', '/pengaturan/pembayaran/midtrans') }) }
+    },
+    qris: {
+      buatTagihan: function (p) { p = p || {}; return dispatch('qris:buatTagihan', p, function () { return apiPost('/qris/tagihan', { body: { jumlah: p.jumlah, keterangan: p.keterangan } }) }) },
+      statusTagihan: function (p) { p = p || {}; return dispatch('qris:statusTagihan', p, function () { return apiGet('/qris/tagihan/' + enc(p.id)) }) }
     },
     langganan: {
       status: function (p) { return dispatch('langganan:status', p, function () { return apiGet('/langganan/status') }) },

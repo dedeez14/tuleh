@@ -115,3 +115,22 @@
 .pu-check { display: flex; align-items: center; gap: 8px; margin: var(--sp-2) 0 var(--sp-4); font-weight: 600; cursor: pointer; }
 .pu-check input { width: 16px; height: 16px; }
 @media (max-width: 560px) { .pu-2col { grid-template-columns: 1fr; } }
+
+/* ---------- Pembayaran ---------- */
+.pb-bank-list { display: flex; flex-direction: column; gap: 8px; margin: var(--sp-3) 0; }
+.pb-bank-row { display: grid; grid-template-columns: 1.1fr 1.2fr 1.2fr auto; gap: 8px; align-items: center; }
+.pb-bank-del {
+  width: 34px; height: 34px; flex: 0 0 auto; border-radius: 8px;
+  border: 1px solid var(--border, var(--surface-3)); background: var(--surface-2);
+  color: var(--danger, #dc2626); cursor: pointer; font-size: 14px; line-height: 1;
+}
+.pb-bank-del:hover { background: var(--danger-bg, #fee2e2); }
+.pb-qr { width: 96px; height: 96px; }
+.pb-mt-head { display: flex; align-items: center; gap: 10px; margin: var(--sp-2) 0 var(--sp-3); flex-wrap: wrap; }
+.pb-webhook { display: flex; gap: 8px; align-items: center; }
+.pb-webhook .input { flex: 1; min-width: 0; }
+@media (max-width: 560px) {
+  .pb-bank-row { grid-template-columns: 1fr 1fr; }
+  .pb-bank-row .pb-bank-nama { grid-column: 1 / 2; }
+  .pb-bank-del { grid-column: 2 / 3; justify-self: end; }
+}

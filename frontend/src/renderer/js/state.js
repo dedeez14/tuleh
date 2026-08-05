@@ -10,6 +10,7 @@ const state = {
   paymentMethods: [],  // ['TUNAI','TRANSFER','QRIS']
   modules: {},
   struk: null,         // { logo, footer, tampil_logo } — dari /config (kop & kaki struk)
+  pembayaran: null,    // { qr_statis, bank[], midtrans_aktif } — dari /config (layar bayar)
   config: null,        // hasil /config
   tokoList: [],        // daftar toko company (GET /tokos)
   toko: null,          // toko terpilih {id, nama, bidang_usaha}
@@ -58,6 +59,7 @@ export function resetAuthState() {
     paymentMethods: [],
     modules: {},
     struk: null,
+    pembayaran: null,
     config: null,
     tokoList: [],
     toko: null,

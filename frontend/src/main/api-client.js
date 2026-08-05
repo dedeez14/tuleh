@@ -148,7 +148,7 @@ async function upload(endpoint, { query, file, auth = true } = {}) {
 
   const bytes = file.bytes instanceof ArrayBuffer ? new Uint8Array(file.bytes) : file.bytes
   const form = new FormData()
-  form.append('logo', new Blob([bytes], { type: file.mime || 'application/octet-stream' }), file.filename || 'logo.png')
+  form.append(file.field || 'logo', new Blob([bytes], { type: file.mime || 'application/octet-stream' }), file.filename || 'upload.png')
 
   const headers = { Accept: 'application/json' }
   if (auth && token) headers.Authorization = `Bearer ${token}`

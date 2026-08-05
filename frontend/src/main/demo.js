@@ -55,6 +55,29 @@ function usahaDemo () {
   return demoUsaha
 }
 
+let demoPembayaran = null        // pengaturan pembayaran demo (mutable)
+let demoQris = {}                // id tagihan QRIS demo → objek
+let demoQrisSeq = 0
+
+/** Pengaturan pembayaran demo — Midtrans SENGAJA diaktifkan agar semua fitur
+ *  (termasuk QRIS dinamis) bisa dicoba di Mode Demo. */
+function pembayaranDemo () {
+  if (!demoPembayaran) {
+    demoPembayaran = {
+      qr_statis: null,
+      bank: [{ bank: 'BCA', rekening: '8880123456', atas_nama: 'Tuleh Demo' }],
+      midtrans_aktif: true,
+      midtrans: {
+        diizinkan: true, terpasang: true, aktif: true, lingkungan: 'sandbox',
+        merchant_id: 'M-DEMO-001', client_key: 'Mid-client-DEMO',
+        server_key_masked: '••••DEMO', verified_at: new Date().toISOString(),
+        webhook_url: 'https://tatreport.com/api/pos/v1/webhook/midtrans/demo-token'
+      }
+    }
+  }
+  return demoPembayaran
+}
+
 /** Bytes (ArrayBuffer/Uint8Array) → data URI (untuk pratinjau logo di Mode Demo). */
 function toDataUri (bytes, mime) {
   if (!bytes) return null
@@ -1062,14 +1085,72 @@ const handlers = {
 
   'config:get': () => {
     const u = usahaDemo()
+    const pb = pembayaranDemo()
     return ok({
       company: { ...COMPANY, nama: u.nama, alamat: u.alamat, telepon: u.telepon, email: u.email, npwp: u.npwp, logo: u.logo },
       struk: u.struk,
+      pembayaran: { qr_statis: pb.qr_statis, bank: pb.bank, midtrans_aktif: pb.midtrans_aktif },
       keamanan: { aktif: false, auto_lock_menit: 3 },
       pengaturan: { stok_minimum_tampil: 0, tampilkan_stok_habis: true },
       payment_methods: ['TUNAI', 'TRANSFER', 'QRIS'],
       modules: { multi_satuan: false }
     })
+  },
+
+  // ---- Pembayaran (Mode Demo) ----
+  'pembayaran:get': () => ok(pembayaranDemo()),
+  'pembayaran:simpan': ({ bank, hapusQr } = {}) => {
+    const pb = pembayaranDemo()
+    if (Array.isArray(bank)) {
+      pb.bank = bank.slice(0, 5)
+        .map((r) => ({ bank: String((r && r.bank) || '').trim(), rekening: String((r && r.rekening) || '').trim(), atas_nama: String((r && r.atas_nama) || '').trim() }))
+        .filter((r) => r.bank || r.rekening || r.atas_nama)
+    }
+    if (hapusQr) pb.qr_statis = null
+    return ok(pembayaranDemo())
+  },
+  'pembayaran:uploadQr': ({ bytes, mime } = {}) => {
+    const uri = toDataUri(bytes, mime)
+    if (uri) pembayaranDemo().qr_statis = uri
+    return ok(pembayaranDemo())
+  },
+  'pembayaran:midtransSimpan': (f = {}) => {
+    const pb = pembayaranDemo()
+    const mt = pb.midtrans
+    if ('aktif' in f) { mt.aktif = !!f.aktif; pb.midtrans_aktif = !!f.aktif }
+    else if (f.server_key) {
+      mt.terpasang = true
+      mt.merchant_id = f.merchant_id || mt.merchant_id
+      mt.client_key = f.client_key || mt.client_key
+      mt.lingkungan = 'sandbox'
+      mt.server_key_masked = '••••' + String(f.server_key).slice(-4)
+      mt.verified_at = new Date().toISOString()
+      mt.aktif = true; pb.midtrans_aktif = true
+    }
+    return ok(pembayaranDemo())
+  },
+  'pembayaran:midtransHapus': () => {
+    const pb = pembayaranDemo()
+    pb.midtrans = { diizinkan: true, terpasang: false, aktif: false, lingkungan: null, merchant_id: null, client_key: null, server_key_masked: null, verified_at: null, webhook_url: pb.midtrans.webhook_url }
+    pb.midtrans_aktif = false
+    return ok(pembayaranDemo())
+  },
+  'qris:buatTagihan': ({ jumlah } = {}) => {
+    const id = 'QRD-' + (++demoQrisSeq)
+    const t = {
+      id, order_id: 'ORDER-' + id, jumlah: Number(jumlah) || 0, status: 'MENUNGGU',
+      qr_string: '00020101021126DEMOQRIS' + id + '5204' + (Number(jumlah) || 0),
+      qr_url: null, expired_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(), _polls: 0
+    }
+    demoQris[id] = t
+    return ok({ id: t.id, order_id: t.order_id, jumlah: t.jumlah, status: t.status, qr_string: t.qr_string, qr_url: t.qr_url, expired_at: t.expired_at })
+  },
+  'qris:statusTagihan': ({ id } = {}) => {
+    const t = demoQris[id]
+    if (!t) return { ok: false, status: 404, message: 'Tagihan tidak ditemukan.', errors: null }
+    t._polls += 1
+    if (t.status === 'MENUNGGU' && t._polls >= 2) t.status = 'LUNAS' // demo: lunas setelah ~2 poll
+    return ok({ id: t.id, order_id: t.order_id, jumlah: t.jumlah, status: t.status, qr_string: t.qr_string, qr_url: t.qr_url, expired_at: t.expired_at })
   },
 
   // ---- Pengaturan Usaha & Struk (Mode Demo) ----

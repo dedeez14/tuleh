@@ -59,6 +59,32 @@ function usahaBody(f) {
   return b
 }
 
+// Body PUT /pengaturan/pembayaran — daftar bank (maks 5) menggantikan seluruh
+// daftar; hapus_qr menghapus QR statis.
+function pembayaranBody({ bank, hapusQr } = {}) {
+  const b = {}
+  if (Array.isArray(bank)) {
+    b.bank = bank.slice(0, 5).map((r) => ({
+      bank: (str(r && r.bank, { max: 40 }) || '').trim(),
+      rekening: (str(r && r.rekening, { max: 40 }) || '').trim(),
+      atas_nama: (str(r && r.atas_nama, { max: 80 }) || '').trim()
+    })).filter((r) => r.bank || r.rekening || r.atas_nama)
+  }
+  if (hapusQr) b.hapus_qr = true
+  return b
+}
+
+// Body PUT /pengaturan/pembayaran/midtrans — pasang key {merchant_id, client_key,
+// server_key} ATAU saklar {aktif}. Server key TAK PERNAH di-log di sisi app.
+function midtransBody(f = {}) {
+  const b = {}
+  if ('merchant_id' in f) b.merchant_id = str(f.merchant_id, { max: 100 })
+  if ('client_key' in f) b.client_key = str(f.client_key, { max: 200 })
+  if ('server_key' in f) b.server_key = str(f.server_key, { max: 200 })
+  if ('aktif' in f) b.aktif = !!f.aktif
+  return b
+}
+
 // Handler dibungkus supaya error validasi kembali sebagai envelope, bukan exception IPC.
 // Saat Mode Demo aktif, channel yang punya simulasi dialihkan ke demo.js (tanpa jaringan).
 // Checkout toko ber-lifecycle → sisipkan URL + QR pelacakan pelanggan ke struk
@@ -268,6 +294,23 @@ function registerIpcHandlers(getMainWindow) {
     withAuthWatch(api.upload('/pengaturan/usaha/logo', { file: { bytes, filename, mime } })))
   handle('pengaturan:uploadLogoStruk', ({ bytes, filename, mime } = {}) =>
     withAuthWatch(api.upload('/pengaturan/usaha/logo-struk', { file: { bytes, filename, mime } })))
+
+  // ---------- Pengaturan Pembayaran (dua lapis: QR statis+bank & Midtrans) ----------
+  handle('pembayaran:get', () => withAuthWatch(api.get('/pengaturan/pembayaran')))
+  handle('pembayaran:simpan', ({ bank, hapusQr } = {}) =>
+    withAuthWatch(api.request('PUT', '/pengaturan/pembayaran', { body: pembayaranBody({ bank, hapusQr }) })))
+  handle('pembayaran:uploadQr', ({ bytes, filename, mime } = {}) =>
+    withAuthWatch(api.upload('/pengaturan/pembayaran/qr', { file: { bytes, filename, mime, field: 'qr' } })))
+  handle('pembayaran:midtransSimpan', (f) =>
+    withAuthWatch(api.request('PUT', '/pengaturan/pembayaran/midtrans', { body: midtransBody(f || {}) })))
+  handle('pembayaran:midtransHapus', () =>
+    withAuthWatch(api.request('DELETE', '/pengaturan/pembayaran/midtrans', {})))
+
+  // QRIS dinamis (kasir — semua peran). Buat tagihan (jumlah = grand total) + poll status.
+  handle('qris:buatTagihan', ({ jumlah, keterangan } = {}) =>
+    withAuthWatch(api.post('/qris/tagihan', { body: { jumlah: num(jumlah, { required: true }), keterangan: str(keterangan, { max: 190 }) } })))
+  handle('qris:statusTagihan', ({ id } = {}) =>
+    withAuthWatch(api.get(`/qris/tagihan/${encodeURIComponent(str(id, { required: true }))}`)))
 
   // ---------- Langganan & Kontak CS (Sistem Mitra) ----------
   // Endpoint per-tenant; kontrak di docs/Skema-API-Sistem-Mitra-Tuleh.md §6.5.

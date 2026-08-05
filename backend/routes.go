@@ -122,6 +122,18 @@ var routeTable = []route{
 	{method: "PUT", pattern: "/pengaturan/keamanan", purge: []string{apiPrefix + "/pengaturan", apiPrefix + "/config"}},
 	{method: "POST", pattern: "/keamanan/verifikasi"}, // verifikasi PIN — tanpa cache (rate-limit di server)
 
+	// Pembayaran dua lapis (QR statis + bank; Midtrans merchant). Mutasi purge
+	// /config (blok pembayaran) + /pengaturan. Upload QR statis = multipart (O/M).
+	{method: "GET", pattern: "/pengaturan/pembayaran", cache: 30 * time.Second},
+	{method: "PUT", pattern: "/pengaturan/pembayaran", purge: []string{apiPrefix + "/pengaturan", apiPrefix + "/config"}},
+	{method: "POST", pattern: "/pengaturan/pembayaran/qr", purge: []string{apiPrefix + "/pengaturan", apiPrefix + "/config"}},
+	{method: "PUT", pattern: "/pengaturan/pembayaran/midtrans", purge: []string{apiPrefix + "/pengaturan", apiPrefix + "/config"}},
+	{method: "DELETE", pattern: "/pengaturan/pembayaran/midtrans", purge: []string{apiPrefix + "/pengaturan", apiPrefix + "/config"}},
+
+	// QRIS dinamis (Midtrans merchant) — buat tagihan & poll status, selalu segar
+	{method: "POST", pattern: "/qris/tagihan"},
+	{method: "GET", pattern: "/qris/tagihan/{id}"},
+
 	// Hold transaksi (parkir keranjang) — selalu segar, lintas perangkat
 	{method: "GET", pattern: "/hold"},
 	{method: "POST", pattern: "/hold"},

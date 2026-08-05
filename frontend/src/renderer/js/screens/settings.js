@@ -6,6 +6,7 @@ import { icons, toast, confirmDialog } from '../components/ui.js'
 import { esc, fmtDateTime, fmtDate } from '../utils/format.js'
 import { mulaiPembayaran } from '../langganan-bayar.js'
 import { mountProfilUsaha } from './profil-usaha.js'
+import { mountPembayaran } from './pembayaran-setelan.js'
 
 const DASH = '<span class="u-faint">—</span>'
 
@@ -167,6 +168,8 @@ export const SettingsScreen = {
 
           <div id="set-profil-usaha"></div>
 
+          <div id="set-pembayaran"></div>
+
           ${accountCardHTML()}
 
           ${hakAksesCardHTML()}
@@ -213,8 +216,9 @@ export const SettingsScreen = {
     const btnTunnel = container.querySelector('#set-tunnel-btn')
     let tunnelAktif = false
 
-    // Profil Usaha & Struk — kartu dimuat & di-wiring secara async.
+    // Profil Usaha & Struk + Pembayaran — kartu dimuat & di-wiring secara async.
     mountProfilUsaha(container.querySelector('#set-profil-usaha'))
+    mountPembayaran(container.querySelector('#set-pembayaran'))
 
     // Perpanjang langganan (alur pembayaran Midtrans)
     const perpanjangBtn = container.querySelector('#set-perpanjang')

@@ -315,6 +315,7 @@ async function loadWorkspace() {
     if (config.data.company) patch.company = config.data.company
     if (config.data.modules) patch.modules = config.data.modules
     if (config.data.struk) patch.struk = config.data.struk
+    if (config.data.pembayaran) patch.pembayaran = config.data.pembayaran
   }
   if (sesi.ok) {
     patch.session = sesi.data || null
@@ -356,6 +357,7 @@ export async function refreshConfig() {
     const patch = { config: config.data }
     if (config.data.company) patch.company = config.data.company
     if (config.data.struk) patch.struk = config.data.struk
+    if (config.data.pembayaran) patch.pembayaran = config.data.pembayaran
     if (config.data.modules) patch.modules = config.data.modules
     if (config.data.payment_methods) patch.paymentMethods = config.data.payment_methods
     setState(patch)
