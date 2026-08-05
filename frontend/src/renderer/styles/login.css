@@ -1,15 +1,22 @@
 /* ============================================================
-   Layar Login — flat, tegas, tanpa gradient; radius seragam 3px
+   Layar Login — Editorial Split (kiri ≠ kanan)
+   KIRI : poster sinema — foto full-bleed + scrim gradien + hero
+          majalah (selalu gelap, theme-independent).
+   KANAN: lembar solid bersih — form "melebur" dalam whitespace,
+          aksen mint tipis (theme-aware lewat token).
+   Aman Android WebView Chrome 77: tanpa color-mix()/:has();
+   tanpa backdrop-filter (kedua panel opak → ringan & legibel).
    ============================================================ */
 
 .login {
   --r: 3px; /* radius khusus layar login */
   display: grid;
-  grid-template-columns: minmax(380px, 44%) 1fr;
-  height: 100vh;
+  grid-template-columns: minmax(400px, 46%) 1fr; /* kiri sinematik, kanan lega */
+  min-height: 100vh;
+  background: var(--surface); /* fallback SOLID — foto hanya di sisi kiri */
 }
 
-/* Semua elemen interaktif di layar login memakai radius 3px */
+/* Semua elemen interaktif di layar login memakai radius kecil tegas */
 .login .input,
 .login .btn,
 .login .textarea,
@@ -17,16 +24,28 @@
   border-radius: var(--r);
 }
 
-/* ---------- Panel brand (kiri) — warna solid, tanpa dekorasi ---------- */
+/* ============================================================
+   KIRI — poster sinema: foto full-bleed + scrim (selalu gelap)
+   ============================================================ */
 
 .login__brand {
-  background: var(--sidebar-bg);
-  color: var(--sidebar-text);
-  padding: var(--sp-12) var(--sp-10);
+  position: relative;
+  color: #fff;
+  padding: var(--sp-12) clamp(var(--sp-8), 4vw, var(--sp-12));
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  border-right: 1px solid var(--sidebar-line);
+  border-right: 0; /* seam = batas foto ↔ lembar solid */
+  /* Scrim ganda: diagonal menggelapkan tepi seam + vertikal 4-stop
+     agar logo (atas), hero (tengah), fitur (bawah) semua terbaca. */
+  background:
+    linear-gradient(103deg, rgba(6, 26, 23, 0.55) 0%, rgba(6, 26, 23, 0) 58%),
+    linear-gradient(180deg,
+      rgba(6, 26, 23, 0.74) 0%,
+      rgba(6, 26, 23, 0.40) 34%,
+      rgba(6, 26, 23, 0.56) 64%,
+      rgba(6, 26, 23, 0.93) 100%),
+    url('../assets/login-bg.jpg') center / cover no-repeat;
 }
 
 .login__brand-top {
@@ -52,19 +71,31 @@
   color: var(--mint-400);
 }
 
-.login__wordmark {
-  height: 34px;
-  width: auto;
+/* Hero majalah dengan eyebrow mint */
+.login__hero {
+  position: relative;
+}
+
+.login__hero::before {
+  content: "";
   display: block;
+  width: 46px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--mint-400);
+  box-shadow: 0 0 16px rgba(122, 226, 207, 0.5);
+  margin-bottom: var(--sp-4);
 }
 
 .login__hero-title {
-  font-size: clamp(1.9rem, 3vw, 2.6rem);
+  font-family: var(--font-display);
+  font-size: clamp(2.1rem, 1.1rem + 3.6vw, 3.4rem);
+  line-height: 1.06;
+  letter-spacing: -0.025em;
   font-weight: 800;
   color: #fff;
-  letter-spacing: -0.02em;
-  line-height: 1.18;
-  max-width: 420px;
+  max-width: 15ch;
+  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.38); /* jaminan legibilitas di atas foto */
 }
 
 .login__hero-title em {
@@ -73,18 +104,18 @@
 }
 
 .login__hero-desc {
-  margin-top: var(--sp-4);
+  margin-top: var(--sp-5);
   font-size: var(--text-md);
-  color: var(--sidebar-text);
-  max-width: 380px;
-  line-height: 1.6;
+  line-height: 1.65;
+  color: rgba(255, 255, 255, 0.84);
+  max-width: 42ch;
 }
 
 .login__features {
   display: flex;
   flex-direction: column;
   gap: 0;
-  border-top: 1px solid var(--sidebar-line);
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
 }
 
 .login__feature {
@@ -92,14 +123,15 @@
   align-items: center;
   gap: var(--sp-3);
   font-size: var(--text-sm);
-  padding: var(--sp-3) 0;
-  border-bottom: 1px solid var(--sidebar-line);
+  padding: var(--sp-4) 0;
+  color: rgba(255, 255, 255, 0.90);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.10);
 }
 
 .login__feature-icon {
   width: 30px;
   height: 30px;
-  border: 1px solid var(--sidebar-line);
+  border: 1px solid rgba(255, 255, 255, 0.24);
   border-radius: var(--r);
   color: var(--mint-400);
   display: flex;
@@ -108,22 +140,24 @@
   flex-shrink: 0;
 }
 
-/* ---------- Panel form (kanan) — latar polos + kartu tegas ---------- */
+/* ============================================================
+   KANAN — lembar solid bersih: form melebur + aksen mint tipis
+   ============================================================ */
 
 .login__panel {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: var(--sp-8);
-  background: var(--bg);
+  padding: var(--sp-12) clamp(var(--sp-8), 6vw, 96px); /* whitespace lega */
+  background: var(--surface); /* SOLID — tanpa foto, tanpa translusen */
 }
 
 .login__box {
-  width: min(420px, 100%);
-  background: var(--surface);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--r);
-  padding: var(--sp-10) var(--sp-8);
+  width: min(400px, 100%);
+  background: transparent; /* form melebur dalam whitespace */
+  border: 0;
+  box-shadow: none;
+  padding: 0;
 }
 
 /* Branding ringkas di dalam kartu — hanya saat panel kiri tersembunyi */
@@ -152,15 +186,53 @@
 }
 
 .login__title {
-  font-size: var(--text-2xl);
+  font-size: var(--text-3xl);
   font-weight: 800;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.login__title::before {
+  content: "";
+  display: block;
+  width: 40px;
+  height: 3px;
+  background: var(--mint-500);
+  border-radius: 2px;
+  margin-bottom: var(--sp-4);
 }
 
 .login__subtitle {
   color: var(--text-2);
-  font-size: var(--text-sm);
-  margin: var(--sp-2) 0 var(--sp-6);
+  font-size: var(--text-md);
+  margin: var(--sp-2) 0 var(--sp-8);
+}
+
+.login__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+/* Label editorial: huruf-kapital ter-track (kontras karakter vs kiri) */
+.login .field__label {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+/* Input "filled" tenang (di-scope .login agar tak bocor ke input global) */
+.login .input {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+
+.login .input:focus {
+  background: var(--surface);
+  border-color: var(--mint-500);
+  box-shadow: var(--focus-ring);
 }
 
 .login__form .btn--primary {
@@ -193,7 +265,7 @@
   color: var(--text);
 }
 
-/* Kotak mode demo — garis solid, sejajar dengan kartu */
+/* Kotak mode demo */
 .login__demo {
   margin-top: var(--sp-5);
   display: flex;
@@ -238,6 +310,26 @@
   text-decoration: underline;
 }
 
+/* ============================================================
+   Tema gelap — sisi kanan ikut token otomatis; hanya seam divider
+   yang dipertegas (kertas kanan ikut menggelap). Sisi kiri selalu
+   gelap sinematik → tak perlu override.
+   ============================================================ */
+
+:root[data-theme="dark"] .login__panel {
+  box-shadow: inset 1px 0 0 rgba(122, 226, 207, 0.14);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .login__panel {
+    box-shadow: inset 1px 0 0 rgba(122, 226, 207, 0.14);
+  }
+}
+
+/* ============================================================
+   Responsif ≤900px — brand hilang, form center di lembar solid
+   ============================================================ */
+
 @media (max-width: 900px) {
   .login {
     grid-template-columns: 1fr;
@@ -249,5 +341,9 @@
 
   .login__box-brand {
     display: flex;
+  }
+
+  .login__panel {
+    padding: var(--sp-10) var(--sp-6);
   }
 }

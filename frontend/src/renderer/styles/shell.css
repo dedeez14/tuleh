@@ -499,18 +499,34 @@
 /* ---------- Beranda ---------- */
 
 .home {
-  overflow-x: hidden;      /* cegah overflow horizontal (mis. watermark -6vw) → ombak tak "terputus" di kanan */
+  overflow-x: hidden;      /* cegah overflow horizontal (mis. watermark -6vw) */
   overflow-y: auto;
   height: 100%;
-  background:
-    radial-gradient(1200px 420px at 50% -8%, color-mix(in srgb, var(--accent) 12%, var(--bg)), transparent 70%),
-    var(--bg);
+  position: relative;
+  background-color: var(--bg);
+  /* Ombak kaki Beranda = LATAR penuh-lebar di DASAR konten. background-attachment:
+     local → ombak IKUT MENGGULIR bersama konten (BUKAN sticky) & menutup 100% penuh
+     termasuk kolom scrollbar (latar dicat di border-box → tak terpotong gutter). */
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%20108%201440%20212'%20preserveAspectRatio='none'%3E%3Cpath%20d='M0,192L48,170.7C96,149,192,107,288,112C384,117,480,171,576,181.3C672,192,768,160,864,170.7C960,181,1056,235,1152,240C1248,245,1344,203,1392,181.3L1440,160L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z'%20fill='%237ae2cf'%20opacity='.28'%20transform='translate(0%2026)'/%3E%3Cpath%20d='M0,192L48,170.7C96,149,192,107,288,112C384,117,480,171,576,181.3C672,192,768,160,864,170.7C960,181,1056,235,1152,240C1248,245,1344,203,1392,181.3L1440,160L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z'%20fill='%2338bdf8'%20opacity='.42'%20transform='translate(0%2011)'/%3E%3Cpath%20d='M0,192L48,170.7C96,149,192,107,288,112C384,117,480,171,576,181.3C672,192,768,160,864,170.7C960,181,1056,235,1152,240C1248,245,1344,203,1392,181.3L1440,160L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z'%20fill='%230099ff'%20opacity='.92'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center bottom;
+  background-size: 100% 132px;
+  background-attachment: local;
   display: flex;
   flex-direction: column;
-  scrollbar-width: thin; /* Firefox: scrollbar tipis → gutter kanan minim */
+  scrollbar-width: thin;   /* Firefox: scrollbar tipis */
 }
-/* Scrollbar tipis & halus (WebKit/Chromium) supaya tepi kanan tidak menyisakan
-   celah putih lebar di samping ombak. */
+/* Glow ambient atas — dipisah dari ombak agar ombak tetap tampil walau color-mix
+   tak didukung WebView lama. Tetap di puncak viewport (tak ikut menggulir). */
+.home::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(1200px 420px at 50% -8%, color-mix(in srgb, var(--accent) 12%, var(--bg)), transparent 70%);
+}
+.home > * { position: relative; z-index: 1; }
 .home::-webkit-scrollbar { width: 8px; }
 .home::-webkit-scrollbar-track { background: transparent; }
 .home::-webkit-scrollbar-thumb {
@@ -524,49 +540,28 @@
   width: 100%;
   max-width: 1080px;
   margin: 0 auto;
-  padding: var(--sp-10) var(--sp-8) var(--sp-10);
+  /* padding-bawah beri ruang untuk ombak latar di dasar (≈132px) + jarak sp-6 */
+  padding: var(--sp-10) var(--sp-8) calc(132px + var(--sp-6));
 }
 
 /* Watermark logo Tuléh monokrom, berulang & sangat samar (di belakang konten). */
-.home__inner::before {
+.home::after {
   content: "";
   position: absolute;
-  inset: 0 -6vw;
+  inset: 0;                       /* PENUH-LEBAR .home (bukan .home__inner 1080px) → sampai tepi */
   background-image: var(--home-watermark);
   background-repeat: repeat;
-  background-size: 250px auto;
+  background-size: calc(100% / 3) auto;  /* di-loop 3 logo per baris, utuh (tak terpotong) */
   opacity: 0.05;
   z-index: 0;
   pointer-events: none;
 }
 .home__inner > * { position: relative; z-index: 1; }
 
-/* Ombak kaki Beranda — tiga lapis (mint → langit → biru) untuk kedalaman. */
-.home__waves {
-  position: relative;
-  flex: 0 0 auto;
-  width: 100%;
-  height: 132px;
-  margin-top: var(--sp-6);
-  pointer-events: none;
-  overflow: hidden;
-}
-.home__wave {
-  position: absolute;
-  left: -2%;
-  bottom: -1px;
-  width: 104%;
-  height: 100%;
-  display: block;
-}
-.home__wave--back  { fill: var(--mint-400); opacity: 0.28; transform: translateY(16px) scaleY(0.9); }
-.home__wave--mid   { fill: #38bdf8;         opacity: 0.42; transform: translateY(7px); }
-.home__wave--front { fill: #0099ff;         opacity: 0.92; }
-
 /* Dark: balikkan watermark grayscale agar tetap terlihat samar di latar gelap. */
-:root[data-theme="dark"] .home__inner::before { filter: invert(1); opacity: 0.06; }
+:root[data-theme="dark"] .home::after { filter: invert(1); opacity: 0.06; }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .home__inner::before { filter: invert(1); opacity: 0.06; }
+  :root:not([data-theme="light"]) .home::after { filter: invert(1); opacity: 0.06; }
 }
 
 .home__head {

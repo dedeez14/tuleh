@@ -81,14 +81,8 @@ const MODULE_ACCENT = {
   keuangan: 'laporan', pengeluaran: 'meja', stok: 'dapur'
 }
 
-// Ombak dekoratif kaki Beranda — tiga lapis (mint→langit→biru) untuk kedalaman.
-const WAVE_PATH = 'M0,192L48,170.7C96,149,192,107,288,112C384,117,480,171,576,181.3C672,192,768,160,864,170.7C960,181,1056,235,1152,240C1248,245,1344,203,1392,181.3L1440,160L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z'
-const HOME_WAVES = `
-  <div class="home__waves" aria-hidden="true">
-    <svg class="home__wave home__wave--back" viewBox="0 108 1440 212" preserveAspectRatio="none"><path d="${WAVE_PATH}"/></svg>
-    <svg class="home__wave home__wave--mid" viewBox="0 108 1440 212" preserveAspectRatio="none"><path d="${WAVE_PATH}"/></svg>
-    <svg class="home__wave home__wave--front" viewBox="0 108 1440 212" preserveAspectRatio="none"><path d="${WAVE_PATH}"/></svg>
-  </div>`
+// Ombak kaki Beranda kini dirender sebagai LATAR CSS penuh-lebar (background-image
+// di .home, lihat shell.css) — ikut menggulir dengan konten, bukan elemen sticky.
 
 const appRoot = document.getElementById('app')
 let currentCleanup = null
@@ -649,7 +643,6 @@ function renderHome(container) {
           ${moduleList().map(homeCardHTML).join('')}
         </div>
       </div>
-      ${HOME_WAVES}
     </div>`
 
   container.querySelectorAll('[data-module]').forEach((el) => {
