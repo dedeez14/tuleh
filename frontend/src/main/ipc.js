@@ -11,6 +11,7 @@ const tracker = require('./tracker')
 const tunnel = require('./tunnel')
 const qr = require('./qr')
 const customerWindow = require('./customer-window')
+const updater = require('./updater')
 
 // ---------- Validasi input dari renderer (jangan percaya begitu saja) ----------
 
@@ -150,6 +151,20 @@ function registerIpcHandlers(getMainWindow) {
     return result
   }
 
+  // Auto-Update: HTTP 426 dari endpoint mana pun → sinyal ke renderer untuk
+  // membuka layar update wajib (fail-open bila window belum siap).
+  api.setUpgradeHandler((message) => {
+    const win = getMainWindow()
+    if (win && !win.isDestroyed()) win.webContents.send('update:required', { message: message || '' })
+    console.log('[update] 426 diterima —', message || '(tanpa pesan)')
+  })
+
+  // Auto-Update Tahap 3: relay progres/selesai/error electron-updater ke renderer.
+  updater.init((channel, payload) => {
+    const win = getMainWindow()
+    if (win && !win.isDestroyed()) win.webContents.send(channel, payload)
+  })
+
   // ---------- Aplikasi & pengaturan ----------
 
   handle('app:info', () => ({
@@ -171,6 +186,16 @@ function registerIpcHandlers(getMainWindow) {
       smokeFlow: process.env.IPOS_SMOKE_FLOW || null
     }
   }))
+
+  // Auto-Update: cek versi ke server (tanpa auth). Balasan berisi
+  // { wajib, update_tersedia, versi_terbaru, catatan, unduhan:{windows,android}, ukuran }.
+  handle('app:checkUpdate', () => api.get('/app/versi', { auth: false, query: { versi: api.appVersion() } }))
+
+  // Auto-Update Tahap 3 (desktop): unduh & pasang lewat electron-updater.
+  // Renderer memakai ini bila didukung; jika tidak, jatuh ke unduhan browser.
+  handle('update:supported', () => ({ ok: true, data: { supported: updater.isSupported() } }))
+  handle('update:download', () => updater.download())
+  handle('update:install', () => { updater.install(); return { ok: true } })
 
   // Buka URL di browser sistem (halaman pembayaran Midtrans — WAJIB browser penuh,
   // bukan webview: 3-D Secure & deep link e-wallet kerap gagal di webview).

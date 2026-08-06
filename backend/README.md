@@ -13,7 +13,7 @@ MPos (Electron) ──HTTP──▶ mpos-backend (127.0.0.1:8787) ──HTTPS─
 | Aspek | Yang dilakukan |
 |---|---|
 | **Cepat** | Cache TTL di memori per token (produk 15 dtk, master/config 5 mnt, laporan 30 dtk) — di-purge otomatis saat checkout/void/buka-tutup sesi; koneksi HTTPS di-pool (ping: ~5 dtk dingin → ~140 ms berikutnya); retry 1× untuk GET yang gagal jaringan |
-| **Aman** | Bind default hanya `127.0.0.1`; allowlist 29 endpoint (di luar itu 404); rate limit 20 rps/IP + khusus login 5/menit (anti brute force); body maks 1 MB; token tidak pernah disimpan atau ditulis ke log (cache di-key dengan SHA-256 token); zero dependency — murni stdlib Go |
+| **Aman** | Bind default hanya `127.0.0.1`; allowlist endpoint ketat (di luar itu 404); rate limit 20 rps/IP + khusus login 5/menit (anti brute force); body maks 1 MB; token tidak pernah disimpan atau ditulis ke log (cache di-key dengan SHA-256 token); zero dependency — murni stdlib Go |
 
 ## Menjalankan
 

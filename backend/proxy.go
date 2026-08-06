@@ -19,7 +19,8 @@ const (
 )
 
 // Header yang diteruskan ke upstream — selain ini dibuang (hop-by-hop dsb.)
-var forwardedHeaders = []string{"Authorization", "Content-Type", "Accept", "Accept-Language"}
+// X-Tuleh-Version wajib diteruskan agar server bisa menegakkan versi minimum (426).
+var forwardedHeaders = []string{"Authorization", "Content-Type", "Accept", "Accept-Language", "X-Tuleh-Version"}
 
 type proxy struct {
 	upstream *url.URL

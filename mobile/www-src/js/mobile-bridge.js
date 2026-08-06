@@ -12,12 +12,30 @@
   var API_PREFIX = '/api/pos/v1'
   var TIMEOUT_MS = 15000
   var DEFAULT_BASE = 'https://tatreport.com'
-  var APP_VERSION = '0.9.8'
+  var APP_VERSION = '0.9.9'
 
   var baseUrl = DEFAULT_BASE
   var token = null
   var activeTokoId = null
   var expiredCb = null
+  var updateReqCb = null // Auto-Update: dipanggil saat HTTP 426 (update wajib)
+  // Auto-Update Tahap 4 (Android in-app installer via plugin native ApkUpdater)
+  var apkProgressCb = null
+  var apkDownloadedCb = null
+  var apkErrorCb = null
+  var apkLastPath = null
+  var apkProgressBound = false
+
+  /** Plugin native ApkUpdater bila tersedia (build APK), else null (peramban). */
+  function apkPlugin () {
+    return (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.ApkUpdater) || null
+  }
+  /** Pasang listener progres native sekali → teruskan ke apkProgressCb. */
+  function ensureApkProgress (plugin) {
+    if (apkProgressBound || !plugin || typeof plugin.addListener !== 'function') return
+    apkProgressBound = true
+    try { plugin.addListener('progress', function (e) { if (apkProgressCb) { try { apkProgressCb({ percent: (e && e.percent) || 0 }) } catch (x) {} } }) } catch (x) {}
+  }
 
   // ---- Penyimpanan (Capacitor Preferences; async, akses lazy) ----
   function getPrefs () {
@@ -75,7 +93,7 @@
     if (auth && activeTokoId && !(query && Object.prototype.hasOwnProperty.call(query, 'toko_id'))) {
       query = Object.assign({}, query || {}, { toko_id: activeTokoId })
     }
-    var headers = { Accept: 'application/json' }
+    var headers = { Accept: 'application/json', 'X-Tuleh-Version': APP_VERSION }
     var hasBody = opts.body !== undefined
     if (hasBody) headers['Content-Type'] = 'application/json'
     if (auth && token) headers.Authorization = 'Bearer ' + token
@@ -92,6 +110,8 @@
           try { payload = text ? JSON.parse(text) : null } catch (e) { payload = null }
           if (!res.ok || !payload || payload.success === false) {
             if (res.status === 401) { token = null; prefSet('token', null); if (expiredCb) { try { expiredCb() } catch (e) {} } }
+            // 426 dari endpoint mana pun = wajib update → beri sinyal ke renderer.
+            if (res.status === 426 && updateReqCb) { try { updateReqCb({ message: (payload && payload.message) || 'Aplikasi Anda perlu diperbarui.' }) } catch (e) {} }
             return { ok: false, status: res.status, message: (payload && payload.message) || statusMessage(res.status), errors: (payload && payload.errors) || null }
           }
           return { ok: true, status: res.status, data: payload.data !== undefined ? payload.data : null, meta: payload.meta !== undefined ? payload.meta : null, message: payload.message || '' }
@@ -165,6 +185,8 @@
           try { payload = text ? JSON.parse(text) : null } catch (e) { payload = null }
           if (!res.ok || !payload || payload.success === false) {
             if (res.status === 401) { token = null; prefSet('token', null); if (expiredCb) { try { expiredCb() } catch (e) {} } }
+            // 426 dari endpoint mana pun = wajib update → beri sinyal ke renderer.
+            if (res.status === 426 && updateReqCb) { try { updateReqCb({ message: (payload && payload.message) || 'Aplikasi Anda perlu diperbarui.' }) } catch (e) {} }
             return { ok: false, status: res.status, message: (payload && payload.message) || statusMessage(res.status), errors: (payload && payload.errors) || null }
           }
           return { ok: true, status: res.status, data: payload.data !== undefined ? payload.data : null, meta: payload.meta !== undefined ? payload.meta : null, message: payload.message || '' }
@@ -217,6 +239,48 @@
     app: {
       info: function () { return ok({ version: APP_VERSION, platform: 'android', gateway: { ok: false, running: false, external: false }, tracking: { running: false, baseUrl: baseUrl }, smokeDemo: false, smokeTokoIndex: null, smokeScreen: null, smokeTheme: null, smokeOpenBill: false, smokeFlow: null }) },
       print: function () { return printStruk() },
+      // Auto-Update: cek versi ke server (tanpa auth) + langganan sinyal 426.
+      checkUpdate: function () { return apiGet('/app/versi', { auth: false, query: { versi: APP_VERSION } }) },
+      onUpdateRequired: function (cb) { updateReqCb = cb; return function () { if (updateReqCb === cb) updateReqCb = null } },
+
+      // ---- Auto-Update Tahap 4: unduh+pasang APK di dalam app (plugin native) ----
+      // Kontrak dicerminkan dari desktop (electron-updater): downloadUpdate → event
+      // 'downloaded' → installUpdate. Bila plugin tak ada (peramban) → supported:false
+      // sehingga update.js jatuh ke unduhan peramban (openExternal).
+      updateSupported: function () { return ok({ supported: !!apkPlugin() }) },
+      downloadUpdate: function (opts) {
+        var plugin = apkPlugin()
+        if (!plugin) return Promise.resolve({ ok: false, supported: false })
+        opts = opts || {}
+        var url = opts.url
+        if (!url || !/^https:\/\//i.test(url)) return Promise.resolve({ ok: false, message: 'URL unduhan tidak valid.' })
+        var filename = opts.filename || 'tuleh-update.apk'
+        return Promise.resolve(plugin.canInstall()).then(function (res) {
+          if (res && res.granted === false) {
+            try { plugin.openInstallPermission() } catch (e) {}
+            return { ok: false, needPermission: true, message: 'Izinkan "Instal aplikasi tak dikenal" untuk Tuléh, lalu tekan Update lagi.' }
+          }
+          ensureApkProgress(plugin)
+          return Promise.resolve(plugin.download({ url: url, filename: filename })).then(function (r) {
+            apkLastPath = (r && r.path) || null
+            if (apkDownloadedCb) { try { apkDownloadedCb({}) } catch (e) {} }
+            return { ok: true }
+          })
+        }).catch(function (err) {
+          var msg = (err && (err.message || err.errorMessage)) || 'Gagal mengunduh pembaruan.'
+          if (apkErrorCb) { try { apkErrorCb({ message: msg }) } catch (e) {} }
+          return { ok: false, message: msg }
+        })
+      },
+      installUpdate: function () {
+        var plugin = apkPlugin()
+        if (!plugin || !apkLastPath) return { ok: false, message: 'Berkas pembaruan belum siap.' }
+        try { plugin.install({ path: apkLastPath }) } catch (e) { return { ok: false, message: 'Gagal membuka pemasang.' } }
+        return { ok: true }
+      },
+      onUpdateProgress: function (cb) { apkProgressCb = cb; return function () { if (apkProgressCb === cb) apkProgressCb = null } },
+      onUpdateDownloaded: function (cb) { apkDownloadedCb = cb; return function () { if (apkDownloadedCb === cb) apkDownloadedCb = null } },
+      onUpdateError: function (cb) { apkErrorCb = cb; return function () { if (apkErrorCb === cb) apkErrorCb = null } },
       // Buka URL di browser sistem (halaman bayar Midtrans). Capacitor membuka URL
       // lintas-origin (https) di peramban perangkat, bukan di webview app.
       openExternal: function (p) {

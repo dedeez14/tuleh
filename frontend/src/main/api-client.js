@@ -1,6 +1,6 @@
 'use strict'
 
-const { net } = require('electron')
+const { net, app } = require('electron')
 
 const API_PREFIX = '/api/pos/v1'
 const TIMEOUT_MS = 15000
@@ -10,6 +10,20 @@ let baseUrl = 'https://tatreport.com'
 let gatewayUrl = null // bila di-set, transport lewat gateway lokal (mpos-backend)
 let token = null
 let activeTokoId = null // "toko aktif" utk disambiguasi multi-toko (MOVERA §1.3)
+
+// Versi app (satu sumber: package.json via Electron) — dikirim di header tiap
+// request sebagai X-Tuleh-Version. Auto-Update Tahap 1.
+function appVersion() {
+  try { return app.getVersion() } catch { return '0.0.0' }
+}
+
+// Handler "update wajib" (HTTP 426 dari endpoint mana pun) — di-set oleh ipc.js
+// untuk mengirim sinyal ke renderer (buka layar update). Dipanggil sekali/deteksi.
+let upgradeHandler = null
+function setUpgradeHandler(fn) { upgradeHandler = typeof fn === 'function' ? fn : null }
+function notifyUpgrade(message) {
+  if (upgradeHandler) { try { upgradeHandler(message || '') } catch { /* abaikan */ } }
+}
 
 function setBaseUrl(url) {
   baseUrl = url
@@ -46,6 +60,7 @@ function statusMessage(status) {
     404: 'Data tidak ditemukan.',
     409: 'Aksi bentrok dengan kondisi saat ini.',
     422: 'Data yang dikirim tidak valid.',
+    426: 'Aplikasi Anda perlu diperbarui ke versi terbaru.',
     429: 'Terlalu banyak permintaan. Coba lagi sebentar.',
     500: 'Terjadi kesalahan pada server.'
   }
@@ -87,7 +102,7 @@ async function request(method, endpoint, { query, body, auth = true } = {}) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
 
-  const headers = { Accept: 'application/json' }
+  const headers = { Accept: 'application/json', 'X-Tuleh-Version': appVersion() }
   if (body !== undefined) headers['Content-Type'] = 'application/json'
   if (auth && token) headers.Authorization = `Bearer ${token}`
 
@@ -114,12 +129,10 @@ async function request(method, endpoint, { query, body, auth = true } = {}) {
   const payload = await readJsonSafe(response)
 
   if (!response.ok || !payload || payload.success === false) {
-    return {
-      ok: false,
-      status: response.status,
-      message: (payload && payload.message) || statusMessage(response.status),
-      errors: (payload && payload.errors) || null
-    }
+    const message = (payload && payload.message) || statusMessage(response.status)
+    // 426 dari endpoint mana pun = versi di bawah minimum → wajib update.
+    if (response.status === 426) notifyUpgrade(message)
+    return { ok: false, status: response.status, message, errors: (payload && payload.errors) || null }
   }
 
   return {
@@ -150,7 +163,7 @@ async function upload(endpoint, { query, file, auth = true } = {}) {
   const form = new FormData()
   form.append(file.field || 'logo', new Blob([bytes], { type: file.mime || 'application/octet-stream' }), file.filename || 'upload.png')
 
-  const headers = { Accept: 'application/json' }
+  const headers = { Accept: 'application/json', 'X-Tuleh-Version': appVersion() }
   if (auth && token) headers.Authorization = `Bearer ${token}`
 
   let response
@@ -167,12 +180,9 @@ async function upload(endpoint, { query, file, auth = true } = {}) {
 
   const payload = await readJsonSafe(response)
   if (!response.ok || !payload || payload.success === false) {
-    return {
-      ok: false,
-      status: response.status,
-      message: (payload && payload.message) || statusMessage(response.status),
-      errors: (payload && payload.errors) || null
-    }
+    const message = (payload && payload.message) || statusMessage(response.status)
+    if (response.status === 426) notifyUpgrade(message)
+    return { ok: false, status: response.status, message, errors: (payload && payload.errors) || null }
   }
   return {
     ok: true,
@@ -183,4 +193,4 @@ async function upload(endpoint, { query, file, auth = true } = {}) {
   }
 }
 
-module.exports = { request, get, post, upload, setBaseUrl, setGateway, setToken, hasToken, setActiveTokoId, getActiveTokoId }
+module.exports = { request, get, post, upload, setBaseUrl, setGateway, setToken, hasToken, setActiveTokoId, getActiveTokoId, setUpgradeHandler, appVersion }

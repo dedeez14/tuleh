@@ -1,7 +1,7 @@
 {
   "name": "ipos-frontend",
   "productName": "Tuléh",
-  "version": "0.9.8",
+  "version": "0.9.9",
   "description": "Tuléh — aplikasi Point of Sale desktop (Electron) untuk TATREPORT POS API",
   "main": "src/main/main.js",
   "license": "MIT",
@@ -11,6 +11,9 @@
     "postinstall": "node tools/fetch-fonts.mjs",
     "fonts": "node tools/fetch-fonts.mjs",
     "dist": "electron-builder --win"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
   },
   "devDependencies": {
     "electron": "^35.0.0",
@@ -35,6 +38,13 @@
       }
     ],
     "asar": true,
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://pos.tatreport.com/unduh",
+        "channel": "latest"
+      }
+    ],
     "win": {
       "executableName": "Tuleh",
       "target": [

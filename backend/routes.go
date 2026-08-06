@@ -24,6 +24,7 @@ var routeTable = []route{
 	{method: "GET", pattern: "/ping"},
 	{method: "GET", pattern: "/config", cache: 5 * time.Minute},
 	{method: "GET", pattern: "/bidang-usaha", cache: 5 * time.Minute},
+	{method: "GET", pattern: "/app/versi", cache: 60 * time.Second}, // Auto-Update: cek versi (tanpa auth)
 
 	// Langganan & Kontak CS (Sistem Mitra §6.5) — info tenant
 	{method: "GET", pattern: "/langganan/status", cache: 60 * time.Second},

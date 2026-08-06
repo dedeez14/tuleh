@@ -73,13 +73,26 @@ jobs:
         working-directory: frontend
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        # publish config generic ada → electron-builder tetap membuat latest.yml
+        # (+ .blockmap) di dist/ meski --publish never. File itu dipakai
+        # electron-updater untuk mendeteksi & memverifikasi (sha512) pembaruan.
         run: npx electron-builder --win --publish never
+      - name: Pastikan latest.yml ada (feed electron-updater)
+        shell: bash
+        run: |
+          if [ ! -f frontend/dist/latest.yml ]; then
+            echo "::error::latest.yml tak dihasilkan — auto-update desktop tak akan berfungsi. Cek konfigurasi build.publish."
+            ls -la frontend/dist || true
+            exit 1
+          fi
+          echo "latest.yml OK"; cat frontend/dist/latest.yml
       - uses: actions/upload-artifact@v4
         with:
           name: desktop
           path: |
             frontend/dist/Tuleh-Setup-*.exe
             frontend/dist/Tuleh-Setup-*.exe.blockmap
+            frontend/dist/latest.yml
           if-no-files-found: error
 
   android:
@@ -120,19 +133,67 @@ jobs:
         run: |
           npx cap add android
           npx capacitor-assets generate --android
+      - name: Suntik plugin native ApkUpdater + izin (Auto-Update Tahap 4)
+        # Salin plugin+MainActivity ke modul app, tambah izin REQUEST_INSTALL_PACKAGES
+        # & jalur FileProvider. cap add android meregenerasi android/, jadi disuntik tiap build.
+        run: |
+          APPJAVA=mobile/android/app/src/main/java/com/tuleh/kasir
+          cp mobile/native/ApkUpdaterPlugin.java "$APPJAVA/ApkUpdaterPlugin.java"
+          cp mobile/native/MainActivity.java "$APPJAVA/MainActivity.java"
+          python3 mobile/native/patch-android.py
       - name: minSdk = 29 (Android 10)
         run: sed -i 's/minSdkVersion = [0-9]\+/minSdkVersion = 29/' mobile/android/variables.gradle
-      - name: Gradle assembleDebug
+      - name: Set versi Android (versionName + versionCode monoton)
+        # cap add android selalu menulis versionCode 1 / versionName "1.0".
+        # Auto-Update Android butuh versionCode NAIK tiap rilis agar dikenali
+        # sebagai pembaruan. Kode = major*10000 + minor*100 + patch (mis. 0.9.9 → 909).
+        run: |
+          VER="${{ needs.version-check.outputs.version }}"
+          IFS='.' read -r MA MI PA <<< "$VER"
+          VC=$(( 10#${MA:-0} * 10000 + 10#${MI:-0} * 100 + 10#${PA:-0} ))
+          echo "versionName=$VER versionCode=$VC"
+          sed -i "s/versionCode 1/versionCode $VC/" mobile/android/app/build.gradle
+          sed -i "s/versionName \"1.0\"/versionName \"$VER\"/" mobile/android/app/build.gradle
+          grep -E 'versionCode|versionName' mobile/android/app/build.gradle
+      - name: Cek keystore rilis (opsional)
+        id: ks
+        # Tanda tangan STABIL agar update bisa dipasang di atas app lama. Bila secret
+        # keystore belum diisi, jatuh ke assembleDebug (update belum bisa menimpa app lama).
+        run: |
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then echo "has=true" >> "$GITHUB_OUTPUT"; else echo "has=false" >> "$GITHUB_OUTPUT"; fi
+      - name: Siapkan signing rilis
+        if: steps.ks.outputs.has == 'true'
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/tuleh-release.keystore"
+          python3 mobile/native/apply-signing.py
+      - name: Build APK
         working-directory: mobile/android
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/tuleh-release.keystore
+          ANDROID_KS_PASS: ${{ secrets.ANDROID_KS_PASS }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASS: ${{ secrets.ANDROID_KEY_PASS }}
         run: |
           chmod +x ./gradlew
-          ./gradlew assembleDebug --console=plain
+          if [ "${{ steps.ks.outputs.has }}" = "true" ]; then
+            ./gradlew assembleRelease --console=plain
+          else
+            echo "::warning::Tanpa keystore rilis (secret ANDROID_KEYSTORE_BASE64 kosong) — memakai assembleDebug; update Android belum bisa menimpa app lama."
+            ./gradlew assembleDebug --console=plain
+          fi
       - name: Beri nama APK sesuai versi
-        run: cp mobile/android/app/build/outputs/apk/debug/app-debug.apk "Tuleh-${{ needs.version-check.outputs.version }}-android-debug.apk"
+        run: |
+          VER="${{ needs.version-check.outputs.version }}"
+          REL=mobile/android/app/build/outputs/apk/release/app-release.apk
+          DBG=mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          if [ -f "$REL" ]; then cp "$REL" "Tuleh-$VER-android.apk"; else cp "$DBG" "Tuleh-$VER-android.apk"; fi
+          ls -la Tuleh-*-android.apk
       - uses: actions/upload-artifact@v4
         with:
           name: android
-          path: Tuleh-*-android-debug.apk
+          path: Tuleh-*-android.apk
           if-no-files-found: error
 
   release:

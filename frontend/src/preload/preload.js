@@ -12,7 +12,33 @@ contextBridge.exposeInMainWorld('iposAPI', {
     print: invoke('app:print'),
     openExternal: invoke('app:openExternal'),
     openQueueDisplay: invoke('display:antrian'),
-    ensureLanAccess: invoke('firewall:ensure')
+    ensureLanAccess: invoke('firewall:ensure'),
+    // Auto-Update
+    checkUpdate: invoke('app:checkUpdate'),
+    onUpdateRequired(callback) {
+      const listener = (_event, info) => callback(info || {})
+      ipcRenderer.on('update:required', listener)
+      return () => ipcRenderer.removeListener('update:required', listener)
+    },
+    // Auto-Update Tahap 3 (desktop, electron-updater)
+    updateSupported: invoke('update:supported'),
+    downloadUpdate: invoke('update:download'),
+    installUpdate: invoke('update:install'),
+    onUpdateProgress(callback) {
+      const listener = (_event, p) => callback(p || {})
+      ipcRenderer.on('update:progress', listener)
+      return () => ipcRenderer.removeListener('update:progress', listener)
+    },
+    onUpdateDownloaded(callback) {
+      const listener = (_event, info) => callback(info || {})
+      ipcRenderer.on('update:downloaded', listener)
+      return () => ipcRenderer.removeListener('update:downloaded', listener)
+    },
+    onUpdateError(callback) {
+      const listener = (_event, info) => callback(info || {})
+      ipcRenderer.on('update:error', listener)
+      return () => ipcRenderer.removeListener('update:error', listener)
+    }
   },
   // Display Pelanggan — window kasir memanggil open/close/update/status;
   // window pelanggan (index.html?display=customer) berlangganan onState.

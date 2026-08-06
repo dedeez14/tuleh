@@ -877,6 +877,17 @@ if (new URLSearchParams(location.search).get('display') === 'customer') {
 } else {
   // Terapkan tema tersimpan sedini mungkin agar tidak ada kedip warna saat boot.
   applyTheme()
+  // Auto-Update: langganan sinyal 426 (update wajib) + cek versi saat start &
+  // kembali-ke-foreground. FAIL-OPEN: kegagalan cek tak boleh memblokir aplikasi.
+  import('./update.js').then((u) => {
+    if (api.app && typeof api.app.onUpdateRequired === 'function') {
+      api.app.onUpdateRequired((info) => u.onServerForcedUpdate(info))
+    }
+    u.checkForUpdate()
+    const onForeground = () => { if (!document.hidden) u.checkForUpdate() }
+    document.addEventListener('visibilitychange', onForeground)
+    window.addEventListener('focus', onForeground)
+  }).catch(() => { /* fail-open */ })
   boot().catch((err) => { console.error('Boot gagal:', err); hideSplash() })
   // Jaring pengaman: jangan biarkan splash tersangkut bila boot lama/gagal.
   setTimeout(hideSplash, 15000)
