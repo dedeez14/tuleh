@@ -110,6 +110,14 @@ if (!app.requestSingleInstanceLock()) {
     registerIpcHandlers(() => mainWindow)
     createWindow()
 
+    // Buka akses LAN (firewall) OTOMATIS — agar TV/HP di jaringan bisa membuka
+    // Display Pelanggan (/display) & Papan Antrian (/antrian). UAC muncul sekali
+    // saja bila aturan belum ada; setelah disetujui, permanen. Hanya di build
+    // terpasang (dev dilewati agar tak mengganggu). Tak memblokir startup.
+    if (app.isPackaged) {
+      setTimeout(() => { require('./firewall').ensure().catch(() => {}) }, 1500)
+    }
+
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow()
     })

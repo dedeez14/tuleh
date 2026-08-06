@@ -292,13 +292,26 @@ function renderPos(container) {
             <button type="button" class="btn btn--outline btn--sm" id="cd-copy">Salin</button></div>
           <div class="field__hint">Buka URL ini di browser monitor/TV pelanggan (satu Wi-Fi). Beda dari “jendela kedua” di PC ini.</div>
         </div>`
-        : `<div class="field__hint">Server LAN belum aktif — URL Display Pelanggan LAN muncul saat sesi/demo berjalan.</div>`}`
+        : `<div class="field__hint">Server LAN belum aktif — URL Display Pelanggan LAN muncul saat sesi/demo berjalan.</div>`}
+      ${cdSupported ? `
+        <div class="field">
+          <label class="field__label">Akses jaringan (TV/monitor lain)</label>
+          <button type="button" class="btn btn--outline btn--block" id="cd-fw">Buka akses jaringan (firewall)</button>
+          <div class="field__hint">Dibuka OTOMATIS saat app dijalankan. Tekan ini hanya bila TV masih tak bisa membuka URL (minta izin admin sekali).</div>
+        </div>` : ''}`
     const footer = document.createElement('div')
     footer.innerHTML = `<button type="button" class="btn btn--primary btn--block" id="cd-save">Simpan</button>`
     const { close } = showModal({ title: 'Display Pelanggan', body, footer })
     const copyBtn = body.querySelector('#cd-copy')
     if (copyBtn) copyBtn.addEventListener('click', async () => {
       try { await navigator.clipboard.writeText(lanDisplay); toast('URL disalin.', 'success') } catch { toast('Gagal menyalin.', 'error') }
+    })
+    const fwBtn = body.querySelector('#cd-fw')
+    if (fwBtn) fwBtn.addEventListener('click', async () => {
+      fwBtn.disabled = true; fwBtn.textContent = 'Membuka…'
+      const r = await api.app.ensureLanAccess()
+      fwBtn.disabled = false; fwBtn.textContent = 'Buka akses jaringan (firewall)'
+      toast(r.ok ? 'Akses jaringan LAN dibuka.' : firstError(r), r.ok ? 'success' : 'error')
     })
     footer.querySelector('#cd-save').addEventListener('click', () => {
       const v = body.querySelector('#cd-promo').value.trim()

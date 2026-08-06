@@ -181,6 +181,13 @@ function registerIpcHandlers(getMainWindow) {
     return { ok: true, data: null }
   })
 
+  // Buka akses LAN (firewall) manual — fallback bila auto-open saat start ditolak.
+  handle('firewall:ensure', async () => {
+    const r = await require('./firewall').ensure()
+    if (r && r.ok) return { ok: true, data: r }
+    return fail('Gagal membuka akses jaringan (izin admin ditolak?). Coba lagi & pilih “Ya” pada dialog Windows.')
+  })
+
   // Buka Papan Antrian (TV/monitor) — URL LAN dibentuk di sini (tepercaya), bukan
   // dari renderer, jadi aman meski http (alamat LAN lokal).
   handle('display:antrian', async () => {

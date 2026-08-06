@@ -11,7 +11,8 @@ contextBridge.exposeInMainWorld('iposAPI', {
     info: invoke('app:info'),
     print: invoke('app:print'),
     openExternal: invoke('app:openExternal'),
-    openQueueDisplay: invoke('display:antrian')
+    openQueueDisplay: invoke('display:antrian'),
+    ensureLanAccess: invoke('firewall:ensure')
   },
   // Display Pelanggan — window kasir memanggil open/close/update/status;
   // window pelanggan (index.html?display=customer) berlangganan onState.

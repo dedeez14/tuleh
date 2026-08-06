@@ -12,7 +12,7 @@
   var API_PREFIX = '/api/pos/v1'
   var TIMEOUT_MS = 15000
   var DEFAULT_BASE = 'https://tatreport.com'
-  var APP_VERSION = '0.9.6'
+  var APP_VERSION = '0.9.7'
 
   var baseUrl = DEFAULT_BASE
   var token = null
@@ -226,7 +226,8 @@
         return ok(null)
       },
       // Papan antrian butuh server LAN (hanya ada di desktop/EXE).
-      openQueueDisplay: function () { return notAvailable('Display Antrian (TV LAN) hanya tersedia di aplikasi desktop.') }
+      openQueueDisplay: function () { return notAvailable('Display Antrian (TV LAN) hanya tersedia di aplikasi desktop.') },
+      ensureLanAccess: function () { return notAvailable('Akses LAN (firewall) hanya relevan di aplikasi desktop.') }
     },
     settings: {
       get: function () { return ready.then(function () { return { ok: true, status: 200, data: { baseUrl: baseUrl, hasToken: token != null }, meta: null, message: '' } }) },
