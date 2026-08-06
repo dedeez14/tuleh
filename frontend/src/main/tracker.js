@@ -193,9 +193,14 @@ function displayPage() {
 function renderTracking(info) {
   const { order, states, labels, tokoNama } = info
   const currentIdx = states.indexOf(order.stage)
+  // "Selesai": pesanan mencapai tahap TERAKHIR (mis. Siap / Siap Diambil) atau
+  // stage terminal eksplisit (SELESAI/diambil). Saat kasir klik "Selesai" di papan
+  // antrian, order pindah ke tahap terakhir → tracking pelanggan tampil "Selesai".
+  const selesai = (states.length > 0 && currentIdx === states.length - 1) ||
+    /^(SELESAI|DIAMBIL|SERAH|DONE|SELESAI_)/i.test(String(order.stage || ''))
 
   const timeline = states.map((stage, idx) => {
-    const cls = idx < currentIdx ? 'done' : idx === currentIdx ? 'now' : 'next'
+    const cls = (selesai || idx < currentIdx) ? 'done' : idx === currentIdx ? 'now' : 'next'
     return `<li class="${cls}"><span class="dot"></span><span>${escapeHtml(labels[stage] || stage)}</span></li>`
   }).join('')
 
@@ -209,12 +214,18 @@ function renderTracking(info) {
       <div class="toko">${escapeHtml(tokoNama || 'Tuléh')}</div>
     </div>
     <div class="card">
-      ${order.no_antrian ? `
+      ${selesai ? `
+        <div style="text-align:center;padding:22px 14px;background:#dff7f1;border:2px solid #2fae99;border-radius:10px;margin-bottom:14px">
+          <div style="width:66px;height:66px;margin:0 auto 10px;border-radius:50%;background:#2fae99;color:#fff;font-size:40px;font-weight:800;display:flex;align-items:center;justify-content:center">&#10003;</div>
+          <div style="font-size:23px;font-weight:800;color:#17695d">Pesanan Selesai</div>
+          <div style="font-size:14px;color:#526e66;margin-top:4px;line-height:1.5">Pesanan Anda telah selesai${order.no_antrian ? ` &mdash; antrian <b>${escapeHtml(order.no_antrian)}</b>` : ''}. Silakan diambil. Terima kasih! &#128522;</div>
+        </div>` : ''}
+      ${order.no_antrian && !selesai ? `
         <div class="antrian">
           <div class="lbl">Nomor Antrian</div>
           <div class="no">${escapeHtml(order.no_antrian)}</div>
         </div>` : ''}
-      <div class="status-now">${escapeHtml(labels[order.stage] || order.stage)}</div>
+      ${!selesai ? `<div class="status-now">${escapeHtml(labels[order.stage] || order.stage)}</div>` : ''}
       ${order.bayar === 'BON' ? `
         <div style="text-align:center;font-size:13px;color:#0e7490;background:#e0f4f9;
                     border:1px solid #b8e3ee;border-radius:3px;padding:6px;margin:8px 0">
@@ -246,60 +257,112 @@ function renderMenu(kode, info, errorMsg, prefill = {}) {
     if (!grup.has(kat)) grup.set(kat, [])
     grup.get(kat).push(p)
   }
-  const rows = [...grup.entries()].map(([kat, produk]) => `
+  const seksi = [...grup.entries()].map(([kat, produk]) => `
     <div class="mgroup">${escapeHtml(kat)}</div>
-    ${produk.map((p) => `
-    <div class="mrow">
-      <div class="mrow__info">
-        <div class="mrow__nama">${escapeHtml(p.nama)}</div>
-        <div class="mrow__harga">Rp ${Number(p.harga).toLocaleString('id-ID')}</div>
-      </div>
-      <input class="mrow__qty" type="number" name="q_${escapeHtml(p.id)}" min="0" max="20"
-             value="${escapeHtml(prefill[`q_${p.id}`] || 0)}" inputmode="numeric" />
-    </div>`).join('')}`).join('')
+    ${produk.map((p) => {
+      const q0 = Number(prefill[`q_${p.id}`]) || 0
+      return `
+      <div class="mitem${q0 > 0 ? ' is-on' : ''}" data-harga="${Number(p.harga) || 0}">
+        <div class="mitem__info">
+          <div class="mitem__nama">${escapeHtml(p.nama)}</div>
+          <div class="mitem__harga">Rp ${Number(p.harga).toLocaleString('id-ID')}</div>
+        </div>
+        <div class="stepper">
+          <button type="button" class="stepper__btn" data-act="dec" aria-label="Kurangi">&minus;</button>
+          <span class="stepper__val">${q0}</span>
+          <button type="button" class="stepper__btn" data-act="inc" aria-label="Tambah">+</button>
+        </div>
+        <input type="hidden" name="q_${escapeHtml(p.id)}" value="${q0}" />
+      </div>`
+    }).join('')}`).join('')
 
   const isiUtama = info.products.length === 0
-    ? `<div class="card" style="text-align:center;padding:28px 16px">
-      Menu belum tersedia. Silakan pesan langsung di kasir.
-    </div>`
-    : `<form class="card" method="POST" action="/o/${escapeHtml(kode)}">
-      <div style="margin-bottom:12px">
-        <label style="font-size:13px;font-weight:700;color:#526e66">Nama Anda</label>
-        <input name="nama" required maxlength="60" placeholder="mis. Budi" value="${escapeHtml(prefill.nama || '')}"
-               style="width:100%;padding:10px;border:1px solid #cde2da;border-radius:3px;margin-top:4px;font-size:16px" />
-      </div>
-      <div class="mlist">${rows}</div>
-      <div style="margin:12px 0">
-        <label style="font-size:13px;font-weight:700;color:#526e66">Catatan (opsional)</label>
-        <input name="catatan" maxlength="300" placeholder="mis. tanpa seledri" value="${escapeHtml(prefill.catatan || '')}"
-               style="width:100%;padding:10px;border:1px solid #cde2da;border-radius:3px;margin-top:4px;font-size:16px" />
-      </div>
-      <button type="submit"
-              style="width:100%;padding:14px;background:#7ae2cf;border:none;border-radius:3px;font-size:16px;font-weight:800;color:#08332c;position:sticky;bottom:10px">
-        Kirim Pesanan
-      </button>
-      <div class="foot" style="margin-top:10px">Pembayaran dilakukan di kasir. Setelah dikirim,
-        Anda mendapat tautan untuk memantau status pesanan.</div>
-    </form>`
+    ? `<div class="card empty">Menu belum tersedia. Silakan pesan langsung di kasir.</div>`
+    : `<form method="POST" action="/o/${escapeHtml(kode)}" id="ordform">
+        <div class="card fieldcard">
+          <label class="flabel" for="nama">Nama Anda</label>
+          <input class="finput" id="nama" name="nama" required maxlength="60" placeholder="mis. Budi" value="${escapeHtml(prefill.nama || '')}" />
+        </div>
+        <div class="card menucard">${seksi}</div>
+        <div class="card fieldcard">
+          <label class="flabel" for="catatan">Catatan (opsional)</label>
+          <input class="finput" id="catatan" name="catatan" maxlength="300" placeholder="mis. tanpa seledri, level pedas 2" value="${escapeHtml(prefill.catatan || '')}" />
+        </div>
+        <div class="foot">Pembayaran di kasir. Setelah dikirim, Anda dapat tautan untuk memantau status pesanan.</div>
+        <div class="orderbar">
+          <div class="orderbar__sum"><span id="ob-count">0 item</span><b id="ob-total">Rp 0</b></div>
+          <button type="submit" class="orderbar__btn" id="ob-submit" disabled>Kirim Pesanan &rarr;</button>
+        </div>
+      </form>`
 
   const body = `
-    <div class="head">
-      <h1>Pesan dari Meja ${escapeHtml(info.mejaNomor)}</h1>
-      <div class="toko">${escapeHtml(info.tokoNama)}</div>
+    <div class="mhead">
+      <div class="mhead__toko">${escapeHtml(info.tokoNama)}</div>
+      <div class="mhead__meja">Meja ${escapeHtml(info.mejaNomor)}</div>
     </div>
-    ${errorMsg ? `<div class="card" style="border-color:#d93a49;color:#b02a37;margin-bottom:12px;padding:12px">${escapeHtml(errorMsg)}</div>` : ''}
+    ${errorMsg ? `<div class="card errbox">${escapeHtml(errorMsg)}</div>` : ''}
     ${isiUtama}
     <style>
-      .mlist { border-top: 1px solid #e3efea; }
-      .mgroup { font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
-                color: #17695d; padding: 14px 0 4px; border-bottom: 1px solid #e3efea; }
-      .mrow { display: flex; align-items: center; justify-content: space-between; gap: 10px;
-              padding: 12px 0; border-bottom: 1px solid #e3efea; }
-      .mrow__nama { font-weight: 600; font-size: 15px; }
-      .mrow__harga { font-size: 13px; color: #526e66; }
-      .mrow__qty { width: 76px; min-height: 48px; padding: 12px 8px; border: 1px solid #cde2da;
-                   border-radius: 3px; font-size: 18px; text-align: center; }
-    </style>`
+      .wrap { max-width: 480px; padding-bottom: 96px; }
+      .mhead { text-align: center; margin-bottom: 14px; }
+      .mhead__toko { font-size: 22px; font-weight: 800; color: #14332c; letter-spacing: -.01em; }
+      .mhead__meja { display: inline-block; margin-top: 7px; font-size: 13px; font-weight: 700; color: #17695d;
+                     background: #dff7f1; border: 1px solid #bff0e5; border-radius: 999px; padding: 4px 15px; }
+      .card { background: #fff; border: 1px solid #cde2da; border-radius: 12px; padding: 14px; margin-bottom: 12px; }
+      .errbox { border-color: #d93a49; color: #b02a37; }
+      .empty { text-align: center; padding: 28px 16px; color: #526e66; }
+      .flabel { font-size: 13px; font-weight: 700; color: #526e66; }
+      .finput { width: 100%; padding: 12px; border: 1px solid #cde2da; border-radius: 9px; margin-top: 6px; font-size: 16px; }
+      .finput:focus { outline: none; border-color: #2fae99; box-shadow: 0 0 0 3px rgba(122,226,207,.35); }
+      .menucard { padding: 2px 14px; }
+      .mgroup { font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #17695d; padding: 15px 0 6px; }
+      .mitem { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 1px solid #eef5f2; }
+      .mgroup + .mitem { border-top: none; }
+      .mitem__nama { font-weight: 700; font-size: 15px; color: #14332c; line-height: 1.3; }
+      .mitem__harga { font-size: 14px; color: #526e66; margin-top: 2px; }
+      .mitem.is-on .mitem__nama { color: #0e6b5c; }
+      .stepper { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+      .stepper__btn { width: 42px; height: 42px; border: 1px solid #cde2da; background: #f7fcfa; color: #0e6b5c;
+                      font-size: 22px; font-weight: 800; line-height: 1; border-radius: 10px; cursor: pointer;
+                      display: flex; align-items: center; justify-content: center; -webkit-tap-highlight-color: transparent; }
+      .stepper__btn:active { background: #dff7f1; transform: scale(.93); }
+      .stepper__val { min-width: 30px; text-align: center; font-size: 17px; font-weight: 800; color: #14332c; font-variant-numeric: tabular-nums; }
+      .mitem:not(.is-on) .stepper__btn[data-act="dec"] { opacity: .3; }
+      .orderbar { position: fixed; left: 0; right: 0; bottom: 0; max-width: 480px; margin: 0 auto; z-index: 20;
+                  display: flex; align-items: center; gap: 12px; padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+                  background: #fff; border-top: 1px solid #cde2da; box-shadow: 0 -8px 24px -14px rgba(0,0,0,.28); }
+      .orderbar__sum { display: flex; flex-direction: column; line-height: 1.2; }
+      .orderbar__sum span { font-size: 12px; color: #526e66; }
+      .orderbar__sum b { font-size: 19px; color: #14332c; font-variant-numeric: tabular-nums; }
+      .orderbar__btn { flex: 1; padding: 15px; background: #7ae2cf; border: none; border-radius: 10px; font-size: 16px;
+                       font-weight: 800; color: #08332c; cursor: pointer; }
+      .orderbar__btn:disabled { background: #e6efec; color: #9db3ab; }
+      .foot { text-align: center; margin-bottom: 6px; }
+    </style>
+    <script>
+      (function () {
+        var form = document.getElementById('ordform'); if (!form) return;
+        var countEl = document.getElementById('ob-count'), totalEl = document.getElementById('ob-total'), subBtn = document.getElementById('ob-submit');
+        function fmt(n){ return 'Rp ' + (Number(n) || 0).toLocaleString('id-ID'); }
+        function recompute(){
+          var count = 0, total = 0;
+          form.querySelectorAll('.mitem').forEach(function (it) {
+            var q = Number(it.querySelector('input[type=hidden]').value) || 0;
+            count += q; total += q * (Number(it.getAttribute('data-harga')) || 0);
+          });
+          countEl.textContent = count + ' item'; totalEl.textContent = fmt(total); subBtn.disabled = count === 0;
+        }
+        form.addEventListener('click', function (e) {
+          var btn = e.target.closest('.stepper__btn'); if (!btn) return;
+          var it = btn.closest('.mitem'), hid = it.querySelector('input[type=hidden]'), v = Number(hid.value) || 0;
+          v += btn.getAttribute('data-act') === 'inc' ? 1 : -1; if (v < 0) v = 0; if (v > 20) v = 20;
+          hid.value = v; it.querySelector('.stepper__val').textContent = v; it.classList.toggle('is-on', v > 0);
+          recompute();
+        });
+        form.addEventListener('submit', function (e) { if (subBtn.disabled) e.preventDefault(); });
+        recompute();
+      })();
+    </script>`
 
   // Halaman menu tidak boleh auto-refresh (form akan tereset) → tanpa meta refresh
   return pageShell(`Menu — ${info.tokoNama}`, body).replace(/<meta http-equiv="refresh"[^>]*>/, '')

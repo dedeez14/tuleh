@@ -3,8 +3,10 @@
 // "Menunggu Bayar" di Papan Pesanan.
 
 import { api, firstError } from '../api.js'
+import { getState } from '../state.js'
 import { esc } from '../utils/format.js'
 import { icons, showModal, emptyStateHTML, loadingHTML } from '../components/ui.js'
+import { printQR } from '../components/receipt.js'
 
 export const TablesScreen = {
   id: 'tables',
@@ -97,7 +99,12 @@ export const TablesScreen = {
           Cetak dan tempel di Meja ${esc(card.dataset.nomor)}. Pelanggan memindai
           dengan kamera HP (WiFi yang sama) untuk membuka menu dan memesan.
         </p>`
-      showModal({ title: `QR Meja ${card.dataset.nomor}`, body: bodyEl })
+      const footer = document.createElement('div')
+      footer.innerHTML = `<button type="button" class="btn btn--primary btn--block" id="tqr-print">${icons.print} Cetak QR Meja</button>`
+      const tokoNama = getState().company?.nama || getState().company?.name || 'Tuléh'
+      showModal({ title: `QR Meja ${card.dataset.nomor}`, body: bodyEl, footer })
+      footer.querySelector('#tqr-print').addEventListener('click', () =>
+        printQR({ nomor: card.dataset.nomor, tokoNama, url, qrUri: qrResult.data.uri }))
     })
 
     return () => {

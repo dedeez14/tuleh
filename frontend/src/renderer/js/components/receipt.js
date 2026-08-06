@@ -91,3 +91,24 @@ export async function printReceipt(struk) {
     toast(`Gagal mencetak: ${result.message}`, 'error')
   }
 }
+
+/** Cetak kartu QR meja (untuk ditempel di meja) — nama toko, nomor meja, QR besar. */
+export async function printQR({ nomor, tokoNama, url, qrUri }) {
+  const printRoot = document.getElementById('print-root')
+  if (!printRoot || !qrUri) return
+  printRoot.innerHTML = `
+    <div class="qrprint">
+      <div class="qrprint__toko">${esc(tokoNama || 'Tuléh')}</div>
+      <div class="qrprint__meja">MEJA ${esc(nomor)}</div>
+      <img class="qrprint__img" src="${esc(qrUri)}" alt="QR Meja ${esc(nomor)}" />
+      <div class="qrprint__cta">Pindai untuk Pesan Sendiri</div>
+      <div class="qrprint__sub">Arahkan kamera HP ke kode QR di atas &rarr; pilih menu &rarr; kirim.
+        Pesanan langsung masuk ke meja ini.</div>
+      <div class="qrprint__url">${esc(url || '')}</div>
+    </div>`
+  const result = await api.app.print()
+  printRoot.innerHTML = ''
+  if (!result.ok && result.message && !/dibatalkan|cancel/i.test(result.message)) {
+    toast(`Gagal mencetak: ${result.message}`, 'error')
+  }
+}

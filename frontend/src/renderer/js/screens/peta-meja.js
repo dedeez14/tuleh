@@ -7,7 +7,7 @@ import { api, firstError } from '../api.js'
 import { getState } from '../state.js'
 import { esc, fmtIDR, fmtNumber } from '../utils/format.js'
 import { toast, icons, showModal, confirmDialog, emptyStateHTML, loadingHTML } from '../components/ui.js'
-import { printReceipt, buildReceiptHTML } from '../components/receipt.js'
+import { printReceipt, buildReceiptHTML, printQR } from '../components/receipt.js'
 import { quickCashOptions } from '../lib/cart.js'
 
 const POLL_MS = 5000
@@ -196,7 +196,11 @@ export const PetaMejaScreen = {
           <div class="tbl-qr__url mono">${esc(url)}</div>
           <div class="tbl-qr__hint">Pelanggan scan untuk pesan sendiri — pesanan masuk ke bon meja ini.</div>
         </div>`
-      showModal({ title: `QR Meja ${nomor}`, body, size: 'sm' })
+      const footer = document.createElement('div')
+      footer.innerHTML = `<button type="button" class="btn btn--primary btn--block" id="tqr-print">${icons.print} Cetak QR Meja</button>`
+      const tokoNama = getState().company?.nama || getState().company?.name || 'Tuléh'
+      showModal({ title: `QR Meja ${nomor}`, body, footer, size: 'sm' })
+      footer.querySelector('#tqr-print').addEventListener('click', () => printQR({ nomor, tokoNama, url, qrUri: res.data.uri }))
     }
 
     function tanyaPax(nomor) {

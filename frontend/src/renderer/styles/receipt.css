@@ -128,6 +128,28 @@
   pointer-events: none;
 }
 
+/* Kartu QR meja untuk dicetak (di dalam #print-root; hanya tampil saat cetak). */
+.qrprint {
+  text-align: center;
+  padding: 8mm 6mm;
+  color: #0a2723;
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+}
+.qrprint__toko { font-size: 20px; font-weight: 800; letter-spacing: -0.01em; }
+.qrprint__meja {
+  display: inline-block; margin: 8px auto 12px; padding: 4px 16px;
+  font-size: 15px; font-weight: 800; letter-spacing: 0.1em;
+  color: #08332c; background: #7ae2cf; border-radius: 999px;
+}
+.qrprint__img {
+  width: 62mm; max-width: 100%; height: auto; display: block; margin: 0 auto;
+  border: 1px solid #cde2da; border-radius: 8px; padding: 8px; background: #fff;
+}
+.qrprint__cta { margin-top: 12px; font-size: 18px; font-weight: 800; color: #14332c; }
+.qrprint__sub { margin-top: 6px; font-size: 12px; line-height: 1.5; color: #526e66; }
+.qrprint__url { margin-top: 10px; font-size: 10px; color: #8aa39a; word-break: break-all;
+                font-family: ui-monospace, Consolas, monospace; }
+
 @media print {
   @page {
     size: 80mm auto;
