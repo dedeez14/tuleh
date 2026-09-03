@@ -8,7 +8,8 @@
 const crypto = require('node:crypto')
 const {
   COMPANY, USER, BRANCH, KATEGORI, GUDANG, SATUAN, PELANGGAN_AWAL, TOKOS, MANIFESTS, TABLES,
-  buatProduk, buatProdukBakso, buatProdukLaundry, KATEGORI_BAKSO, KATEGORI_LAUNDRY
+  buatProduk, buatProdukBakso, buatProdukLaundry, buatProdukBengkel,
+  KATEGORI_BAKSO, KATEGORI_LAUNDRY, KATEGORI_BENGKEL
 } = require('./demo-data')
 
 // Label tahap untuk halaman pelacakan pelanggan
@@ -98,7 +99,7 @@ function toDataUri (bytes, mime) {
   }
 }
 
-const ANTRIAN_PREFIX = { 'TOKO-2': 'A', 'TOKO-3': 'L' }
+const ANTRIAN_PREFIX = { 'TOKO-2': 'A', 'TOKO-3': 'L', 'TOKO-4': 'B' }
 
 const produkToko = (tokoId) => (catalogs[tokoId] || {}).produk || []
 const kategoriToko = (tokoId) => (catalogs[tokoId] || {}).kategori || []
@@ -359,7 +360,8 @@ function seed() {
   catalogs = {
     'TOKO-1': { produk: buatProduk(), kategori: KATEGORI.map((k) => ({ ...k })) },
     'TOKO-2': { produk: buatProdukBakso(), kategori: KATEGORI_BAKSO.map((k) => ({ ...k })) },
-    'TOKO-3': { produk: buatProdukLaundry(), kategori: KATEGORI_LAUNDRY.map((k) => ({ ...k })) }
+    'TOKO-3': { produk: buatProdukLaundry(), kategori: KATEGORI_LAUNDRY.map((k) => ({ ...k })) },
+    'TOKO-4': { produk: buatProdukBengkel(), kategori: KATEGORI_BENGKEL.map((k) => ({ ...k })) }
   }
   pelanggan = PELANGGAN_AWAL.map((c) => ({ ...c }))
   sesiList = []
@@ -522,7 +524,12 @@ function seed() {
     buatStasiun({ tokoId: 'TOKO-3', type: 'washer', nama: 'Mesin Cuci 1', kapasitas: 8 }),
     buatStasiun({ tokoId: 'TOKO-3', type: 'washer', nama: 'Mesin Cuci 2', status: 'NONAKTIF', kapasitas: 8 }),
     buatStasiun({ tokoId: 'TOKO-3', type: 'dryer', nama: 'Pengering 1', kapasitas: 8 }),
-    buatStasiun({ tokoId: 'TOKO-3', type: 'folder', nama: 'Meja Lipat 1' })
+    buatStasiun({ tokoId: 'TOKO-3', type: 'folder', nama: 'Meja Lipat 1' }),
+    buatStasiun({ tokoId: 'TOKO-4', type: 'cashier', nama: 'Kasir 1' }),
+    buatStasiun({ tokoId: 'TOKO-4', type: 'mechanic', nama: 'Mekanik Andi' }),
+    buatStasiun({ tokoId: 'TOKO-4', type: 'mechanic', nama: 'Mekanik Yusuf', status: 'ISTIRAHAT' }),
+    buatStasiun({ tokoId: 'TOKO-4', type: 'bay', nama: 'Pit 1', kapasitas: 1 }),
+    buatStasiun({ tokoId: 'TOKO-4', type: 'bay', nama: 'Pit 2', kapasitas: 1 })
   ]
 
   const seedLaundry = [
@@ -533,6 +540,15 @@ function seed() {
     { items: [{ nama: 'Selimut Besar', kuantitas: 2 }], total: 50000, menitLalu: 420, stage: 'SIAP_AMBIL', pelangganNama: 'Budi Santoso' }
   ]
   for (const o of seedLaundry) orders.push(buatOrder({ tokoId: 'TOKO-3', ...o }))
+
+  // Bengkel: antrian servis di berbagai tahap supaya papan proses langsung hidup.
+  const seedBengkel = [
+    { items: [{ nama: 'Ganti Oli (jasa)', kuantitas: 1 }, { nama: 'Oli Mesin 1 L', kuantitas: 1 }], total: 75000, menitLalu: 15, stage: 'ANTRIAN', pelangganNama: 'Rudi Hartono' },
+    { items: [{ nama: 'Servis Ringan / Tune Up', kuantitas: 1 }], total: 75000, menitLalu: 40, stage: 'PEMERIKSAAN', pelangganNama: 'Budi Santoso' },
+    { items: [{ nama: 'Ganti Kampas Rem (jasa)', kuantitas: 1 }, { nama: 'Kampas Rem Depan', kuantitas: 1 }], total: 100000, menitLalu: 90, stage: 'PENGERJAAN', pelangganNama: 'Siti Aminah' },
+    { items: [{ nama: 'Tambal Ban', kuantitas: 1 }], total: 15000, menitLalu: 130, stage: 'SIAP_AMBIL', pelangganNama: 'Dewi Lestari' }
+  ]
+  for (const o of seedBengkel) orders.push(buatOrder({ tokoId: 'TOKO-4', ...o }))
 }
 
 // ---------- Kontrol ----------

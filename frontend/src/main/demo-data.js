@@ -109,6 +109,13 @@ const TOKOS = [
     bidang_usaha: { code: 'laundry', nama: 'Laundry Kiloan & Satuan', kategori: 'Jasa', archetype: 'service_job' },
     manifest_version: 1,
     is_active: true
+  },
+  {
+    id: 'TOKO-4',
+    nama: 'Bengkel Jaya Demo',
+    bidang_usaha: { code: 'bengkel', nama: 'Bengkel Motor/Mobil', kategori: 'Jasa Lifecycle', archetype: 'service_lifecycle' },
+    manifest_version: 1,
+    is_active: true
   }
 ]
 
@@ -238,6 +245,48 @@ const MANIFESTS = {
       { type: 'folder', label: 'Meja Lipat', min: 0 }
     ],
     revision: 1
+  },
+  // Bengkel — cermin manifest_override server (MOVERA config/pos_verticals.php):
+  // servis kendaraan bertahap, bayar saat ambil, item per jasa/suku cadang
+  // (tanpa timbangan/label). Prefix antrian B (demo.js ANTRIAN_PREFIX).
+  'TOKO-4': {
+    vertical_code: 'bengkel',
+    schema_version: 1,
+    min_app_build: 1,
+    menus: [
+      menuItem('dashboard', 'Dashboard', 1),
+      menuItem('kasir', 'Kasir / Servis Baru', 2),
+      menuItem('proses', 'Antrian Servis', 3),
+      menuItem('produk', 'Jasa & Suku Cadang', 4),
+      menuItem('inventory', 'Inventory', 5),
+      menuItem('riwayat', 'Riwayat', 6),
+      menuItem('sesi', 'Sesi Kasir', 7),
+      menuItem('stasiun', 'Stasiun', 8),
+      menuItem('pelanggan', 'Pelanggan', 9),
+      menuItem('pengeluaran', 'Pengeluaran', 10),
+      menuItem('laporan', 'Laporan', 11),
+      menuItem('pengaturan', 'Pengaturan', 12)
+    ],
+    premium_features: PREMIUM_FEATURES,
+    capabilities: ['cart', 'payment', 'receipt_print', 'stages', 'queue', 'customer_tracking'],
+    transaction_flow: ['INTAKE', 'PAYMENT_OR_LATER', 'STAGES', 'PICKUP'],
+    lifecycle: {
+      states: ['ANTRIAN', 'PEMERIKSAAN', 'PENGERJAAN', 'SIAP_AMBIL', 'SELESAI'],
+      transitions: [
+        { from: 'ANTRIAN', to: 'PEMERIKSAAN', actor: 'staff' },
+        { from: 'PEMERIKSAAN', to: 'PENGERJAAN', actor: 'staff' },
+        { from: 'PENGERJAAN', to: 'SIAP_AMBIL', actor: 'staff' },
+        { from: 'SIAP_AMBIL', to: 'SELESAI', actor: 'cashier' }
+      ]
+    },
+    item_config: { unit_mode: 'unit', identity: 'none', weighable: false },
+    payment_modes: ['TUNAI', 'QRIS', 'TRANSFER'],
+    station_types: [
+      { type: 'cashier', label: 'Kasir', min: 1 },
+      { type: 'mechanic', label: 'Mekanik', min: 1 },
+      { type: 'bay', label: 'Pit / Bay', min: 0 }
+    ],
+    revision: 1
   }
 }
 
@@ -254,6 +303,12 @@ const KATEGORI_LAUNDRY = [
   { id: 'KL-1', kode: 'KIL', nama: 'Kiloan' },
   { id: 'KL-2', kode: 'SAT', nama: 'Satuan' },
   { id: 'KL-3', kode: 'EXP', nama: 'Express' }
+]
+
+const KATEGORI_BENGKEL = [
+  { id: 'KG-1', kode: 'JSV', nama: 'Jasa Servis' },
+  { id: 'KG-2', kode: 'OLI', nama: 'Oli & Pelumas' },
+  { id: 'KG-3', kode: 'SPR', nama: 'Suku Cadang' }
 ]
 
 function buatProdukBakso() {
@@ -299,6 +354,34 @@ function buatProdukLaundry() {
   ]
 }
 
+// Bengkel: jasa (tanpa stok) + suku cadang (berstok, dipotong saat terjual).
+// tipe & harga_beli ditetapkan di sini (bukan diturunkan per-toko oleh demo.js
+// seperti laundry) karena satu katalog memuat JASA dan PRODUK sekaligus.
+function buatProdukBengkel() {
+  const p = (n, kode, nama, harga, satuan, kategori, kelolaStok = false, stok = 0) => ({
+    id: `BKL-${String(n).padStart(3, '0')}`,
+    kode, nama, barcode: null,
+    tipe: kelolaStok ? 'PRODUK' : 'JASA',
+    harga_beli: kelolaStok ? Math.round(harga * 0.65) : null,
+    harga_jual: harga, pajak_persen: 0,
+    satuan, satuan_id: null, kategori,
+    kelola_stok: kelolaStok, stok, gambar: null
+  })
+  return [
+    p(1, 'JSV-001', 'Ganti Oli (jasa)', 20000, 'Unit', 'Jasa Servis'),
+    p(2, 'JSV-002', 'Servis Ringan / Tune Up', 75000, 'Unit', 'Jasa Servis'),
+    p(3, 'JSV-003', 'Ganti Kampas Rem (jasa)', 35000, 'Unit', 'Jasa Servis'),
+    p(4, 'JSV-004', 'Tambal Ban', 15000, 'Unit', 'Jasa Servis'),
+    p(5, 'JSV-005', 'Servis Besar / Turun Mesin', 350000, 'Unit', 'Jasa Servis'),
+    p(6, 'OLI-001', 'Oli Mesin 1 L', 55000, 'Botol', 'Oli & Pelumas', true, 24),
+    p(7, 'OLI-002', 'Oli Gardan 120 ml', 18000, 'Botol', 'Oli & Pelumas', true, 15),
+    p(8, 'SPR-001', 'Busi', 25000, 'Pcs', 'Suku Cadang', true, 30),
+    p(9, 'SPR-002', 'Kampas Rem Depan', 65000, 'Set', 'Suku Cadang', true, 12),
+    p(10, 'SPR-003', 'Filter Udara', 40000, 'Pcs', 'Suku Cadang', true, 8),
+    p(11, 'SPR-004', 'Ban Dalam', 35000, 'Pcs', 'Suku Cadang', true, 10)
+  ]
+}
+
 // Meja ber-QR untuk toko F&B (kode dipakai di URL /o/{kode} — stabil & unik)
 const TABLES = [
   { id: 'MEJA-1', toko_id: 'TOKO-2', nomor: '1', kode: 'MJ-BAKSO-01' },
@@ -320,5 +403,6 @@ const PELANGGAN_AWAL = [
 
 module.exports = {
   COMPANY, USER, BRANCH, KATEGORI, GUDANG, SATUAN, PELANGGAN_AWAL, TOKOS, MANIFESTS, TABLES,
-  buatProduk, buatProdukBakso, buatProdukLaundry, KATEGORI_BAKSO, KATEGORI_LAUNDRY
+  buatProduk, buatProdukBakso, buatProdukLaundry, buatProdukBengkel,
+  KATEGORI_BAKSO, KATEGORI_LAUNDRY, KATEGORI_BENGKEL
 }

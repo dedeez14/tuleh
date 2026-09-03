@@ -38,8 +38,8 @@ npm start
 
 Login memakai akun POS MOVERA Anda; server default `https://tatreport.com` (bisa
 diganti per-tenant lewat **Ubah server** di layar login, wajib HTTPS). Ingin
-melihat-lihat tanpa akun? Klik **Coba Mode Demo** — 3 toko contoh (minimarket,
-bakso, laundry) dengan data simulasi lokal.
+melihat-lihat tanpa akun? Klik **Coba Mode Demo** — 4 toko contoh (minimarket,
+bakso, laundry, bengkel) dengan data simulasi lokal.
 
 Gateway Go menyala otomatis; menjalankan manual (opsional) — lihat
 [backend/README.md](backend/README.md):

@@ -238,6 +238,12 @@ Semua endpoint di bawah prefix `/api/pos/v1` dan (kecuali `ping`, `openapi.yaml`
 | Laporan | GET | `/laporan/stok` | Posisi stok |
 | Laporan | GET | `/laporan/rekap-kasir` | Rekap per kasir |
 
+> **Bidang usaha dengan alur khas (2026-09).** `bengkel`, `salon`, `doorsmeer`, dan
+> `car_wash` mengirim manifest dengan `lifecycle.states`, `station_types`, `labels`,
+> dan `antrian_prefix` sendiri (server `manifest_override`). Klien cukup membaca
+> manifest apa adanya; tahap baru: `PEMERIKSAAN`, `PENGERJAAN`, `DILAYANI`, `FINISHING`
+> (label Indonesia ikut dikirim `GET /public/track/{token}`).
+
 ### 6.2 `GET /config`
 
 ```json

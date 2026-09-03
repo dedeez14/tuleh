@@ -6,6 +6,7 @@ import { api, firstError } from '../api.js'
 import { getState } from '../state.js'
 import { esc, fmtIDR, fmtNumber, fmtTime, debounce } from '../utils/format.js'
 import { toast, icons, emptyStateHTML, loadingHTML, showModal } from '../components/ui.js'
+import { stageLabel } from '../lib/stage-label.js'
 
 const POLL_MS = 4000
 // Ambang umur pesanan: alur pendek (dapur F&B) dihitung menit; alur panjang
@@ -18,27 +19,6 @@ function fmtUmur(menit) {
   return `${Math.floor(menit / 60)} j ${menit % 60} mnt`
 }
 
-// Label manusiawi untuk kode tahap yang umum; selain ini → Title Case otomatis
-const STAGE_LABELS = {
-  MENUNGGU_BAYAR: 'Menunggu Bayar',
-  ANTRIAN: 'Antrian',
-  DIPROSES: 'Diproses',
-  READY: 'Siap',
-  PENCUCIAN: 'Pencucian',
-  PENGERINGAN: 'Pengeringan',
-  LIPAT: 'Lipat & Kemas',
-  SIAP_AMBIL: 'Siap Diambil',
-  SELESAI: 'Selesai'
-}
-
-function stageLabel(stage) {
-  if (STAGE_LABELS[stage]) return STAGE_LABELS[stage]
-  return String(stage || '')
-    .toLowerCase()
-    .split('_')
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ')
-}
 
 function umurMenit(order) {
   const t = new Date(order.created_at).getTime()

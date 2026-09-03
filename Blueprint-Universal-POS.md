@@ -144,6 +144,23 @@ Tiga archetype awal (bisa bertambah, mis. `booking` untuk barbershop/rental):
 | `food_order` | Bakso, warung makan, kafe, coffee shop | Pesan (kasir/QR meja) → bayar → **dapur** memproses per antrian → ready → diantar/diambil. |
 | `service_job` | Laundry, sablon, servis sepatu | Terima order → **tahapan produksi** berhari-hari → siap diambil → diserahkan. Pelanggan memantau progres. |
 
+### 5.1 Alur jasa khas yang dikirim server (tanpa rilis app)
+
+Sejak 2026-09 server MOVERA memberi beberapa bidang usaha `service_job`
+manifest khusus lewat `manifest_override` (`config/pos_verticals.php`): label,
+tahapan, stasiun, dan prefix antrian berbeda, sementara menu & kapabilitas
+arketipe diwarisi. App tidak perlu berubah — papan proses membaca kolom dari
+`lifecycle.states`, stasiun dari `station_types`, dan tahap yang belum
+dikenal ditampilkan Title Case (`lib/stage-label.js`).
+
+| Bidang usaha | Tahapan | Stasiun | Prefix |
+|---|---|---|---|
+| `bengkel` | ANTRIAN → PEMERIKSAAN → PENGERJAAN → SIAP_AMBIL → SELESAI | Kasir, Mekanik, Pit/Bay | B |
+| `salon` (barbershop) | ANTRIAN → DILAYANI → SELESAI (pelanggan hadir, tanpa ambil) | Kasir, Kursi/Kapster | S |
+| `doorsmeer`, `car_wash` | ANTRIAN → PENCUCIAN → PENGERINGAN → FINISHING → SIAP_AMBIL → SELESAI | Kasir, Pencucian, Finishing & Poles | D |
+
+Mode Demo memuat contoh bengkel (`TOKO-4`, katalog `BKL-*`, antrian `B-xxx`).
+
 Modul yang tampil di Beranda MPos ditentukan archetype + capabilities:
 
 | Modul (kartu Beranda) | `inventory_sale` (minimarket) | `food_order` (bakso) | `service_job` (laundry) |
