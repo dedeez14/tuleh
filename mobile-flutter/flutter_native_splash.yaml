@@ -1,0 +1,12 @@
+# Splash native Android (sebelum engine Flutter) — mint900 + ikon kasir Tuléh,
+# agar mulus ke SplashScreen Flutter (tanpa kilatan putih/logo Flutter).
+# Regenerasi: dart run flutter_native_splash:create
+flutter_native_splash:
+  color: "#08332C"
+  image: assets/icon/icon_fg.png
+  android: true
+  ios: false
+  web: false
+  android_12:
+    color: "#08332C"
+    image: assets/icon/icon_fg.png
