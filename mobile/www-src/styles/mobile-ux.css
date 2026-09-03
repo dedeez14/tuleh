@@ -1,0 +1,394 @@
+/* ============================================================
+  Tuleh Android UX Layer
+   Override khusus build Capacitor agar UI lebih nyaman di layar sentuh.
+   Berkas ini hanya dimuat dari mobile/www-src/index.html.
+   ============================================================ */
+
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+}
+
+body {
+  overscroll-behavior-y: contain;
+}
+
+.shell {
+  height: 100dvh;
+}
+
+/* Target sentuh minimum agar nyaman untuk jari */
+.btn,
+.icon-btn,
+.input,
+.select,
+.textarea,
+.pos-chip,
+.bill-chip,
+.step,
+.tabs__item,
+.segmented__item {
+  touch-action: manipulation;
+}
+
+@media (max-width: 1100px) {
+  .btn,
+  .input,
+  .select,
+  .textarea {
+    min-height: 44px;
+  }
+
+  .btn--sm {
+    min-height: 38px;
+  }
+
+  .icon-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .topbar {
+    height: auto;
+    min-height: 62px;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: calc(var(--safe-top) + 10px) calc(12px + var(--safe-right)) 10px calc(12px + var(--safe-left));
+  }
+
+  .topbar__brand {
+    margin-left: 0;
+    padding: 5px 6px;
+  }
+
+  .topbar__logo {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+  }
+
+  .topbar__name {
+    font-size: var(--text-md);
+  }
+
+  .topbar__spacer,
+  .topbar__user {
+    display: none;
+  }
+
+  .topbar__screen {
+    order: 9;
+    flex: 1 1 100%;
+    font-size: var(--text-sm);
+    color: var(--text-2);
+  }
+
+  .topbar__toko,
+  .topbar__toko--static {
+    order: 10;
+    flex: 1 1 100%;
+    max-width: none;
+    min-height: 40px;
+    justify-content: flex-start;
+  }
+
+  .topbar__session {
+    margin-left: auto;
+    min-height: 40px;
+  }
+
+  .topbar__conn {
+    width: 28px;
+    height: 28px;
+  }
+
+  .notif-panel {
+    position: fixed;
+    top: calc(var(--safe-top) + 64px);
+    left: 10px;
+    right: 10px;
+    width: auto;
+    max-height: 72vh;
+  }
+
+  .shell__main {
+    min-height: 0;
+  }
+
+  .screen-page {
+    padding: 14px 12px calc(16px + var(--safe-bottom));
+  }
+
+  .home__inner {
+    padding: 16px 12px calc(110px + var(--safe-bottom));
+  }
+
+  .home__head {
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: var(--sp-4);
+  }
+
+  .home__intro {
+    width: 100%;
+  }
+
+  .home__greet {
+    font-size: var(--text-2xl);
+  }
+
+  .home__stats {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .home__stat {
+    min-width: 0;
+    flex: 1 1 160px;
+  }
+
+  .home__grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .home-card {
+    padding: 16px;
+  }
+
+  .home-card__title {
+    font-size: var(--text-md);
+  }
+
+  .picker {
+    padding: 14px 12px calc(16px + var(--safe-bottom));
+  }
+
+  .picker__head {
+    margin-bottom: var(--sp-4);
+  }
+
+  .pos {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+
+  .pos-catalog__bar {
+    padding: 12px 12px 8px;
+    gap: 10px;
+  }
+
+  .pos-catalog__body {
+    padding: 8px 12px 14px;
+  }
+
+  .pos-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 10px;
+  }
+
+  .pos-card__media {
+    aspect-ratio: 16 / 11;
+  }
+
+  .pos-cart {
+    border-left: none;
+    border-top: 1px solid var(--line);
+    max-height: 52vh;
+  }
+
+  .pos-cart__head,
+  .pos-cart__cust {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .pos-cart__items {
+    padding: 0 12px;
+  }
+
+  .pos-cart__foot {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    padding: 12px 12px calc(12px + var(--safe-bottom));
+  }
+
+  .pos-sum__total-value,
+  .pos-pay__bill-amount {
+    font-size: 2rem;
+  }
+
+  .pos-done__receipt {
+    max-height: 42vh;
+  }
+
+  .pos-done__actions {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .pos-done__actions .btn {
+    width: 100%;
+  }
+
+  .ord {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .ord__bar {
+    align-items: flex-start;
+  }
+
+  .ord__cols {
+    grid-template-columns: repeat(var(--ord-cols, 3), minmax(260px, 84vw));
+    gap: 12px;
+  }
+
+  .ord-col__body {
+    max-height: 56vh;
+  }
+
+  .meja {
+    padding: 12px 12px calc(14px + var(--safe-bottom));
+  }
+
+  .meja-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+  }
+
+  .bill {
+    flex-direction: column;
+  }
+
+  .bill-catalog {
+    padding: 12px;
+  }
+
+  .bill-grid {
+    grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+    gap: 10px;
+  }
+
+  .bill-panel {
+    width: 100%;
+    border-left: none;
+    border-top: 1px solid var(--line);
+    max-height: 50vh;
+    padding: 12px 12px calc(12px + var(--safe-bottom));
+  }
+
+  .bill-actions {
+    flex-direction: column;
+  }
+
+  .bill-actions .btn {
+    width: 100%;
+  }
+
+  .table th,
+  .table td {
+    padding: 10px 12px;
+  }
+
+  .modal {
+    width: calc(100vw - 24px);
+    max-height: calc(100vh - 28px - var(--safe-top));
+  }
+
+  .modal__header {
+    padding: 14px 16px 0;
+  }
+
+  .modal__body {
+    padding: 14px 16px;
+  }
+
+  .modal__footer {
+    padding: 0 16px calc(16px + var(--safe-bottom));
+  }
+
+  .toast-stack {
+    right: 12px;
+    left: 12px;
+    bottom: calc(10px + var(--safe-bottom));
+  }
+
+  .toast {
+    min-width: 0;
+    max-width: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .topbar__demo,
+  .topbar__conn {
+    display: none;
+  }
+
+  .topbar__back {
+    padding: 6px 10px;
+  }
+
+  .home__logo {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+  }
+
+  .home__notice {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .home__notice .btn {
+    width: 100%;
+  }
+
+  .pos-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pos-line__ctrl {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  .pos-pay__quick {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .modal-overlay {
+    align-items: flex-end;
+    padding: 0;
+    background: rgba(8, 38, 33, 0.42);
+  }
+
+  .modal,
+  .modal--md,
+  .modal--lg {
+    width: 100%;
+    border-radius: 16px 16px 0 0;
+    max-height: calc(100vh - var(--safe-top));
+  }
+
+  .modal__footer {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .modal__footer .btn {
+    flex: 1 1 100%;
+  }
+
+  .login__panel {
+    padding: calc(var(--safe-top) + 16px) 16px calc(16px + var(--safe-bottom));
+  }
+}

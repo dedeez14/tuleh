@@ -789,11 +789,18 @@
   padding: var(--sp-4);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: var(--surface-2);
+  background: #fff; /* papan struk = kertas putih PENUH (hindari pita --surface-2 gelap di tema dark) */
   max-height: 280px;
   overflow-y: auto;
   display: flex;
   justify-content: center;
+}
+
+/* Struk pratinjau kasir menyatu dengan papan putih (bukan kartu sempit di tengah) → putih tampak penuh */
+.pos-done .pos-done__receipt .receipt {
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
 }
 
 .pos-done__actions {

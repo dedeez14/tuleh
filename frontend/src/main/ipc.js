@@ -243,7 +243,8 @@ function registerIpcHandlers(getMainWindow) {
         tracking: demo.trackingInfo,
         menu: demo.menuInfo,
         createOrder: demo.createTableOrder,
-        queueBoard: demo.queueBoardInfo
+        queueBoard: demo.queueBoardInfo,
+        payment: demo.paymentInfo
       })
       // Jalur uji: ikut nyalakan tunnel publik agar smoke test bisa memverifikasi
       if (process.env.IPOS_SMOKE_TUNNEL === '1') {

@@ -1710,4 +1710,18 @@ function trackingInfo(token) {
   }
 }
 
-module.exports = { isActive, start, stop, handlers, trackingInfo, menuInfo, createTableOrder, queueBoardInfo }
+/** Info pembayaran toko untuk halaman "Pesanan Terkirim" (tracker.js):
+ *  QRIS statis + rekening bank sebagai QR KODE BAYAR. Null bila demo tak aktif.
+ *  Konfig pembayaran demo bersifat global (bukan per-toko), jadi kodeMeja diabaikan. */
+function paymentInfo(_kodeMeja) {
+  if (!active) return null
+  const p = pembayaranDemo()
+  const toko = TOKOS.find((t) => t.id === activeTokoId)
+  return {
+    tokoNama: toko ? toko.nama : COMPANY.nama,
+    qr_statis: p.qr_statis || null,
+    bank: Array.isArray(p.bank) ? p.bank : []
+  }
+}
+
+module.exports = { isActive, start, stop, handlers, trackingInfo, menuInfo, createTableOrder, queueBoardInfo, paymentInfo }

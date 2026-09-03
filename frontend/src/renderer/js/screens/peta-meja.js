@@ -424,8 +424,12 @@ export const PetaMejaScreen = {
       const res = await api.bill.cetak({ id: bonAktif.id })
       if (!alive) return
       if (!res.ok) { toast(firstError(res), 'error'); return }
-      bonAktif = res.data.bill
-      const prabon = res.data.prabon
+      const data = res.data || {}
+      // Kontrak final: { bill, prabon }. Sebagian versi server mengirim pra-bon
+      // langsung sebagai data — deteksi via penanda status 'BELUM DIBAYAR'.
+      const prabon = data.prabon || (data.status === 'BELUM DIBAYAR' ? data : null)
+      if (!prabon) { toast('Pra-bon kosong dari server — bill belum bisa dicetak.', 'error'); return }
+      if (data.bill) bonAktif = data.bill
       // Tampilkan "hitungan (belum bayar)" di layar dulu, lalu opsi cetak
       const body = document.createElement('div')
       body.className = 'bill-prabon-preview'

@@ -20,7 +20,8 @@ let hooks = {
   tracking: null,    // (token) => { order, states, labels, tokoNama } | null
   menu: null,        // (kodeMeja) => { tokoNama, mejaNomor, products } | null
   createOrder: null, // (kodeMeja, {nama, catatan, items}) => { ok, order?, message? }
-  queueBoard: null   // () => { tokoNama, states, labels, rows } | null
+  queueBoard: null,  // () => { tokoNama, states, labels, rows } | null
+  payment: null      // (kodeMeja) => { tokoNama, qr_statis, bank } | null — QR/rekening bayar toko
 }
 
 // Throttle sederhana POST pemesanan per IP (anti-spam)
@@ -368,23 +369,55 @@ function renderMenu(kode, info, errorMsg, prefill = {}) {
   return pageShell(`Menu — ${info.tokoNama}`, body).replace(/<meta http-equiv="refresh"[^>]*>/, '')
 }
 
-function renderOrderPlaced(result) {
-  const lacak = `/t/${result.order.token_lacak}`
+function renderOrderPlaced(result, pay = null) {
+  const order = result.order || {}
+  const lacak = `/t/${order.token_lacak}`
+  const rp = (n) => 'Rp ' + (Number(n) || 0).toLocaleString('id-ID')
+  const isBon = order.bayar === 'BON' // dine-in open bill: boleh bayar di akhir
+
+  const punyaBayar = !!(pay && (pay.qr_statis || (Array.isArray(pay.bank) && pay.bank.length)))
+  const qrImg = pay && pay.qr_statis
+    ? `<img src="${escapeHtml(pay.qr_statis)}" alt="QR Pembayaran QRIS" style="width:230px;max-width:80%;height:auto;border:1px solid #cde2da;border-radius:12px;padding:8px;background:#fff" />`
+    : ''
+  const bankRows = pay && Array.isArray(pay.bank) && pay.bank.length
+    ? pay.bank.map((b) => `
+        <div style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-top:1px solid #eef5f2">
+          <span>${escapeHtml(b.bank)}</span><span style="font-weight:700;font-variant-numeric:tabular-nums">${escapeHtml(b.rekening)}</span>
+        </div>
+        <div style="font-size:12px;color:#64796f;text-align:right;margin-top:-4px">a.n. ${escapeHtml(b.atas_nama)}</div>`).join('')
+    : ''
+
+  let bayarSection
+  if (punyaBayar) {
+    const catatanBawah = isBon
+      ? 'Anda dapat membayar sekarang via QRIS/transfer, atau di kasir saat selesai.'
+      : 'Setelah membayar, tunjukkan bukti ke kasir. Pesanan masuk antrian dapur setelah pembayaran dikonfirmasi.'
+    bayarSection = `<div style="text-align:center">
+          <div style="font-size:13px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#17695d;margin-bottom:6px">${isBon ? 'Bayar Sekarang (opsional)' : 'Scan untuk Bayar'}</div>
+          ${!isBon && order.total ? `<div style="font-size:26px;font-weight:800;color:#14332c;margin-bottom:12px">${rp(order.total)}</div>` : ''}
+          ${qrImg}
+          ${qrImg ? `<div style="font-size:12px;color:#64796f;margin-top:8px;line-height:1.5">Buka aplikasi bank / e-wallet Anda, pilih bayar QRIS, lalu pindai kode di atas.</div>` : ''}
+          ${bankRows ? `<div style="margin-top:14px;text-align:left"><div style="font-size:12px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#17695d;margin-bottom:2px">Atau transfer ke</div>${bankRows}</div>` : ''}
+          <div style="font-size:12px;color:#64796f;margin-top:12px;line-height:1.5">${catatanBawah}</div>
+        </div>`
+  } else {
+    bayarSection = isBon
+      ? `<p style="font-size:15px;line-height:1.6">Pesanan Anda masuk ke <b>bon meja</b>. Silakan lanjut menikmati &mdash; <b>pembayaran di kasir saat selesai</b>.</p>`
+      : `<p style="font-size:15px;line-height:1.6">Silakan lakukan <b>pembayaran di kasir</b>. Setelah dibayar, pesanan Anda masuk antrian dapur dan mendapat nomor antrian.</p>`
+  }
+
   const body = `
     <div class="head">
       <h1>Pesanan Terkirim</h1>
       <div class="toko">${escapeHtml(result.tokoNama)}</div>
     </div>
-    <div class="card" style="text-align:center">
-      <p style="font-size:15px;line-height:1.6">Silakan lakukan <b>pembayaran di kasir</b>.
-      Setelah dibayar, pesanan Anda masuk antrian dapur dan mendapat nomor antrian.</p>
-      <p style="margin-top:14px"><a href="${lacak}"
-        style="display:inline-block;padding:12px 22px;background:#7ae2cf;color:#08332c;border-radius:3px;text-decoration:none;font-weight:800">
-        Pantau Status Pesanan</a></p>
-      <p class="foot" style="margin-top:10px">Anda akan dialihkan otomatis ke halaman status pesanan…</p>
+    <div class="card">${bayarSection}</div>
+    <div class="card" style="text-align:center;padding:14px">
+      <a href="${lacak}" style="display:inline-block;padding:13px 24px;background:#7ae2cf;color:#08332c;border-radius:10px;text-decoration:none;font-weight:800">Lihat Status Pesanan &rarr;</a>
+      <div class="foot" style="margin-top:8px">${isBon ? 'Pantau pesanan Anda sampai siap.' : 'Sudah bayar? Pantau status pesanan Anda di sini.'}</div>
     </div>`
-  return pageShell('Pesanan terkirim', body)
-    .replace('content="5"', `content="3;url=${lacak}"`)
+  // Tanpa auto-refresh: halaman menampilkan QR bayar & harus diam agar bisa dipindai.
+  return pageShell('Pesanan terkirim', body).replace(/<meta http-equiv="refresh"[^>]*>/, '')
 }
 
 function readBody(req, limit = 10240) {
@@ -547,7 +580,8 @@ async function handleRequest(req, res) {
         return
       }
       res.writeHead(200)
-      res.end(renderOrderPlaced(result))
+      const pay = typeof hooks.payment === 'function' ? hooks.payment(kode) : null
+      res.end(renderOrderPlaced(result, pay))
       return
     }
   }

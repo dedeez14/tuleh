@@ -9,6 +9,7 @@ import { labelPembayaranStruk } from '../lib/qris-flow.js'
 
 /** Bangun HTML struk dari objek Struk API (+ data perusahaan dari state). */
 export function buildReceiptHTML(struk) {
+  if (!struk) return '<div class="receipt"><div class="receipt__foot">Struk tidak tersedia.</div></div>'
   const { company, branch, struk: strukCfg } = getState()
   // Kop: logo struk (fallback logo usaha); sembunyikan bila tampil_logo === false.
   const tampilLogo = strukCfg ? strukCfg.tampil_logo !== false : true
