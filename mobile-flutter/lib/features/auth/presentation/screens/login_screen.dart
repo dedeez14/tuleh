@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/constants/app_config.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../controllers/auth_controller.dart';
 
-/// Layar masuk — hero mint berkedalaman + kartu form mengambang (overlap).
+/// Layar masuk — panel merek + satu kartu form.
+///
+/// Hierarki sengaja dijaga tipis: merek di atas (identitas), satu blok form
+/// (tugas utama), lalu jalur sekunder (Mode Demo) dan keterangan server.
+/// Kolom yang jarang dipakai (nama perangkat) disembunyikan di "Opsi lanjutan"
+/// agar form utama tinggal dua kolom dan terbaca sekali lihat.
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -19,42 +25,37 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   final _login = TextEditingController();
   final _password = TextEditingController();
   final _device = TextEditingController(text: 'Android');
+
   late final AnimationController _entryController;
-  late final Animation<double> _heroAnimation;
+  late final Animation<double> _brandAnimation;
   late final Animation<double> _formAnimation;
+
   bool _obscure = true;
+  bool _opsiLanjutan = false;
 
   @override
   void initState() {
     super.initState();
     _entryController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 760),
+      duration: const Duration(milliseconds: 720),
     );
-    _heroAnimation = CurvedAnimation(
+    _brandAnimation = CurvedAnimation(
       parent: _entryController,
-      curve: const Interval(0, 0.72, curve: Curves.easeOutCubic),
+      curve: const Interval(0, 0.7, curve: Curves.easeOutCubic),
     );
     _formAnimation = CurvedAnimation(
       parent: _entryController,
-      curve: const Interval(0.18, 1, curve: Curves.easeOutCubic),
+      curve: const Interval(0.16, 1, curve: Curves.easeOutCubic),
     );
-  }
-
-  bool _prefersReducedMotion(BuildContext context) {
-    final media = MediaQuery.maybeOf(context);
-    if (media == null) return false;
-    return media.disableAnimations || media.accessibleNavigation;
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_prefersReducedMotion(context)) {
+    if (_reduceMotion) {
       _entryController.value = 1;
-      return;
-    }
-    if (_entryController.status == AnimationStatus.dismissed) {
+    } else if (_entryController.status == AnimationStatus.dismissed) {
       _entryController.forward();
     }
   }
@@ -68,6 +69,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     super.dispose();
   }
 
+  bool get _reduceMotion {
+    final media = MediaQuery.maybeOf(context);
+    if (media == null) return false;
+    return media.disableAnimations || media.accessibleNavigation;
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     FocusScope.of(context).unfocus();
@@ -79,6 +86,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           password: _password.text,
           deviceName: device.isEmpty ? 'Android' : device,
         );
+  }
+
+  Future<void> _mulaiDemo() async {
+    FocusScope.of(context).unfocus();
+    await ref.read(authControllerProvider.notifier).startDemo();
   }
 
   @override
@@ -99,72 +111,90 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
 
     final loading = ref.watch(authControllerProvider).isLoading;
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-    final reduceMotion = _prefersReducedMotion(context);
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       body: DecoratedBox(
-        decoration: const BoxDecoration(
+        // Latar: semburat mint di puncak layar, meredup ke warna dasar tema.
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [AppColors.mint100, AppColors.bgLight],
-            stops: [0, 0.36],
+            colors: isDark
+                ? [AppColors.mint900, AppColors.bgDark]
+                : [AppColors.mint100, AppColors.bgLight],
+            stops: const [0, 0.42],
           ),
         ),
         child: SafeArea(
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final isWide = constraints.maxWidth >= 900;
-              final maxWidth = isWide ? 980.0 : 560.0;
+              final isWide = constraints.maxWidth >= 860;
+
+              final brand = _Brand(compact: !isWide);
+              final form = _formCard(loading: loading, cs: cs);
+              final footer = _ServerFooter(host: _host());
+
+              if (isWide) {
+                return Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1000),
+                    child: SingleChildScrollView(
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
+                      padding: EdgeInsets.fromLTRB(28, 24, 28, 24 + bottomInset),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            flex: 5,
+                            child: _entry(
+                              _brandAnimation,
+                              brand,
+                              begin: const Offset(-0.03, 0),
+                            ),
+                          ),
+                          const SizedBox(width: 40),
+                          Expanded(
+                            flex: 5,
+                            child: _entry(
+                              _formAnimation,
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [form, const SizedBox(height: 14), footer],
+                              ),
+                              begin: const Offset(0.03, 0),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }
 
               return Center(
                 child: ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: maxWidth),
+                  constraints: const BoxConstraints(maxWidth: 480),
                   child: SingleChildScrollView(
                     keyboardDismissBehavior:
                         ScrollViewKeyboardDismissBehavior.onDrag,
-                    padding: EdgeInsets.fromLTRB(16, 14, 16, 14 + bottomInset),
-                    child: isWide
-                        ? Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                flex: 11,
-                                child: _withEntryTransition(
-                                  child: const _Hero(),
-                                  animation: _heroAnimation,
-                                  reduceMotion: reduceMotion,
-                                  begin: const Offset(-0.04, 0.02),
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                flex: 10,
-                                child: _withEntryTransition(
-                                  child: _formCard(loading, compact: false),
-                                  animation: _formAnimation,
-                                  reduceMotion: reduceMotion,
-                                  begin: const Offset(0.04, 0.02),
-                                ),
-                              ),
-                            ],
-                          )
-                        : Column(
-                            children: [
-                              _withEntryTransition(
-                                child: const _Hero(),
-                                animation: _heroAnimation,
-                                reduceMotion: reduceMotion,
-                              ),
-                              const SizedBox(height: 14),
-                              _withEntryTransition(
-                                child: _formCard(loading, compact: true),
-                                animation: _formAnimation,
-                                reduceMotion: reduceMotion,
-                                begin: const Offset(0, 0.06),
-                              ),
-                            ],
-                          ),
+                    padding: EdgeInsets.fromLTRB(20, 28, 20, 20 + bottomInset),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _entry(_brandAnimation, brand),
+                        const SizedBox(height: 26),
+                        _entry(
+                          _formAnimation,
+                          form,
+                          begin: const Offset(0, 0.05),
+                        ),
+                        const SizedBox(height: 14),
+                        _entry(_formAnimation, footer),
+                      ],
+                    ),
                   ),
                 ),
               );
@@ -175,13 +205,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     );
   }
 
-  Widget _withEntryTransition({
-    required Widget child,
-    required Animation<double> animation,
-    required bool reduceMotion,
-    Offset begin = const Offset(0, 0.04),
+  String _host() =>
+      Uri.tryParse(AppConfig.defaultBaseUrl)?.host ?? AppConfig.defaultBaseUrl;
+
+  Widget _entry(
+    Animation<double> animation,
+    Widget child, {
+    Offset begin = const Offset(0, 0.035),
   }) {
-    if (reduceMotion) return child;
+    if (_reduceMotion) return child;
     return FadeTransition(
       opacity: animation,
       child: SlideTransition(
@@ -194,290 +226,402 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     );
   }
 
-  Widget _formCard(bool loading, {required bool compact}) {
-    final cs = Theme.of(context).colorScheme;
-    return Card(
-      elevation: compact ? 8 : 5,
-      shadowColor: Colors.black.withValues(alpha: 0.18),
-      clipBehavior: Clip.antiAlias,
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(20, compact ? 22 : 24, 20, 22),
-        child: AutofillGroup(
-          child: Form(
-            key: _formKey,
-            autovalidateMode: AutovalidateMode.onUserInteraction,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'Selamat datang',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+  Widget _formCard({required bool loading, required ColorScheme cs}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: cs.outline),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.07),
+            blurRadius: 30,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.fromLTRB(22, 24, 22, 22),
+      child: AutofillGroup(
+        child: Form(
+          key: _formKey,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Masuk ke akun',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.2,
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'Masuk untuk mulai berjualan.',
-                  style: TextStyle(color: cs.onSurface.withValues(alpha: 0.62)),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                'Gunakan akun POS toko Anda.',
+                style: TextStyle(
+                  fontSize: 13.5,
+                  height: 1.4,
+                  color: cs.onSurface.withValues(alpha: 0.62),
                 ),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                  decoration: BoxDecoration(
-                    color: cs.surfaceContainerHighest.withValues(alpha: 0.55),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: cs.outline.withValues(alpha: 0.75),
+              ),
+              const SizedBox(height: 22),
+              TextFormField(
+                controller: _login,
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.next,
+                autofillHints: const [AutofillHints.username],
+                enabled: !loading,
+                decoration: const InputDecoration(
+                  labelText: 'Email atau username',
+                  hintText: 'kasir@toko.com',
+                  prefixIcon: Icon(Icons.alternate_email_rounded),
+                ),
+                validator: (v) => (v == null || v.trim().isEmpty)
+                    ? 'Email atau username wajib diisi.'
+                    : null,
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _password,
+                obscureText: _obscure,
+                textInputAction: TextInputAction.done,
+                autofillHints: const [AutofillHints.password],
+                enabled: !loading,
+                onFieldSubmitted: (_) => loading ? null : _submit(),
+                decoration: InputDecoration(
+                  labelText: 'Kata sandi',
+                  prefixIcon: const Icon(Icons.lock_outline_rounded),
+                  suffixIcon: IconButton(
+                    tooltip: _obscure
+                        ? 'Tampilkan kata sandi'
+                        : 'Sembunyikan kata sandi',
+                    onPressed: () => setState(() => _obscure = !_obscure),
+                    icon: Icon(
+                      _obscure
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
                     ),
                   ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.shield_moon_outlined,
-                        size: 18,
-                        color: cs.primary,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Akun terhubung aman ke server toko Anda.',
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            color: cs.onSurface.withValues(alpha: 0.75),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
                 ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _login,
-                  keyboardType: TextInputType.emailAddress,
-                  textInputAction: TextInputAction.next,
-                  autofillHints: const [AutofillHints.username],
-                  decoration: const InputDecoration(
-                    labelText: 'Email / Username',
-                    hintText: 'kasir@toko.com',
-                    prefixIcon: Icon(Icons.alternate_email_rounded),
-                  ),
-                  validator: (v) => (v == null || v.trim().isEmpty)
-                      ? 'Email/username wajib diisi.'
-                      : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _password,
-                  obscureText: _obscure,
-                  textInputAction: TextInputAction.next,
-                  autofillHints: const [AutofillHints.password],
-                  decoration: InputDecoration(
-                    labelText: 'Kata sandi',
-                    hintText: '********',
-                    prefixIcon: const Icon(Icons.lock_outline_rounded),
-                    suffixIcon: IconButton(
-                      tooltip: _obscure
-                          ? 'Tampilkan kata sandi'
-                          : 'Sembunyikan kata sandi',
-                      onPressed: () => setState(() => _obscure = !_obscure),
-                      icon: Icon(
-                        _obscure
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined,
-                      ),
-                    ),
-                  ),
-                  validator: (v) => (v == null || v.isEmpty)
-                      ? 'Kata sandi wajib diisi.'
-                      : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
+                validator: (v) =>
+                    (v == null || v.isEmpty) ? 'Kata sandi wajib diisi.' : null,
+              ),
+              _OpsiLanjutan(
+                terbuka: _opsiLanjutan,
+                onToggle: () => setState(() => _opsiLanjutan = !_opsiLanjutan),
+                child: TextFormField(
                   controller: _device,
                   textInputAction: TextInputAction.done,
-                  onFieldSubmitted: (_) => loading ? null : _submit(),
+                  enabled: !loading,
                   decoration: const InputDecoration(
-                    labelText: 'Nama perangkat (opsional)',
+                    labelText: 'Nama perangkat',
                     hintText: 'Kasir-01',
+                    helperText: 'Muncul di daftar perangkat yang masuk.',
                     prefixIcon: Icon(Icons.smartphone_outlined),
                   ),
                 ),
-                const SizedBox(height: 20),
-                FilledButton.icon(
-                  onPressed: loading ? null : _submit,
-                  icon: loading
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.4,
-                            color: AppColors.mint900,
-                          ),
-                        )
-                      : const Icon(Icons.login_rounded, size: 20),
-                  label: Text(loading ? 'Memproses...' : 'Masuk'),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _Hero extends StatelessWidget {
-  const _Hero();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppColors.mint900, AppColors.mint700],
-        ),
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.mint900.withValues(alpha: 0.28),
-            blurRadius: 28,
-            offset: const Offset(0, 14),
-          ),
-        ],
-      ),
-      child: Stack(
-        children: [
-          Positioned(
-            right: -36,
-            top: -42,
-            child: Container(
-              width: 160,
-              height: 160,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: 0.08),
               ),
-            ),
-          ),
-          Positioned(
-            left: -20,
-            bottom: -54,
-            child: Container(
-              width: 140,
-              height: 140,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: 0.05),
+              const SizedBox(height: 22),
+              FilledButton(
+                onPressed: loading ? null : _submit,
+                child: loading
+                    ? const SizedBox(
+                        height: 21,
+                        width: 21,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.4,
+                          color: AppColors.mint900,
+                        ),
+                      )
+                    : const Text('Masuk'),
               ),
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                height: 58,
-                width: 58,
-                decoration: BoxDecoration(
-                  color: AppColors.mint400,
-                  borderRadius: BorderRadius.circular(17),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.mint400.withValues(alpha: 0.35),
-                      blurRadius: 24,
-                    ),
-                  ],
-                ),
-                child: const Icon(
-                  Icons.point_of_sale_rounded,
-                  color: AppColors.mint900,
-                  size: 32,
-                ),
-              ),
-              const SizedBox(height: 18),
-              RichText(
-                text: const TextSpan(
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                    height: 1.05,
-                    letterSpacing: -0.5,
-                  ),
-                  children: [
-                    TextSpan(text: 'Tul'),
-                    TextSpan(
-                      text: 'éh',
-                      style: TextStyle(color: AppColors.mint400),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Kasir cepat, laporan rapi, semua dalam genggaman.',
-                style: TextStyle(
-                  fontSize: 14,
-                  height: 1.5,
-                  color: Colors.white.withValues(alpha: 0.84),
-                ),
-              ),
+              const SizedBox(height: 20),
+              _Pemisah(label: 'atau', color: cs.outline),
               const SizedBox(height: 16),
-              const Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _HeroPill(
-                    icon: Icons.sync_rounded,
-                    label: 'Sinkron realtime',
-                  ),
-                  _HeroPill(
-                    icon: Icons.lock_outline_rounded,
-                    label: 'Akses aman',
-                  ),
-                ],
+              OutlinedButton.icon(
+                onPressed: loading ? null : _mulaiDemo,
+                icon: const Icon(Icons.play_circle_outline_rounded, size: 20),
+                label: const Text('Coba Mode Demo'),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Jelajahi enam toko contoh tanpa akun. Data simulasi tersimpan '
+                'di perangkat ini saja.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12,
+                  height: 1.45,
+                  color: cs.onSurface.withValues(alpha: 0.55),
+                ),
               ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
 }
 
-class _HeroPill extends StatelessWidget {
-  const _HeroPill({required this.icon, required this.label});
+/// Panel merek — logo, wordmark, dan janji produk.
+class _Brand extends StatelessWidget {
+  const _Brand({required this.compact});
 
-  final IconData icon;
-  final String label;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: Colors.white),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
+    final cs = Theme.of(context).colorScheme;
+    final onMint = Theme.of(context).brightness == Brightness.dark
+        ? Colors.white
+        : AppColors.mint900;
+
+    return Column(
+      crossAxisAlignment: compact
+          ? CrossAxisAlignment.center
+          : CrossAxisAlignment.start,
+      children: [
+        Container(
+          height: compact ? 62 : 72,
+          width: compact ? 62 : 72,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [AppColors.mint300, AppColors.mint500],
             ),
+            borderRadius: BorderRadius.circular(compact ? 19 : 22),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.mint500.withValues(alpha: 0.4),
+                blurRadius: 26,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Icon(
+            Icons.point_of_sale_rounded,
+            color: AppColors.mint900,
+            size: compact ? 32 : 38,
+          ),
+        ),
+        SizedBox(height: compact ? 18 : 26),
+        // Text.rich (bukan RichText) agar wordmark ikut tipografi tema.
+        Text.rich(
+          TextSpan(
+            children: [
+              const TextSpan(text: 'Tul'),
+              TextSpan(text: 'éh', style: TextStyle(color: cs.primary)),
+            ],
+          ),
+          textAlign: compact ? TextAlign.center : TextAlign.start,
+          style: TextStyle(
+            fontSize: compact ? 36 : 46,
+            fontWeight: FontWeight.w800,
+            height: 1.02,
+            letterSpacing: -1,
+            color: onMint,
+          ),
+        ),
+        SizedBox(height: compact ? 8 : 12),
+        Text(
+          compact
+              ? 'Kasir cepat, laporan rapi, dalam genggaman.'
+              : 'Kasir cepat, laporan rapi, dan pesanan terpantau — '
+                    'satu aplikasi untuk semua bidang usaha.',
+          textAlign: compact ? TextAlign.center : TextAlign.start,
+          style: TextStyle(
+            fontSize: compact ? 14 : 16,
+            height: 1.5,
+            color: cs.onSurface.withValues(alpha: 0.62),
+          ),
+        ),
+        if (!compact) ...[
+          const SizedBox(height: 26),
+          const _Keunggulan(
+            icon: Icons.storefront_outlined,
+            judul: 'Menyesuaikan bidang usaha',
+            detail: 'Menu dan alur kerja mengikuti jenis toko Anda.',
+          ),
+          const SizedBox(height: 14),
+          const _Keunggulan(
+            icon: Icons.view_kanban_outlined,
+            judul: 'Pesanan terpantau',
+            detail: 'Papan tahapan dari antrian sampai siap diambil.',
+          ),
+          const SizedBox(height: 14),
+          const _Keunggulan(
+            icon: Icons.lock_outline_rounded,
+            judul: 'Akses aman',
+            detail: 'Token tersimpan terenkripsi di perangkat.',
           ),
         ],
-      ),
+      ],
+    );
+  }
+}
+
+class _Keunggulan extends StatelessWidget {
+  const _Keunggulan({
+    required this.icon,
+    required this.judul,
+    required this.detail,
+  });
+
+  final IconData icon;
+  final String judul;
+  final String detail;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          height: 38,
+          width: 38,
+          decoration: BoxDecoration(
+            color: cs.primary.withValues(alpha: 0.13),
+            borderRadius: BorderRadius.circular(11),
+          ),
+          child: Icon(icon, size: 19, color: cs.primary),
+        ),
+        const SizedBox(width: 13),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                judul,
+                style: const TextStyle(
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                detail,
+                style: TextStyle(
+                  fontSize: 13,
+                  height: 1.4,
+                  color: cs.onSurface.withValues(alpha: 0.6),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Bagian opsional yang dilipat — menjaga form utama tetap dua kolom.
+class _OpsiLanjutan extends StatelessWidget {
+  const _OpsiLanjutan({
+    required this.terbuka,
+    required this.onToggle,
+    required this.child,
+  });
+
+  final bool terbuka;
+  final VoidCallback onToggle;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: onToggle,
+            style: TextButton.styleFrom(
+              foregroundColor: cs.onSurface.withValues(alpha: 0.7),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+            ),
+            icon: AnimatedRotation(
+              turns: terbuka ? 0.25 : 0,
+              duration: const Duration(milliseconds: 180),
+              child: const Icon(Icons.chevron_right_rounded, size: 20),
+            ),
+            label: const Text('Opsi lanjutan'),
+          ),
+        ),
+        // Saat terlipat kolomnya benar-benar tidak dirender (bukan sekadar
+        // disembunyikan), agar tidak ikut terjaring fokus & pembaca layar.
+        AnimatedSize(
+          alignment: Alignment.topCenter,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+          child: terbuka
+              ? Padding(padding: const EdgeInsets.only(top: 4), child: child)
+              : const SizedBox(width: double.infinity),
+        ),
+      ],
+    );
+  }
+}
+
+class _Pemisah extends StatelessWidget {
+  const _Pemisah({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Expanded(child: Divider(color: color)),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: cs.onSurface.withValues(alpha: 0.45),
+            ),
+          ),
+        ),
+        Expanded(child: Divider(color: color)),
+      ],
+    );
+  }
+}
+
+/// Keterangan server — transparansi ke mana aplikasi terhubung.
+class _ServerFooter extends StatelessWidget {
+  const _ServerFooter({required this.host});
+
+  final String host;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(
+          Icons.lock_outline_rounded,
+          size: 14,
+          color: cs.onSurface.withValues(alpha: 0.45),
+        ),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text(
+            'Terhubung aman ke $host',
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 12,
+              color: cs.onSurface.withValues(alpha: 0.5),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

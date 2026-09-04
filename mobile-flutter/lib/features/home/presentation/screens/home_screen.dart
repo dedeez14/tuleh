@@ -6,6 +6,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/format.dart';
 import '../../../auth/domain/entities/user.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
+import '../../../demo/demo_session.dart';
 import '../../../laporan/presentation/providers/laporan_providers.dart';
 import '../../../toko/domain/entities/toko.dart';
 import '../../../toko/presentation/providers/toko_providers.dart';
@@ -105,6 +106,7 @@ class HomeScreen extends ConsumerWidget {
                 children: [
                   _Header(
                     user: user,
+                    isDemo: ref.read(demoSessionProvider).active,
                     onLogout: () =>
                         ref.read(authControllerProvider.notifier).logout(),
                   ),
@@ -199,8 +201,13 @@ class _Mod {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.user, required this.onLogout});
+  const _Header({
+    required this.user,
+    required this.onLogout,
+    this.isDemo = false,
+  });
   final User? user;
+  final bool isDemo;
   final VoidCallback onLogout;
 
   @override
@@ -235,13 +242,42 @@ class _Header extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Halo, $firstName 👋',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                ),
-                overflow: TextOverflow.ellipsis,
+              Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      'Halo, $firstName 👋',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  // Penanda demo: data simulasi, bukan data toko sungguhan.
+                  if (isDemo) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.warn.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: const Text(
+                        'DEMO',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.6,
+                          color: AppColors.warn,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
               if (user?.companyName != null)
                 Text(
@@ -256,7 +292,7 @@ class _Header extends StatelessWidget {
           ),
         ),
         IconButton(
-          tooltip: 'Keluar',
+          tooltip: isDemo ? 'Keluar dari Mode Demo' : 'Keluar',
           onPressed: onLogout,
           icon: const Icon(Icons.logout_rounded),
         ),

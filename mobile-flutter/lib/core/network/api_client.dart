@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../features/demo/demo_session.dart';
 import '../constants/app_config.dart';
 import '../storage/secure_storage.dart';
 
@@ -30,6 +31,10 @@ final dioProvider = Provider<Dio>((ref) {
       validateStatus: (_) => true,
     ),
   );
+
+  // Mode Demo dipasang paling depan: bila aktif, permintaan dijawab dari
+  // mesin demo lokal dan tidak pernah keluar ke jaringan.
+  dio.interceptors.add(DemoInterceptor(ref.watch(demoSessionProvider)));
 
   dio.interceptors.add(
     InterceptorsWrapper(
