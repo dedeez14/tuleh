@@ -1,17 +1,29 @@
 # tuleh_pos
 
-Tuléh POS — aplikasi kasir Android (Flutter, clean architecture)
+Tuléh POS — **aplikasi Android utama** (Flutter, clean architecture, minSdk 29 / Android 10+).
+Pendamping aplikasi desktop di [`../frontend`](../frontend); aplikasi Android lama
+berbasis Capacitor ada di [`../mobile`](../mobile) (legacy).
 
-## Getting Started
+## Perintah
 
-This project is a starting point for a Flutter application.
+```powershell
+flutter pub get
+flutter analyze
+flutter test
+flutter build apk --release --split-per-abi
+```
 
-A few resources to get you started if this is your first Flutter project:
+Rilis: naikkan `version:` di `pubspec.yaml`, push ke `main` → workflow
+[`flutter-release.yml`](../.github/workflows/flutter-release.yml) membuat tag
+`flutter-vX.Y.Z` dan mengunggah APK per ABI. Aplikasi yang terpasang menawarkan
+versi baru itu sendiri (server `/app/versi` dulu, lalu GitHub Releases).
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+## Aset merek
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+`assets/brand/` — logo Tuléh (notepad + pensil) yang sama dengan desktop dan
+aplikasi lama. Ikon peluncur & splash native dibuat ulang dari sini:
+
+```powershell
+dart run flutter_launcher_icons
+dart run flutter_native_splash:create
+```

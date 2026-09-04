@@ -115,13 +115,26 @@ jobs:
     if: needs.version-check.outputs.exists == 'false'
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
+      - name: Ambil catatan rilis dari CHANGELOG
+        # Bagian "## <versi>" di mobile-flutter/CHANGELOG.md → isi Release. Empat
+        # baris pertamanya tampil di banner pembaruan dalam aplikasi, jadi tulis
+        # untuk kasir. Bila bagian tak ada, Release tetap terbit (catatan otomatis).
+        run: |
+          VER="${{ needs.version-check.outputs.version }}"
+          awk -v v="$VER" '
+            /^## /{ aktif = ($2 == v); next }
+            aktif { print }
+          ' mobile-flutter/CHANGELOG.md | sed -e '/./,$!d' > catatan.md
+          if [ -s catatan.md ]; then echo "Catatan rilis $VER:"; cat catatan.md; else echo "::warning::CHANGELOG tak punya bagian $VER"; fi
       - name: Terbitkan Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: flutter-v${{ needs.version-check.outputs.version }}
           name: Tuléh Android (Flutter) v${{ needs.version-check.outputs.version }}
+          body_path: catatan.md
           generate_release_notes: true
           files: artifacts/flutter-android/*

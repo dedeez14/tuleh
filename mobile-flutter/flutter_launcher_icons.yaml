@@ -1,8 +1,14 @@
-# Ikon peluncur app Tuléh (kasir). Regenerasi: dart run flutter_launcher_icons
+# Ikon peluncur = logo Tuléh yang sama dengan desktop & aplikasi Android lama
+# (notepad + pensil, latar PUTIH — latar transparan tampil hitam di banyak
+# launcher). Sumber: mobile/assets/icon-*.png. Regenerasi:
+#   dart run flutter_launcher_icons
 flutter_launcher_icons:
   android: true
   ios: false
-  image_path: "assets/icon/icon.png"
+  image_path: "assets/brand/icon-legacy.png"
   min_sdk_android: 29
-  adaptive_icon_background: "#08332C"
-  adaptive_icon_foreground: "assets/icon/icon_fg.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/brand/icon-foreground.png"
+  # Foreground sudah memuat safe-zone (isi 56% kanvas; ≤1% terpotong mask
+  # lingkaran 66dp), jadi inset bawaan 16% dimatikan.
+  adaptive_icon_foreground_inset: 0

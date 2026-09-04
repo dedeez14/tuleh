@@ -1,10 +1,28 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
 
-/// Splash saat auto-login berjalan — brand Tuléh berkedalaman (gradient + glow).
+/// Aset merek Tuléh — logo yang sama dengan desktop & aplikasi Android lama.
+abstract final class BrandAssets {
+  /// Notepad + wordmark "Tuléh" (transparan). Untuk splash & panel login lebar.
+  static const String logo = 'assets/brand/logo.png';
+
+  /// Notepad + pensil saja (transparan). Untuk tanda merek kecil.
+  static const String icon = 'assets/brand/icon.png';
+}
+
+/// Splash saat auto-login berjalan. Meniru splash desktop (index.html
+/// `#splash`): latar radial putih→mint muda, logo Tuléh mengambang dengan
+/// bayangan, bilah kemajuan mint. Latar putih di tengah menyambung mulus dari
+/// splash native Android (flutter_native_splash, warna #FFFFFF), sehingga tak
+/// ada kilatan warna saat engine Flutter mulai.
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
+
+  static const Color _teks = Color(0xFF2F5B50);
+  static const Color _bayangan = Color(0x3812463C);
 
   @override
   State<SplashScreen> createState() => _SplashScreenState();
@@ -12,48 +30,36 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _entryController;
-  late final Animation<double> _glowOpacity;
-  late final Animation<double> _heroOpacity;
-  late final Animation<Offset> _heroSlide;
-  late final Animation<double> _heroScale;
-  late final Animation<double> _footerOpacity;
+  late final AnimationController _masuk;
+  late final Animation<double> _logoOpacity;
+  late final Animation<double> _logoScale;
+  late final Animation<Offset> _logoSlide;
+  late final Animation<double> _kakiOpacity;
 
   @override
   void initState() {
     super.initState();
-    _entryController = AnimationController(
+    _masuk = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 820),
+      duration: const Duration(milliseconds: 700),
     );
-    _glowOpacity = CurvedAnimation(
-      parent: _entryController,
-      curve: const Interval(0, 0.48, curve: Curves.easeOut),
+    final lengkung = CurvedAnimation(
+      parent: _masuk,
+      curve: const Interval(0, 0.8, curve: Curves.easeOutCubic),
     );
-    _heroOpacity = CurvedAnimation(
-      parent: _entryController,
-      curve: const Interval(0, 0.72, curve: Curves.easeOutCubic),
-    );
-    _heroSlide = Tween<Offset>(begin: const Offset(0, 0.06), end: Offset.zero)
-        .animate(
-          CurvedAnimation(
-            parent: _entryController,
-            curve: const Interval(0, 0.74, curve: Curves.easeOutCubic),
-          ),
-        );
-    _heroScale = Tween<double>(begin: 0.94, end: 1).animate(
-      CurvedAnimation(
-        parent: _entryController,
-        curve: const Interval(0.08, 0.7, curve: Curves.easeOutBack),
-      ),
-    );
-    _footerOpacity = CurvedAnimation(
-      parent: _entryController,
-      curve: const Interval(0.45, 1, curve: Curves.easeOut),
+    _logoOpacity = lengkung;
+    _logoScale = Tween<double>(begin: 0.9, end: 1).animate(lengkung);
+    _logoSlide = Tween<Offset>(
+      begin: const Offset(0, 0.04),
+      end: Offset.zero,
+    ).animate(lengkung);
+    _kakiOpacity = CurvedAnimation(
+      parent: _masuk,
+      curve: const Interval(0.4, 1, curve: Curves.easeOut),
     );
   }
 
-  bool _prefersReducedMotion(BuildContext context) {
+  bool _kurangiGerak(BuildContext context) {
     final media = MediaQuery.maybeOf(context);
     if (media == null) return false;
     return media.disableAnimations || media.accessibleNavigation;
@@ -62,104 +68,60 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_prefersReducedMotion(context)) {
-      _entryController.value = 1;
+    if (_kurangiGerak(context)) {
+      _masuk.value = 1;
       return;
     }
-    if (_entryController.status == AnimationStatus.dismissed) {
-      _entryController.forward();
-    }
+    if (_masuk.status == AnimationStatus.dismissed) _masuk.forward();
   }
 
   @override
   void dispose() {
-    _entryController.dispose();
+    _masuk.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final reduceMotion = _prefersReducedMotion(context);
+    final diam = _kurangiGerak(context);
+    final lebar = MediaQuery.sizeOf(context).width;
+    // Desktop: width 60vw, max 232px.
+    final lebarLogo = (lebar * 0.6).clamp(120.0, 232.0);
 
-    final heroIcon = Container(
-      height: 92,
-      width: 92,
-      decoration: BoxDecoration(
-        color: AppColors.mint400,
-        borderRadius: BorderRadius.circular(26),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.mint400.withValues(alpha: 0.4),
-            blurRadius: 40,
-            spreadRadius: 2,
-          ),
-        ],
-      ),
-      child: const Icon(
-        Icons.point_of_sale_rounded,
-        color: AppColors.mint900,
-        size: 48,
-      ),
-    );
+    final logo = _LogoBerbayang(lebar: lebarLogo);
 
-    final heroBody = Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        reduceMotion
-            ? heroIcon
-            : ScaleTransition(scale: _heroScale, child: heroIcon),
-        const SizedBox(height: 26),
-        RichText(
-          text: const TextSpan(
-            style: TextStyle(
-              fontSize: 40,
-              fontWeight: FontWeight.w800,
-              color: Colors.white,
-              letterSpacing: -0.5,
-            ),
-            children: [
-              TextSpan(text: 'Tul'),
-              TextSpan(
-                text: 'éh',
-                style: TextStyle(color: AppColors.mint400),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Kasir modern untuk usaha Anda',
-          style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.72),
-            fontSize: 14,
-          ),
-        ),
-      ],
-    );
-
-    final hero = reduceMotion
-        ? heroBody
+    final logoBergerak = diam
+        ? logo
         : FadeTransition(
-            opacity: _heroOpacity,
-            child: SlideTransition(position: _heroSlide, child: heroBody),
+            opacity: _logoOpacity,
+            child: SlideTransition(
+              position: _logoSlide,
+              child: ScaleTransition(scale: _logoScale, child: logo),
+            ),
           );
 
-    final footer = Column(
+    final kaki = Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        const SizedBox(
-          height: 26,
-          width: 26,
-          child: CircularProgressIndicator(
-            strokeWidth: 2.6,
-            color: AppColors.mint400,
+        SizedBox(
+          width: (lebar * 0.56).clamp(120.0, 220.0),
+          child: const ClipRRect(
+            borderRadius: BorderRadius.all(Radius.circular(999)),
+            child: LinearProgressIndicator(
+              minHeight: 5,
+              color: AppColors.mint500,
+              backgroundColor: Color(0x24125042),
+            ),
           ),
         ),
-        const SizedBox(height: 14),
-        Text(
-          'Memuat…',
+        const SizedBox(height: 16),
+        const Text(
+          'MEMUAT…',
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.6),
+            color: SplashScreen._teks,
             fontSize: 13,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.8,
           ),
         ),
       ],
@@ -168,97 +130,65 @@ class _SplashScreenState extends State<SplashScreen>
     return Scaffold(
       body: DecoratedBox(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [AppColors.mint900, AppColors.mint800],
+          gradient: RadialGradient(
+            center: Alignment(0, -0.28),
+            radius: 1.1,
+            colors: [Color(0xFFFFFFFF), Color(0xFFEAFAF4), Color(0xFFD2EFE6)],
+            stops: [0, 0.58, 1],
           ),
         ),
-        child: Stack(
-          children: [
-            reduceMotion
-                ? const _Glow(
-                    top: -90,
-                    right: -70,
-                    size: 260,
-                    color: AppColors.mint500,
-                  )
-                : FadeTransition(
-                    opacity: _glowOpacity,
-                    child: const _Glow(
-                      top: -90,
-                      right: -70,
-                      size: 260,
-                      color: AppColors.mint500,
-                    ),
-                  ),
-            reduceMotion
-                ? const _Glow(
-                    bottom: -80,
-                    left: -60,
-                    size: 240,
-                    color: AppColors.mint700,
-                  )
-                : FadeTransition(
-                    opacity: _glowOpacity,
-                    child: const _Glow(
-                      bottom: -80,
-                      left: -60,
-                      size: 240,
-                      color: AppColors.mint700,
-                    ),
-                  ),
-            Center(child: hero),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 54,
-              child: reduceMotion
-                  ? footer
-                  : FadeTransition(opacity: _footerOpacity, child: footer),
-            ),
-          ],
+        child: SafeArea(
+          child: Column(
+            children: [
+              Expanded(child: Center(child: logoBergerak)),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 44),
+                child: diam
+                    ? kaki
+                    : FadeTransition(opacity: _kakiOpacity, child: kaki),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _Glow extends StatelessWidget {
-  const _Glow({
-    this.top,
-    this.bottom,
-    this.left,
-    this.right,
-    required this.size,
-    required this.color,
-  });
-  final double? top, bottom, left, right;
-  final double size;
-  final Color color;
+/// Logo dengan bayangan mengikuti bentuk (padanan CSS `filter: drop-shadow`),
+/// bukan bayangan kotak: salinan logo yang diwarnai lalu diburamkan di bawahnya.
+class _LogoBerbayang extends StatelessWidget {
+  const _LogoBerbayang({required this.lebar});
+  final double lebar;
 
   @override
   Widget build(BuildContext context) {
-    return Positioned(
-      top: top,
-      bottom: bottom,
-      left: left,
-      right: right,
-      child: IgnorePointer(
-        child: Container(
-          height: size,
-          width: size,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: RadialGradient(
-              colors: [
-                color.withValues(alpha: 0.35),
-                color.withValues(alpha: 0),
-              ],
+    final gambar = Image.asset(
+      BrandAssets.logo,
+      width: lebar,
+      fit: BoxFit.contain,
+      semanticLabel: 'Tuléh',
+    );
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Positioned(
+          top: 16,
+          left: 0,
+          right: 0,
+          child: ImageFiltered(
+            imageFilter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+            child: ColorFiltered(
+              colorFilter: const ColorFilter.mode(
+                SplashScreen._bayangan,
+                BlendMode.srcIn,
+              ),
+              child: ExcludeSemantics(child: gambar),
             ),
           ),
         ),
-      ),
+        gambar,
+      ],
     );
   }
 }

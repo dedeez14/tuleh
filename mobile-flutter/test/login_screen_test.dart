@@ -4,6 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tuleh_pos/core/storage/secure_storage.dart';
 import 'package:tuleh_pos/core/theme/app_theme.dart';
+import 'package:tuleh_pos/core/widgets/splash_screen.dart';
 import 'package:tuleh_pos/features/auth/presentation/controllers/auth_controller.dart';
 import 'package:tuleh_pos/features/auth/presentation/screens/login_screen.dart';
 import 'package:tuleh_pos/features/demo/demo_session.dart';
@@ -202,6 +203,37 @@ void main() {
       await container.read(authControllerProvider.notifier).logout();
       expect(container.read(demoSessionProvider).active, isFalse);
       expect(container.read(authControllerProvider).valueOrNull, isNull);
+    });
+  });
+
+  group('merek', () {
+    // Ikon aplikasi, splash, dan layar masuk harus memakai logo Tuléh yang
+    // sama dengan desktop — bukan ikon Material generik (kasus: rilis 1.x–2.1
+    // tampil dengan ikon mesin kasir sehingga pengguna tak mengenali aplikasi).
+    testWidgets('layar masuk memakai logo Tuléh, bukan ikon generik', (
+      tester,
+    ) async {
+      await pumpLogin(tester);
+
+      final logo = tester.widgetList<Image>(find.byType(Image)).where(
+        (w) => w.image is AssetImage &&
+            (w.image as AssetImage).assetName == BrandAssets.icon,
+      );
+      expect(logo, hasLength(1));
+      expect(find.byIcon(Icons.point_of_sale_rounded), findsNothing);
+    });
+
+    testWidgets('splash memakai logo Tuléh penuh', (tester) async {
+      await tester.pumpWidget(const MaterialApp(home: SplashScreen()));
+      await tester.pump(const Duration(seconds: 1));
+
+      final logo = tester.widgetList<Image>(find.byType(Image)).where(
+        (w) => w.image is AssetImage &&
+            (w.image as AssetImage).assetName == BrandAssets.logo,
+      );
+      // Dua: gambar + salinan bayangannya.
+      expect(logo, hasLength(2));
+      expect(find.byIcon(Icons.point_of_sale_rounded), findsNothing);
     });
   });
 }

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/app_config.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/splash_screen.dart' show BrandAssets;
 import '../controllers/auth_controller.dart';
 
 /// Layar masuk — panel merek + satu kartu form.
@@ -380,29 +381,13 @@ class _Brand extends StatelessWidget {
           ? CrossAxisAlignment.center
           : CrossAxisAlignment.start,
       children: [
-        Container(
-          height: compact ? 62 : 72,
-          width: compact ? 62 : 72,
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [AppColors.mint300, AppColors.mint500],
-            ),
-            borderRadius: BorderRadius.circular(compact ? 19 : 22),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.mint500.withValues(alpha: 0.4),
-                blurRadius: 26,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: Icon(
-            Icons.point_of_sale_rounded,
-            color: AppColors.mint900,
-            size: compact ? 32 : 38,
-          ),
+        // Logo Tuléh (notepad + pensil) — aset yang sama dengan desktop dan
+        // ikon peluncur, bukan ikon generik.
+        Image.asset(
+          BrandAssets.icon,
+          height: compact ? 64 : 80,
+          fit: BoxFit.contain,
+          semanticLabel: 'Logo Tuléh',
         ),
         SizedBox(height: compact ? 18 : 26),
         // Text.rich (bukan RichText) agar wordmark ikut tipografi tema.

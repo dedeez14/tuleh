@@ -1,12 +1,15 @@
-# Splash native Android (sebelum engine Flutter) — mint900 + ikon kasir Tuléh,
-# agar mulus ke SplashScreen Flutter (tanpa kilatan putih/logo Flutter).
+# Splash native Android (sebelum engine Flutter) — putih + logo Tuléh, meniru
+# splash desktop (index.html #splash) agar terasa satu produk, lalu mulus ke
+# SplashScreen Flutter yang latarnya juga putih-mint.
+# Android 10/11: logo penuh (notepad + wordmark) di tengah.
+# Android 12+: sistem memakai ikon dalam lingkaran, jadi dipakai notepad saja.
 # Regenerasi: dart run flutter_native_splash:create
 flutter_native_splash:
-  color: "#08332C"
-  image: assets/icon/icon_fg.png
+  color: "#FFFFFF"
+  image: assets/brand/logo.png
   android: true
   ios: false
   web: false
   android_12:
-    color: "#08332C"
-    image: assets/icon/icon_fg.png
+    color: "#FFFFFF"
+    image: assets/brand/icon-foreground.png
