@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'features/pemantau/presentation/pemantau_gate.dart';
 import 'features/update/presentation/widgets/update_gate.dart';
 
 /// Akar aplikasi — MaterialApp.router dengan tema Tuléh (light/dark ikut sistem).
@@ -20,8 +21,9 @@ class TulehApp extends ConsumerWidget {
       darkTheme: AppTheme.dark(),
       themeMode: ThemeMode.system,
       routerConfig: router,
-      builder: (context, child) =>
-          UpdateGate(child: child ?? const SizedBox.shrink()),
+      builder: (context, child) => PemantauGate(
+        child: UpdateGate(child: child ?? const SizedBox.shrink()),
+      ),
     );
   }
 }

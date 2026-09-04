@@ -22,6 +22,17 @@
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30"/>
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
     <uses-feature android:name="android.hardware.bluetooth" android:required="false"/>
+
+    <!-- Pemantau pesanan meja (layanan latar depan, flutter_foreground_task):
+         memeriksa /bills & /orders berkala walau aplikasi di latar belakang,
+         lalu memberi notifikasi bersuara saat ada pesanan/permintaan bayar
+         baru. Android 10 (minSdk 29) cukup FOREGROUND_SERVICE; Android 14+
+         menuntut tipe dataSync; Android 13+ menuntut POST_NOTIFICATIONS. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <uses-permission android:name="android.permission.VIBRATE"/>
     <application
         android:label="Tuléh"
         android:name="${applicationName}"
@@ -53,6 +64,13 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- Pemantau pesanan meja. Nama service TIDAK boleh diubah (milik plugin).
+             stopWithTask=false: tetap hidup saat aplikasi digeser dari recent. -->
+        <service
+            android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
+            android:foregroundServiceType="dataSync"
+            android:stopWithTask="false"
+            android:exported="false" />
         <!-- Auto-Update: berbagi berkas APK yang diunduh ke pemasang sistem. -->
         <provider
             android:name="androidx.core.content.FileProvider"

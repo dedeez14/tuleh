@@ -2,7 +2,7 @@ import '../../../../core/network/api_result.dart';
 import '../entities/product.dart';
 
 abstract interface class ProductRepository {
-  Future<Result<List<Product>>> list({String? query});
+  Future<Result<List<Product>>> list({String? query, bool includeHabis = false});
 
   Future<Result<void>> create({
     required String nama,

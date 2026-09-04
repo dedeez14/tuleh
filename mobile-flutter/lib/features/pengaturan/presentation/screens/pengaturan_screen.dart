@@ -5,6 +5,7 @@ import '../../../../core/network/api_client.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../../../cetak/presentation/screens/printer_screen.dart';
+import '../../../pemantau/presentation/pemantau_providers.dart';
 import '../../../toko/domain/entities/toko.dart';
 import '../../../toko/presentation/providers/toko_providers.dart';
 import 'profil_usaha_screen.dart';
@@ -101,6 +102,7 @@ class PengaturanScreen extends ConsumerWidget {
               ),
             ),
           ),
+          const _SaklarPemantau(),
           Card(
             margin: const EdgeInsets.only(bottom: 8),
             child: ListTile(
@@ -166,5 +168,61 @@ class PengaturanScreen extends ConsumerWidget {
     if (ya == true) {
       ref.read(authControllerProvider.notifier).logout();
     }
+  }
+}
+
+/// Saklar "Notifikasi pesanan meja": menjalankan layanan latar depan yang
+/// memeriksa pesanan meja walau aplikasi ditutup. Android menampilkan
+/// notifikasi tetap selama layanan hidup — itu syarat sistem, dijelaskan di
+/// subjudul agar tidak dikira gangguan.
+class _SaklarPemantau extends ConsumerWidget {
+  const _SaklarPemantau();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cs = Theme.of(context).colorScheme;
+    final svc = ref.watch(pemantauServiceProvider);
+    if (!svc.didukung) return const SizedBox.shrink();
+    final aktif = ref.watch(pemantauDiinginkanProvider).valueOrNull ?? false;
+    final demo = ref.watch(authControllerProvider.notifier).isDemo;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: SwitchListTile(
+        secondary: Icon(Icons.notifications_active_outlined, color: cs.primary),
+        title: const Text('Notifikasi pesanan meja'),
+        subtitle: Text(
+          demo
+              ? 'Tidak tersedia di Mode Demo.'
+              : aktif
+              ? 'Berjalan di latar belakang; bunyi saat ada pesanan atau '
+                    'permintaan bayar dari meja. Notifikasi "memantau" '
+                    'tetap tampil selama aktif.'
+              : 'Beri tahu saat pelanggan memesan atau minta bayar dari '
+                    'QR meja, walau aplikasi ditutup.',
+        ),
+        value: aktif,
+        onChanged: demo
+            ? null
+            : (v) async {
+                if (v) {
+                  final izin = await svc.mintaIzin();
+                  if (!izin) {
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Izin notifikasi ditolak. Aktifkan di Setelan '
+                          'Android → Aplikasi → Tuléh → Notifikasi.',
+                        ),
+                      ),
+                    );
+                    return;
+                  }
+                }
+                await ref.read(pemantauDiinginkanProvider.notifier).atur(v);
+              },
+      ),
+    );
   }
 }

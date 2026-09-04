@@ -76,6 +76,7 @@ class _ProductFormSheetState extends ConsumerState<ProductFormSheet> {
     result.when(
       ok: (_) {
         ref.invalidate(productsProvider);
+        ref.invalidate(produkKelolaProvider);
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()

@@ -10,9 +10,9 @@ class ProductRepositoryImpl implements ProductRepository {
   final ProductRemoteDataSource remote;
 
   @override
-  Future<Result<List<Product>>> list({String? query}) async {
+  Future<Result<List<Product>>> list({String? query, bool includeHabis = false}) async {
     try {
-      return Ok(await remote.list(query: query));
+      return Ok(await remote.list(query: query, includeHabis: includeHabis));
     } on ApiException catch (e) {
       return Err(e);
     }

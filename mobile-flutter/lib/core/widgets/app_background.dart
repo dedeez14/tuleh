@@ -1,3 +1,5 @@
+import 'dart:ui' show PointMode;
+
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
@@ -13,6 +15,7 @@ class AppBackground extends StatelessWidget {
     super.key,
     required this.child,
     this.ombak = true,
+    this.pola = false,
     this.intensitas = 1,
   });
 
@@ -20,6 +23,10 @@ class AppBackground extends StatelessWidget {
 
   /// Ombak di kaki layar. Dimatikan pada layar yang penuh daftar panjang.
   final bool ombak;
+
+  /// Pola titik halus di bagian atas layar (dasbor & masuk) — tekstur agar
+  /// bidang tidak polos, memudar sebelum area kartu supaya tetap terbaca.
+  final bool pola;
 
   /// Pengali kekuatan semburat (0–1.4). Layar padat memakai nilai kecil.
   final double intensitas;
@@ -51,6 +58,17 @@ class AppBackground extends StatelessWidget {
       ),
       child: Stack(
         children: [
+          if (pola)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: CustomPaint(
+                  painter: PolaTitikPainter(
+                    warna: isDark ? AppColors.mint400 : AppColors.mint700,
+                    alphaMaks: (isDark ? 0.22 : 0.2) * k,
+                  ),
+                ),
+              ),
+            ),
           // Cahaya lembut — memberi kedalaman tanpa mengganggu keterbacaan.
           _Cahaya(
             top: -120,
@@ -171,4 +189,75 @@ class _OmbakPainter extends CustomPainter {
   @override
   bool shouldRepaint(_OmbakPainter old) =>
       old.warna != warna || old.isDark != isDark;
+}
+
+/// Pola titik (dot grid) — tekstur latar dasbor & layar masuk.
+///
+/// Titik berjarak [jarak] dp, memudar linier dari puncak sampai
+/// [tinggiPudar] bagian tinggi layar, dengan pengencer radial dari sudut kanan
+/// atas agar terasa seperti cahaya, bukan kertas grafik. Digambar per pita
+/// alpha (bukan per titik) → beberapa panggilan `drawPoints` saja, murah
+/// di ponsel lama.
+class PolaTitikPainter extends CustomPainter {
+  const PolaTitikPainter({
+    required this.warna,
+    this.alphaMaks = 0.2,
+    this.jarak = 22,
+    this.radius = 1.7,
+    this.tinggiPudar = 0.58,
+  });
+
+  final Color warna;
+  final double alphaMaks;
+  final double jarak;
+  final double radius;
+  final double tinggiPudar;
+
+  static const int _pita = 7;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final batasY = size.height * tinggiPudar;
+    if (batasY <= 0 || alphaMaks <= 0) return;
+    final kelompok = List.generate(_pita, (_) => <Offset>[]);
+    final pusat = Offset(size.width * 0.86, -size.height * 0.05);
+    final jangkau = size.width * 1.15;
+
+    var baris = 0;
+    for (var y = jarak / 2; y < batasY; y += jarak, baris++) {
+      final pudarY = 1 - (y / batasY);
+      // Baris ganjil digeser setengah jarak → susunan segitiga, lebih hidup
+      // daripada kisi persegi.
+      final geser = baris.isOdd ? jarak / 2 : 0.0;
+      for (var x = jarak / 2 + geser; x < size.width; x += jarak) {
+        final jarakRadial = (Offset(x, y) - pusat).distance / jangkau;
+        final pudarRadial = (1.15 - jarakRadial).clamp(0.25, 1.0);
+        final kuat = (pudarY * pudarRadial).clamp(0.0, 1.0);
+        if (kuat < 0.06) continue;
+        final idx = ((kuat * (_pita - 1)).round()).clamp(0, _pita - 1);
+        kelompok[idx].add(Offset(x, y));
+      }
+    }
+
+    for (var i = 0; i < _pita; i++) {
+      if (kelompok[i].isEmpty) continue;
+      final alpha = alphaMaks * ((i + 1) / _pita);
+      canvas.drawPoints(
+        PointMode.points,
+        kelompok[i],
+        Paint()
+          ..color = warna.withValues(alpha: alpha)
+          ..strokeWidth = radius * 2
+          ..strokeCap = StrokeCap.round,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(PolaTitikPainter old) =>
+      old.warna != warna ||
+      old.alphaMaks != alphaMaks ||
+      old.jarak != jarak ||
+      old.radius != radius ||
+      old.tinggiPudar != tinggiPudar;
 }

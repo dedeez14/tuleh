@@ -35,9 +35,9 @@ class _GrafikPenjualanState extends State<GrafikPenjualan> {
   /// pergantian bulan yang juga menyebut bulannya. "28 Agu" untuk setiap batang
   /// membuat label bertumpuk pada layar ponsel.
   static String _labelSumbu(List<PenjualanHari> rows, int i) {
-    final d = DateTime.tryParse(rows[i].tanggal);
+    final d = DateTime.tryParse(rows[i].tanggal)?.toLocal();
     if (d == null) return fmtTanggalPendek(rows[i].tanggal);
-    final sebelum = i == 0 ? null : DateTime.tryParse(rows[i - 1].tanggal);
+    final sebelum = i == 0 ? null : DateTime.tryParse(rows[i - 1].tanggal)?.toLocal();
     final gantiBulan = sebelum == null || sebelum.month != d.month;
     return gantiBulan ? fmtTanggalPendek(rows[i].tanggal) : '${d.day}';
   }

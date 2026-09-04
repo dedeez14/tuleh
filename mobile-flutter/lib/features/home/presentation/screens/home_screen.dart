@@ -28,10 +28,15 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(authControllerProvider).value;
-    final tokos = ref.watch(tokoListProvider).valueOrNull ?? const <Toko>[];
+    final tokoAsync = ref.watch(tokoListProvider);
+    final tokos = tokoAsync.valueOrNull ?? const <Toko>[];
     final activeId = ref.watch(activeTokoIdProvider).valueOrNull;
 
-    if (activeId == null && tokos.isNotEmpty) {
+    // Toko aktif belum ada, atau id tersimpan tidak dikenal akun ini (sisa
+    // akun/demo sebelumnya) → pakai toko pertama. Tanpa ini kepala dasbor
+    // terjebak di "Memuat toko…" selamanya.
+    final idDikenal = tokos.any((t) => t.id == activeId);
+    if (tokos.isNotEmpty && (activeId == null || !idDikenal)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ref.read(activeTokoIdProvider.notifier).select(tokos.first.id);
       });
@@ -47,6 +52,7 @@ class HomeScreen extends ConsumerWidget {
 
     return Scaffold(
       body: AppBackground(
+        pola: true,
         child: SafeArea(
           bottom: false,
           child: RefreshIndicator(
@@ -66,6 +72,8 @@ class HomeScreen extends ConsumerWidget {
                       child: _Header(
                         user: user,
                         toko: activeToko,
+                        tokoGagal: tokoAsync.hasError,
+                        onMuatUlangToko: () => ref.invalidate(tokoListProvider),
                         bisaGanti: tokos.length > 1,
                         isDemo: ref.read(demoSessionProvider).active,
                         onGantiToko: tokos.length > 1
@@ -149,10 +157,16 @@ class _Header extends StatelessWidget {
     required this.isDemo,
     required this.onGantiToko,
     required this.onLogout,
+    this.tokoGagal = false,
+    this.onMuatUlangToko,
   });
 
   final User? user;
   final Toko? toko;
+  /// Daftar toko gagal dimuat → tampilkan sebab + tombol ulang, bukan
+  /// "Memuat toko…" tanpa akhir.
+  final bool tokoGagal;
+  final VoidCallback? onMuatUlangToko;
   final bool bisaGanti;
   final bool isDemo;
   final VoidCallback? onGantiToko;
@@ -227,7 +241,7 @@ class _Header extends StatelessWidget {
               const SizedBox(height: 2),
               // Nama toko sebagai tombol pilih — bukan kartu terpisah.
               InkWell(
-                onTap: onGantiToko,
+                onTap: tokoGagal ? onMuatUlangToko : onGantiToko,
                 borderRadius: BorderRadius.circular(8),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 2),
@@ -235,19 +249,28 @@ class _Header extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        Icons.storefront_outlined,
+                        tokoGagal
+                            ? Icons.refresh_rounded
+                            : Icons.storefront_outlined,
                         size: 15,
-                        color: cs.onSurface.withValues(alpha: 0.6),
+                        color: tokoGagal
+                            ? cs.error
+                            : cs.onSurface.withValues(alpha: 0.6),
                       ),
                       const SizedBox(width: 5),
                       Flexible(
                         child: Text(
-                          toko?.nama ?? 'Memuat toko…',
+                          toko?.nama ??
+                              (tokoGagal
+                                  ? 'Toko gagal dimuat · ketuk untuk ulang'
+                                  : 'Memuat toko…'),
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
-                            color: cs.onSurface.withValues(alpha: 0.7),
+                            color: tokoGagal
+                                ? cs.error
+                                : cs.onSurface.withValues(alpha: 0.7),
                           ),
                         ),
                       ),

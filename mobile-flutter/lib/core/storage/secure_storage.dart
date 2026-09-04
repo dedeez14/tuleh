@@ -3,10 +3,34 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 /// Penyimpanan aman (Keystore Android) untuk token & preferensi sensitif.
 /// Token TIDAK PERNAH disimpan di SharedPreferences biasa (high-secure).
+///
+/// Semua pembacaan di-cache di memori. Interceptor Dio membaca token dan id
+/// toko pada SETIAP permintaan; tanpa cache itu berarti dua operasi Keystore
+/// per permintaan, dan pada banyak ponsel Android 10 satu operasi Keystore
+/// memakan ratusan milidetik — beranda yang memicu belasan permintaan jadi
+/// terasa "memuat toko" berdetik-detik. Tulis/hapus memperbarui cache.
 class SecureStorage {
   SecureStorage(this._storage);
 
   final FlutterSecureStorage _storage;
+  final Map<String, String?> _cache = {};
+
+  Future<String?> _read(String key) async {
+    if (_cache.containsKey(key)) return _cache[key];
+    final v = await _storage.read(key: key);
+    _cache[key] = v;
+    return v;
+  }
+
+  Future<void> _write(String key, String? value) async {
+    if (value == null || value.isEmpty) {
+      _cache[key] = null;
+      await _storage.delete(key: key);
+    } else {
+      _cache[key] = value;
+      await _storage.write(key: key, value: value);
+    }
+  }
 
   static const _kToken = 'tuleh_token';
   static const _kBaseUrl = 'tuleh_base_url';
@@ -14,47 +38,40 @@ class SecureStorage {
   static const _kUpdateSnooze = 'tuleh_update_snooze';
   static const _kRestokAmbang = 'tuleh_restok_ambang';
 
-  Future<String?> readToken() => _storage.read(key: _kToken);
-  Future<void> writeToken(String? value) => value == null || value.isEmpty
-      ? _storage.delete(key: _kToken)
-      : _storage.write(key: _kToken, value: value);
+  Future<String?> readToken() => _read(_kToken);
+  Future<void> writeToken(String? value) => _write(_kToken, value);
 
-  Future<String?> readBaseUrl() => _storage.read(key: _kBaseUrl);
-  Future<void> writeBaseUrl(String value) =>
-      _storage.write(key: _kBaseUrl, value: value);
+  Future<String?> readBaseUrl() => _read(_kBaseUrl);
+  Future<void> writeBaseUrl(String value) => _write(_kBaseUrl, value);
 
-  Future<String?> readActiveTokoId() => _storage.read(key: _kActiveToko);
-  Future<void> writeActiveTokoId(String? value) => value == null || value.isEmpty
-      ? _storage.delete(key: _kActiveToko)
-      : _storage.write(key: _kActiveToko, value: value);
+  Future<String?> readActiveTokoId() => _read(_kActiveToko);
+  Future<void> writeActiveTokoId(String? value) => _write(_kActiveToko, value);
 
   /// Tanggal terakhir banner update opsional ditutup (format YYYY-MM-DD).
   /// Dipakai agar banner muncul maksimal 1× per hari.
-  Future<String?> readUpdateSnooze() => _storage.read(key: _kUpdateSnooze);
+  Future<String?> readUpdateSnooze() => _read(_kUpdateSnooze);
   Future<void> writeUpdateSnooze(String yyyymmdd) =>
-      _storage.write(key: _kUpdateSnooze, value: yyyymmdd);
+      _write(_kUpdateSnooze, yyyymmdd);
 
   /// Ambang stok "perlu restok" (dipakai layar Stok). Default 5.
   Future<int> readRestokAmbang() async {
-    final v = await _storage.read(key: _kRestokAmbang);
+    final v = await _read(_kRestokAmbang);
     return int.tryParse(v ?? '') ?? 5;
   }
 
   Future<void> writeRestokAmbang(int value) =>
-      _storage.write(key: _kRestokAmbang, value: value.toString());
+      _write(_kRestokAmbang, value.toString());
 
   /// Nilai preferensi bebas (mis. printer terpilih). Dipisah dari kunci sesi
   /// agar tidak ikut terhapus saat pengguna keluar.
-  Future<String?> bacaNilai(String kunci) => _storage.read(key: 'tuleh_$kunci');
+  Future<String?> bacaNilai(String kunci) => _read('tuleh_$kunci');
 
   Future<void> tulisNilai(String kunci, String? nilai) =>
-      nilai == null || nilai.isEmpty
-      ? _storage.delete(key: 'tuleh_$kunci')
-      : _storage.write(key: 'tuleh_$kunci', value: nilai);
+      _write('tuleh_$kunci', nilai);
 
   Future<void> clearSession() async {
-    await _storage.delete(key: _kToken);
-    await _storage.delete(key: _kActiveToko);
+    await _write(_kToken, null);
+    await _write(_kActiveToko, null);
   }
 }
 

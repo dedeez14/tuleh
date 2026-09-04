@@ -269,11 +269,14 @@ class _BarisTrx extends StatelessWidget {
     );
   }
 
-  /// "14:05" dari ISO; kosong bila tanggal tak memuat jam.
+  /// "14:05" dari ISO; kosong bila tanggal tak memuat jam — termasuk bentuk
+  /// server MOVERA "2026-09-05T00:00:00+07:00" (tanggal saja, jam 00:00
+  /// bukan waktu transaksi sebenarnya).
   static String _jam(String? iso) {
     final d = DateTime.tryParse(iso ?? '');
     if (d == null || (iso!.length <= 10)) return '';
     final lokal = d.isUtc ? d.toLocal() : d;
+    if (lokal.hour == 0 && lokal.minute == 0 && lokal.second == 0) return '';
     String dua(int n) => n.toString().padLeft(2, '0');
     return '${dua(lokal.hour)}:${dua(lokal.minute)}';
   }

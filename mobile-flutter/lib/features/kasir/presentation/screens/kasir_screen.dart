@@ -322,7 +322,7 @@ class _KartuProduk extends StatelessWidget {
           ),
           child: Row(
             children: [
-              _Lambang(jasa: _jasa),
+              _Lambang(jasa: _jasa, gambar: product.gambar),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -352,6 +352,21 @@ class _KartuProduk extends StatelessWidget {
                             ),
                           ),
                         ),
+                        if (product.promo && product.hargaNormal != null)
+                          Flexible(
+                            child: Padding(
+                              padding: const EdgeInsets.only(left: 6),
+                              child: Text(
+                                fmtIDR(product.hargaNormal!),
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  decoration: TextDecoration.lineThrough,
+                                  color: cs.onSurface.withValues(alpha: 0.5),
+                                ),
+                              ),
+                            ),
+                          ),
                         if (product.satuan != null &&
                             product.satuan!.isNotEmpty)
                           Flexible(
@@ -407,26 +422,38 @@ class _KartuProduk extends StatelessWidget {
   }
 }
 
-/// Lambang jenis item — membedakan jasa dari barang secara sekilas.
+/// Lambang item: foto produk bila ada (seperti kartu kasir desktop), selain
+/// itu ikon jenis — membedakan jasa dari barang secara sekilas.
 class _Lambang extends StatelessWidget {
-  const _Lambang({required this.jasa});
+  const _Lambang({required this.jasa, this.gambar});
   final bool jasa;
+  final String? gambar;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final ikon = Icon(
+      jasa ? Icons.handyman_outlined : Icons.inventory_2_outlined,
+      size: 22,
+      color: cs.primary,
+    );
     return Container(
       height: 46,
       width: 46,
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: cs.primary.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(14),
       ),
-      child: Icon(
-        jasa ? Icons.handyman_outlined : Icons.inventory_2_outlined,
-        size: 22,
-        color: cs.primary,
-      ),
+      child: gambar == null
+          ? ikon
+          : Image.network(
+              gambar!,
+              fit: BoxFit.cover,
+              // Ukuran dekode dibatasi: kartu 46dp, bukan foto 2000px penuh.
+              cacheWidth: 138,
+              errorBuilder: (_, _, _) => ikon,
+            ),
     );
   }
 }

@@ -6,9 +6,18 @@ const _bulanId = [
 /// ISO/tanggal → "2 Agu 2026" (Bahasa Indonesia). '-' bila kosong/invalid.
 String fmtTanggal(String? iso) {
   if (iso == null || iso.isEmpty) return '-';
-  final dt = DateTime.tryParse(iso);
+  final dt = _lokal(iso);
   if (dt == null) return iso;
   return '${dt.day} ${_bulanId[dt.month]} ${dt.year}';
+}
+
+/// Parse ISO lalu pindahkan ke zona perangkat. Server MOVERA mengirim
+/// laporan harian sebagai UTC ("2026-09-03T17:00:00Z" = 4 Sep 00:00 WIB);
+/// tanpa ini hari yang tampil mundur satu hari.
+DateTime? _lokal(String iso) {
+  final dt = DateTime.tryParse(iso);
+  if (dt == null) return null;
+  return dt.isUtc ? dt.toLocal() : dt;
 }
 
 /// Rupiah ringkas untuk label sumbu grafik (mis. 1250000 → "1,2 jt").
@@ -31,7 +40,7 @@ String _satuDesimal(double v) {
 /// Tanggal pendek untuk label sumbu (mis. "2024-09-04" → "4 Sep").
 String fmtTanggalPendek(String? iso) {
   if (iso == null || iso.isEmpty) return '';
-  final dt = DateTime.tryParse(iso);
+  final dt = _lokal(iso);
   if (dt == null) return iso;
   return '${dt.day} ${_bulanId[dt.month]}';
 }

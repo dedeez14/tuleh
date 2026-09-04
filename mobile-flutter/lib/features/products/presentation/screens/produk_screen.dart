@@ -15,7 +15,7 @@ class ProdukScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final products = ref.watch(productsProvider);
+    final products = ref.watch(produkKelolaProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Produk')),
@@ -54,7 +54,7 @@ class ProdukScreen extends ConsumerWidget {
               data: (list) => list.isEmpty
                   ? const Center(child: Text('Belum ada produk.'))
                   : RefreshIndicator(
-                      onRefresh: () async => ref.invalidate(productsProvider),
+                      onRefresh: () async => ref.invalidate(produkKelolaProvider),
                       child: ListView.separated(
                         padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
                         itemCount: list.length,
@@ -221,7 +221,7 @@ class _Detail extends ConsumerWidget {
       await ref
           .read(inventoryDataSourceProvider)
           .stokMasuk(idProduk: product.id, jumlah: jumlah);
-      ref.invalidate(productsProvider);
+      ref.invalidate(produkKelolaProvider);
       navigator.pop();
       messenger
         ..hideCurrentSnackBar()

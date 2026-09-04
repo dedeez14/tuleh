@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/app_config.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/app_background.dart' show PolaTitikPainter;
 import '../../../../core/widgets/splash_screen.dart' show BrandAssets;
 import '../controllers/auth_controller.dart';
 
@@ -128,79 +129,109 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
             stops: const [0, 0.42],
           ),
         ),
-        child: SafeArea(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final isWide = constraints.maxWidth >= 860;
-
-              final brand = _Brand(compact: !isWide);
-              final form = _formCard(loading: loading, cs: cs);
-              final footer = _ServerFooter(host: _host());
-
-              if (isWide) {
-                return Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 1000),
-                    child: SingleChildScrollView(
-                      keyboardDismissBehavior:
-                          ScrollViewKeyboardDismissBehavior.onDrag,
-                      padding: EdgeInsets.fromLTRB(28, 24, 28, 24 + bottomInset),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Expanded(
-                            flex: 5,
-                            child: _entry(
-                              _brandAnimation,
-                              brand,
-                              begin: const Offset(-0.03, 0),
-                            ),
-                          ),
-                          const SizedBox(width: 40),
-                          Expanded(
-                            flex: 5,
-                            child: _entry(
-                              _formAnimation,
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [form, const SizedBox(height: 14), footer],
-                              ),
-                              begin: const Offset(0.03, 0),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              }
-
-              return Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 480),
-                  child: SingleChildScrollView(
-                    keyboardDismissBehavior:
-                        ScrollViewKeyboardDismissBehavior.onDrag,
-                    padding: EdgeInsets.fromLTRB(20, 28, 20, 20 + bottomInset),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _entry(_brandAnimation, brand),
-                        const SizedBox(height: 26),
-                        _entry(
-                          _formAnimation,
-                          form,
-                          begin: const Offset(0, 0.05),
-                        ),
-                        const SizedBox(height: 14),
-                        _entry(_formAnimation, footer),
-                      ],
-                    ),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: IgnorePointer(
+                child: CustomPaint(
+                  painter: PolaTitikPainter(
+                    warna: isDark ? AppColors.mint400 : AppColors.mint700,
+                    alphaMaks: isDark ? 0.22 : 0.2,
+                    tinggiPudar: 0.7,
                   ),
                 ),
-              );
-            },
-          ),
+              ),
+            ),
+            SafeArea(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final isWide = constraints.maxWidth >= 860;
+
+                  final brand = _Brand(compact: !isWide);
+                  final form = _formCard(loading: loading, cs: cs);
+                  final footer = _ServerFooter(host: _host());
+
+                  if (isWide) {
+                    return Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 1000),
+                        child: SingleChildScrollView(
+                          keyboardDismissBehavior:
+                              ScrollViewKeyboardDismissBehavior.onDrag,
+                          padding: EdgeInsets.fromLTRB(
+                            28,
+                            24,
+                            28,
+                            24 + bottomInset,
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Expanded(
+                                flex: 5,
+                                child: _entry(
+                                  _brandAnimation,
+                                  brand,
+                                  begin: const Offset(-0.03, 0),
+                                ),
+                              ),
+                              const SizedBox(width: 40),
+                              Expanded(
+                                flex: 5,
+                                child: _entry(
+                                  _formAnimation,
+                                  Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      form,
+                                      const SizedBox(height: 14),
+                                      footer,
+                                    ],
+                                  ),
+                                  begin: const Offset(0.03, 0),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+
+                  return Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 480),
+                      child: SingleChildScrollView(
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
+                        padding: EdgeInsets.fromLTRB(
+                          20,
+                          28,
+                          20,
+                          20 + bottomInset,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _entry(_brandAnimation, brand),
+                            const SizedBox(height: 26),
+                            _entry(
+                              _formAnimation,
+                              form,
+                              begin: const Offset(0, 0.05),
+                            ),
+                            const SizedBox(height: 14),
+                            _entry(_formAnimation, footer),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -395,7 +426,10 @@ class _Brand extends StatelessWidget {
           TextSpan(
             children: [
               const TextSpan(text: 'Tul'),
-              TextSpan(text: 'éh', style: TextStyle(color: cs.primary)),
+              TextSpan(
+                text: 'éh',
+                style: TextStyle(color: cs.primary),
+              ),
             ],
           ),
           textAlign: compact ? TextAlign.center : TextAlign.start,

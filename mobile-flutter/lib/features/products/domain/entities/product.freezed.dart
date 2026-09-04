@@ -15,7 +15,9 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$Product {
 
- String get id; String get nama; double get harga; String? get tipe; double? get hargaBeli; String? get satuan; String? get kategori; String? get barcode; double? get stok;
+ String get id; String get nama; double get harga; String? get tipe; double? get hargaBeli; String? get satuan; String? get kategori; String? get barcode; double? get stok;/// Harga jual normal saat [promo] aktif (untuk dicoret di kartu).
+ double? get hargaNormal; bool get promo;/// URL foto produk (server: `gambar`); null = tanpa foto.
+ String? get gambar;
 /// Create a copy of Product
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -26,16 +28,16 @@ $ProductCopyWith<Product> get copyWith => _$ProductCopyWithImpl<Product>(this as
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is Product&&(identical(other.id, id) || other.id == id)&&(identical(other.nama, nama) || other.nama == nama)&&(identical(other.harga, harga) || other.harga == harga)&&(identical(other.tipe, tipe) || other.tipe == tipe)&&(identical(other.hargaBeli, hargaBeli) || other.hargaBeli == hargaBeli)&&(identical(other.satuan, satuan) || other.satuan == satuan)&&(identical(other.kategori, kategori) || other.kategori == kategori)&&(identical(other.barcode, barcode) || other.barcode == barcode)&&(identical(other.stok, stok) || other.stok == stok));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is Product&&(identical(other.id, id) || other.id == id)&&(identical(other.nama, nama) || other.nama == nama)&&(identical(other.harga, harga) || other.harga == harga)&&(identical(other.tipe, tipe) || other.tipe == tipe)&&(identical(other.hargaBeli, hargaBeli) || other.hargaBeli == hargaBeli)&&(identical(other.satuan, satuan) || other.satuan == satuan)&&(identical(other.kategori, kategori) || other.kategori == kategori)&&(identical(other.barcode, barcode) || other.barcode == barcode)&&(identical(other.stok, stok) || other.stok == stok)&&(identical(other.hargaNormal, hargaNormal) || other.hargaNormal == hargaNormal)&&(identical(other.promo, promo) || other.promo == promo)&&(identical(other.gambar, gambar) || other.gambar == gambar));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,nama,harga,tipe,hargaBeli,satuan,kategori,barcode,stok);
+int get hashCode => Object.hash(runtimeType,id,nama,harga,tipe,hargaBeli,satuan,kategori,barcode,stok,hargaNormal,promo,gambar);
 
 @override
 String toString() {
-  return 'Product(id: $id, nama: $nama, harga: $harga, tipe: $tipe, hargaBeli: $hargaBeli, satuan: $satuan, kategori: $kategori, barcode: $barcode, stok: $stok)';
+  return 'Product(id: $id, nama: $nama, harga: $harga, tipe: $tipe, hargaBeli: $hargaBeli, satuan: $satuan, kategori: $kategori, barcode: $barcode, stok: $stok, hargaNormal: $hargaNormal, promo: $promo, gambar: $gambar)';
 }
 
 
@@ -46,7 +48,7 @@ abstract mixin class $ProductCopyWith<$Res>  {
   factory $ProductCopyWith(Product value, $Res Function(Product) _then) = _$ProductCopyWithImpl;
 @useResult
 $Res call({
- String id, String nama, double harga, String? tipe, double? hargaBeli, String? satuan, String? kategori, String? barcode, double? stok
+ String id, String nama, double harga, String? tipe, double? hargaBeli, String? satuan, String? kategori, String? barcode, double? stok, double? hargaNormal, bool promo, String? gambar
 });
 
 
@@ -63,7 +65,7 @@ class _$ProductCopyWithImpl<$Res>
 
 /// Create a copy of Product
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? nama = null,Object? harga = null,Object? tipe = freezed,Object? hargaBeli = freezed,Object? satuan = freezed,Object? kategori = freezed,Object? barcode = freezed,Object? stok = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? nama = null,Object? harga = null,Object? tipe = freezed,Object? hargaBeli = freezed,Object? satuan = freezed,Object? kategori = freezed,Object? barcode = freezed,Object? stok = freezed,Object? hargaNormal = freezed,Object? promo = null,Object? gambar = freezed,}) {
   return _then(Product(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,nama: null == nama ? _self.nama : nama // ignore: cast_nullable_to_non_nullable
@@ -74,7 +76,10 @@ as double?,satuan: freezed == satuan ? _self.satuan : satuan // ignore: cast_nul
 as String?,kategori: freezed == kategori ? _self.kategori : kategori // ignore: cast_nullable_to_non_nullable
 as String?,barcode: freezed == barcode ? _self.barcode : barcode // ignore: cast_nullable_to_non_nullable
 as String?,stok: freezed == stok ? _self.stok : stok // ignore: cast_nullable_to_non_nullable
-as double?,
+as double?,hargaNormal: freezed == hargaNormal ? _self.hargaNormal : hargaNormal // ignore: cast_nullable_to_non_nullable
+as double?,promo: null == promo ? _self.promo : promo // ignore: cast_nullable_to_non_nullable
+as bool,gambar: freezed == gambar ? _self.gambar : gambar // ignore: cast_nullable_to_non_nullable
+as String?,
   ));
 }
 
@@ -159,10 +164,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String nama,  double harga,  String? tipe,  double? hargaBeli,  String? satuan,  String? kategori,  String? barcode,  double? stok)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String nama,  double harga,  String? tipe,  double? hargaBeli,  String? satuan,  String? kategori,  String? barcode,  double? stok,  double? hargaNormal,  bool promo,  String? gambar)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _Product() when $default != null:
-return $default(_that.id,_that.nama,_that.harga,_that.tipe,_that.hargaBeli,_that.satuan,_that.kategori,_that.barcode,_that.stok);case _:
+return $default(_that.id,_that.nama,_that.harga,_that.tipe,_that.hargaBeli,_that.satuan,_that.kategori,_that.barcode,_that.stok,_that.hargaNormal,_that.promo,_that.gambar);case _:
   return orElse();
 
 }
@@ -180,10 +185,10 @@ return $default(_that.id,_that.nama,_that.harga,_that.tipe,_that.hargaBeli,_that
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String nama,  double harga,  String? tipe,  double? hargaBeli,  String? satuan,  String? kategori,  String? barcode,  double? stok)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String nama,  double harga,  String? tipe,  double? hargaBeli,  String? satuan,  String? kategori,  String? barcode,  double? stok,  double? hargaNormal,  bool promo,  String? gambar)  $default,) {final _that = this;
 switch (_that) {
 case _Product():
-return $default(_that.id,_that.nama,_that.harga,_that.tipe,_that.hargaBeli,_that.satuan,_that.kategori,_that.barcode,_that.stok);case _:
+return $default(_that.id,_that.nama,_that.harga,_that.tipe,_that.hargaBeli,_that.satuan,_that.kategori,_that.barcode,_that.stok,_that.hargaNormal,_that.promo,_that.gambar);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -200,10 +205,10 @@ return $default(_that.id,_that.nama,_that.harga,_that.tipe,_that.hargaBeli,_that
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String nama,  double harga,  String? tipe,  double? hargaBeli,  String? satuan,  String? kategori,  String? barcode,  double? stok)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String nama,  double harga,  String? tipe,  double? hargaBeli,  String? satuan,  String? kategori,  String? barcode,  double? stok,  double? hargaNormal,  bool promo,  String? gambar)?  $default,) {final _that = this;
 switch (_that) {
 case _Product() when $default != null:
-return $default(_that.id,_that.nama,_that.harga,_that.tipe,_that.hargaBeli,_that.satuan,_that.kategori,_that.barcode,_that.stok);case _:
+return $default(_that.id,_that.nama,_that.harga,_that.tipe,_that.hargaBeli,_that.satuan,_that.kategori,_that.barcode,_that.stok,_that.hargaNormal,_that.promo,_that.gambar);case _:
   return null;
 
 }
@@ -215,7 +220,7 @@ return $default(_that.id,_that.nama,_that.harga,_that.tipe,_that.hargaBeli,_that
 
 
 class _Product implements Product {
-  const _Product({required this.id, required this.nama, required this.harga, this.tipe, this.hargaBeli, this.satuan, this.kategori, this.barcode, this.stok});
+  const _Product({required this.id, required this.nama, required this.harga, this.tipe, this.hargaBeli, this.satuan, this.kategori, this.barcode, this.stok, this.hargaNormal, this.promo = false, this.gambar});
   
 
 @override final  String id;
@@ -227,6 +232,11 @@ class _Product implements Product {
 @override final  String? kategori;
 @override final  String? barcode;
 @override final  double? stok;
+/// Harga jual normal saat [promo] aktif (untuk dicoret di kartu).
+@override final  double? hargaNormal;
+@override@JsonKey() final  bool promo;
+/// URL foto produk (server: `gambar`); null = tanpa foto.
+@override final  String? gambar;
 
 /// Create a copy of Product
 /// with the given fields replaced by the non-null parameter values.
@@ -238,16 +248,16 @@ _$ProductCopyWith<_Product> get copyWith => __$ProductCopyWithImpl<_Product>(thi
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Product&&(identical(other.id, id) || other.id == id)&&(identical(other.nama, nama) || other.nama == nama)&&(identical(other.harga, harga) || other.harga == harga)&&(identical(other.tipe, tipe) || other.tipe == tipe)&&(identical(other.hargaBeli, hargaBeli) || other.hargaBeli == hargaBeli)&&(identical(other.satuan, satuan) || other.satuan == satuan)&&(identical(other.kategori, kategori) || other.kategori == kategori)&&(identical(other.barcode, barcode) || other.barcode == barcode)&&(identical(other.stok, stok) || other.stok == stok));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Product&&(identical(other.id, id) || other.id == id)&&(identical(other.nama, nama) || other.nama == nama)&&(identical(other.harga, harga) || other.harga == harga)&&(identical(other.tipe, tipe) || other.tipe == tipe)&&(identical(other.hargaBeli, hargaBeli) || other.hargaBeli == hargaBeli)&&(identical(other.satuan, satuan) || other.satuan == satuan)&&(identical(other.kategori, kategori) || other.kategori == kategori)&&(identical(other.barcode, barcode) || other.barcode == barcode)&&(identical(other.stok, stok) || other.stok == stok)&&(identical(other.hargaNormal, hargaNormal) || other.hargaNormal == hargaNormal)&&(identical(other.promo, promo) || other.promo == promo)&&(identical(other.gambar, gambar) || other.gambar == gambar));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,nama,harga,tipe,hargaBeli,satuan,kategori,barcode,stok);
+int get hashCode => Object.hash(runtimeType,id,nama,harga,tipe,hargaBeli,satuan,kategori,barcode,stok,hargaNormal,promo,gambar);
 
 @override
 String toString() {
-  return 'Product(id: $id, nama: $nama, harga: $harga, tipe: $tipe, hargaBeli: $hargaBeli, satuan: $satuan, kategori: $kategori, barcode: $barcode, stok: $stok)';
+  return 'Product(id: $id, nama: $nama, harga: $harga, tipe: $tipe, hargaBeli: $hargaBeli, satuan: $satuan, kategori: $kategori, barcode: $barcode, stok: $stok, hargaNormal: $hargaNormal, promo: $promo, gambar: $gambar)';
 }
 
 
@@ -258,7 +268,7 @@ abstract mixin class _$ProductCopyWith<$Res> implements $ProductCopyWith<$Res> {
   factory _$ProductCopyWith(_Product value, $Res Function(_Product) _then) = __$ProductCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String nama, double harga, String? tipe, double? hargaBeli, String? satuan, String? kategori, String? barcode, double? stok
+ String id, String nama, double harga, String? tipe, double? hargaBeli, String? satuan, String? kategori, String? barcode, double? stok, double? hargaNormal, bool promo, String? gambar
 });
 
 
@@ -275,7 +285,7 @@ class __$ProductCopyWithImpl<$Res>
 
 /// Create a copy of Product
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? nama = null,Object? harga = null,Object? tipe = freezed,Object? hargaBeli = freezed,Object? satuan = freezed,Object? kategori = freezed,Object? barcode = freezed,Object? stok = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? nama = null,Object? harga = null,Object? tipe = freezed,Object? hargaBeli = freezed,Object? satuan = freezed,Object? kategori = freezed,Object? barcode = freezed,Object? stok = freezed,Object? hargaNormal = freezed,Object? promo = null,Object? gambar = freezed,}) {
   return _then(_Product(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,nama: null == nama ? _self.nama : nama // ignore: cast_nullable_to_non_nullable
@@ -286,7 +296,10 @@ as double?,satuan: freezed == satuan ? _self.satuan : satuan // ignore: cast_nul
 as String?,kategori: freezed == kategori ? _self.kategori : kategori // ignore: cast_nullable_to_non_nullable
 as String?,barcode: freezed == barcode ? _self.barcode : barcode // ignore: cast_nullable_to_non_nullable
 as String?,stok: freezed == stok ? _self.stok : stok // ignore: cast_nullable_to_non_nullable
-as double?,
+as double?,hargaNormal: freezed == hargaNormal ? _self.hargaNormal : hargaNormal // ignore: cast_nullable_to_non_nullable
+as double?,promo: null == promo ? _self.promo : promo // ignore: cast_nullable_to_non_nullable
+as bool,gambar: freezed == gambar ? _self.gambar : gambar // ignore: cast_nullable_to_non_nullable
+as String?,
   ));
 }
 

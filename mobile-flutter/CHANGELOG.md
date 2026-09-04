@@ -5,6 +5,16 @@ sebagai isi Release GitHub (workflow flutter-release.yml), dan empat baris
 pertamanya tampil di banner pembaruan dalam aplikasi. Tulis untuk kasir, bukan
 untuk programmer.
 
+## 2.4.0
+
+- Baru: Notifikasi pesanan meja. Nyalakan di Pengaturan; aplikasi memantau pesanan dan permintaan bayar dari QR meja di latar belakang, lalu berbunyi walau aplikasi ditutup.
+- Lebih cepat: beranda tidak lagi membaca Keystore dua kali untuk setiap permintaan ke server, penyebab "Memuat toko…" terasa lama di banyak ponsel Android 10.
+- Kepala dasbor menampilkan alasan dan tombol ulang bila daftar toko gagal dimuat, bukan "Memuat toko…" tanpa akhir.
+- Pola latar bermerek di layar masuk dan dasbor.
+- Kasir menampilkan foto produk dan harga promo (harga normal dicoret) sesuai pengaturan server.
+- Katalog dengan lebih dari 50 produk kini dimuat seluruhnya; layar Produk menampilkan produk berstok 0 agar bisa direstok.
+- Perbaikan tanggal grafik penjualan yang mundur satu hari, dan jam "00:00" palsu di Riwayat.
+
 ## 2.3.0
 
 - Kolom uang berformat rupiah saat diketik: 50000 tampil 50.000 (uang diterima, kas awal/akhir sesi, pengeluaran, harga produk).
