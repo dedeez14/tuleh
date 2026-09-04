@@ -8,8 +8,8 @@
 const crypto = require('node:crypto')
 const {
   COMPANY, USER, BRANCH, KATEGORI, GUDANG, SATUAN, PELANGGAN_AWAL, TOKOS, MANIFESTS, TABLES,
-  buatProduk, buatProdukBakso, buatProdukLaundry, buatProdukBengkel,
-  KATEGORI_BAKSO, KATEGORI_LAUNDRY, KATEGORI_BENGKEL
+  buatProduk, buatProdukBakso, buatProdukLaundry, buatProdukBengkel, buatProdukDoorsmeer, buatProdukSalon,
+  KATEGORI_BAKSO, KATEGORI_LAUNDRY, KATEGORI_BENGKEL, KATEGORI_DOORSMEER, KATEGORI_SALON
 } = require('./demo-data')
 
 // Label tahap untuk halaman pelacakan pelanggan
@@ -22,6 +22,11 @@ const STAGE_LABELS = {
   PENGERINGAN: 'Pengeringan',
   LIPAT: 'Lipat & Kemas',
   SIAP_AMBIL: 'Siap Diambil',
+  // Jasa kendaraan & salon — selaras lib/stage-label.js (papan staf) & label server
+  PEMERIKSAAN: 'Pemeriksaan',
+  PENGERJAAN: 'Pengerjaan',
+  DILAYANI: 'Dilayani',
+  FINISHING: 'Finishing & Poles',
   SELESAI: 'Selesai'
 }
 
@@ -99,7 +104,9 @@ function toDataUri (bytes, mime) {
   }
 }
 
-const ANTRIAN_PREFIX = { 'TOKO-2': 'A', 'TOKO-3': 'L', 'TOKO-4': 'B' }
+// Prefix nomor antrian per toko (cermin antrian_prefix server): A bakso, L laundry,
+// B bengkel, D doorsmeer, S salon/barbershop.
+const ANTRIAN_PREFIX = { 'TOKO-2': 'A', 'TOKO-3': 'L', 'TOKO-4': 'B', 'TOKO-5': 'D', 'TOKO-6': 'S' }
 
 const produkToko = (tokoId) => (catalogs[tokoId] || {}).produk || []
 const kategoriToko = (tokoId) => (catalogs[tokoId] || {}).kategori || []
@@ -361,7 +368,9 @@ function seed() {
     'TOKO-1': { produk: buatProduk(), kategori: KATEGORI.map((k) => ({ ...k })) },
     'TOKO-2': { produk: buatProdukBakso(), kategori: KATEGORI_BAKSO.map((k) => ({ ...k })) },
     'TOKO-3': { produk: buatProdukLaundry(), kategori: KATEGORI_LAUNDRY.map((k) => ({ ...k })) },
-    'TOKO-4': { produk: buatProdukBengkel(), kategori: KATEGORI_BENGKEL.map((k) => ({ ...k })) }
+    'TOKO-4': { produk: buatProdukBengkel(), kategori: KATEGORI_BENGKEL.map((k) => ({ ...k })) },
+    'TOKO-5': { produk: buatProdukDoorsmeer(), kategori: KATEGORI_DOORSMEER.map((k) => ({ ...k })) },
+    'TOKO-6': { produk: buatProdukSalon(), kategori: KATEGORI_SALON.map((k) => ({ ...k })) }
   }
   pelanggan = PELANGGAN_AWAL.map((c) => ({ ...c }))
   sesiList = []
@@ -372,12 +381,15 @@ function seed() {
   counter = { trx: 0, sesi: 0, cust: pelanggan.length, order: 0, station: 0, bill: 0, inv: 0, exp: 0 }
 
   // Lengkapi produk demo dgn tipe (PRODUK/JASA) & harga_beli (rahasia dagang, null
-  // utk JASA) agar konsisten di kasir, inventory, & manajemen. Laundry = JASA.
+  // utk JASA) agar konsisten di kasir, inventory, & manajemen. Default tipe ikut
+  // archetype toko (service_* = JASA); katalog yang sudah menetapkan `tipe` sendiri
+  // (bengkel/doorsmeer/salon: campuran jasa + produk berstok) dibiarkan apa adanya.
   for (const [tid, cat] of Object.entries(catalogs)) {
-    const jasa = tid === 'TOKO-3'
+    const toko = TOKOS.find((t) => t.id === tid)
+    const jasaDefault = /^service/.test(toko?.bidang_usaha?.archetype || '')
     for (const p of cat.produk) {
-      if (p.tipe == null) p.tipe = jasa ? 'JASA' : 'PRODUK'
-      if (p.harga_beli === undefined) p.harga_beli = jasa ? null : Math.round(p.harga_jual * 0.65)
+      if (p.tipe == null) p.tipe = jasaDefault ? 'JASA' : 'PRODUK'
+      if (p.harga_beli === undefined) p.harga_beli = p.tipe === 'JASA' ? null : Math.round(p.harga_jual * 0.65)
     }
     // Beberapa entri MASUK awal agar Riwayat Stok tak kosong (restok beberapa hari lalu)
     cat.produk.filter((p) => p.kelola_stok).slice(0, 3).forEach((p, i) => {
@@ -529,7 +541,18 @@ function seed() {
     buatStasiun({ tokoId: 'TOKO-4', type: 'mechanic', nama: 'Mekanik Andi' }),
     buatStasiun({ tokoId: 'TOKO-4', type: 'mechanic', nama: 'Mekanik Yusuf', status: 'ISTIRAHAT' }),
     buatStasiun({ tokoId: 'TOKO-4', type: 'bay', nama: 'Pit 1', kapasitas: 1 }),
-    buatStasiun({ tokoId: 'TOKO-4', type: 'bay', nama: 'Pit 2', kapasitas: 1 })
+    buatStasiun({ tokoId: 'TOKO-4', type: 'bay', nama: 'Pit 2', kapasitas: 1 }),
+    // Doorsmeer: bay pencucian + area finishing
+    buatStasiun({ tokoId: 'TOKO-5', type: 'cashier', nama: 'Kasir 1' }),
+    buatStasiun({ tokoId: 'TOKO-5', type: 'washing', nama: 'Bay 1 (Mobil)', kapasitas: 1 }),
+    buatStasiun({ tokoId: 'TOKO-5', type: 'washing', nama: 'Bay 2 (Mobil)', kapasitas: 1 }),
+    buatStasiun({ tokoId: 'TOKO-5', type: 'washing', nama: 'Bay 3 (Motor)', kapasitas: 2 }),
+    buatStasiun({ tokoId: 'TOKO-5', type: 'finishing', nama: 'Finishing 1', kapasitas: 2 }),
+    // Salon/barbershop: satu stasiun per kursi/kapster
+    buatStasiun({ tokoId: 'TOKO-6', type: 'cashier', nama: 'Kasir 1' }),
+    buatStasiun({ tokoId: 'TOKO-6', type: 'chair', nama: 'Kursi 1 — Andi', kapasitas: 1 }),
+    buatStasiun({ tokoId: 'TOKO-6', type: 'chair', nama: 'Kursi 2 — Bima', kapasitas: 1 }),
+    buatStasiun({ tokoId: 'TOKO-6', type: 'chair', nama: 'Kursi 3 — Candra', status: 'ISTIRAHAT', kapasitas: 1 })
   ]
 
   const seedLaundry = [
@@ -549,6 +572,37 @@ function seed() {
     { items: [{ nama: 'Tambal Ban', kuantitas: 1 }], total: 15000, menitLalu: 130, stage: 'SIAP_AMBIL', pelangganNama: 'Dewi Lestari' }
   ]
   for (const o of seedBengkel) orders.push(buatOrder({ tokoId: 'TOKO-4', ...o }))
+
+  // Doorsmeer & salon: pesanan tersebar di tiap tahap agar papan langsung "hidup".
+  // Item dirujuk ke katalog (idProduk + harga) supaya pelunasan nota
+  // bayar-saat-ambil (`belumBayar`) menghasilkan struk yang benar.
+  const seedJasa = (tokoId, daftar) => {
+    const katalog = catalogs[tokoId].produk
+    for (const { belumBayar = false, items, ...o } of daftar) {
+      const bersih = items.map(({ nama, kuantitas }) => {
+        const p = katalog.find((x) => x.nama === nama)
+        if (!p) throw new Error(`Seed ${tokoId}: item "${nama}" tidak ada di katalog`)
+        return { idProduk: p.id, nama: p.nama, kuantitas, harga: p.harga_jual, satuan: p.satuan }
+      })
+      const total = round2(bersih.reduce((s, i) => s + i.harga * i.kuantitas, 0))
+      const order = buatOrder({ tokoId, items: bersih, total, ...o })
+      if (belumBayar) order.bayar = 'BELUM'
+      orders.push(order)
+    }
+  }
+  seedJasa('TOKO-5', [
+    { items: [{ nama: 'Cuci Motor', kuantitas: 1 }], menitLalu: 3, stage: 'ANTRIAN', pelangganNama: 'Rudi Hartono (B 4521 KTA)' },
+    { items: [{ nama: 'Cuci Mobil Besar (SUV/MPV)', kuantitas: 1 }, { nama: 'Parfum Mobil Gantung', kuantitas: 1 }], menitLalu: 14, stage: 'PENCUCIAN', pelangganNama: 'Siti Aminah (D 1290 ABC)', belumBayar: true },
+    { items: [{ nama: 'Cuci Mobil Kecil (City Car)', kuantitas: 1 }], menitLalu: 27, stage: 'PENGERINGAN', pelangganNama: 'Budi Santoso (B 7788 XYZ)' },
+    { items: [{ nama: 'Cuci + Vacuum Interior', kuantitas: 1 }], menitLalu: 41, stage: 'FINISHING', pelangganNama: 'Dewi Lestari (F 3344 QQ)', belumBayar: true },
+    { items: [{ nama: 'Cuci Motor + Semir Ban', kuantitas: 1 }], menitLalu: 55, stage: 'SIAP_AMBIL', pelangganNama: 'Rudi Hartono (B 9001 ZZ)' }
+  ])
+  seedJasa('TOKO-6', [
+    { items: [{ nama: 'Potong Rambut Dewasa', kuantitas: 1 }], menitLalu: 2, stage: 'ANTRIAN', pelangganNama: 'Budi Santoso', belumBayar: true },
+    { items: [{ nama: 'Potong Rambut Anak', kuantitas: 1 }], menitLalu: 6, stage: 'ANTRIAN', pelangganNama: null, belumBayar: true },
+    { items: [{ nama: 'Potong + Cuci + Pijat', kuantitas: 1 }], menitLalu: 18, stage: 'DILAYANI', pelangganNama: 'Rudi Hartono', belumBayar: true },
+    { items: [{ nama: 'Potong Rambut Dewasa', kuantitas: 1 }, { nama: 'Cukur Jenggot & Kumis', kuantitas: 1 }], menitLalu: 9, stage: 'DILAYANI', pelangganNama: 'Dewi Lestari' }
+  ])
 }
 
 // ---------- Kontrol ----------

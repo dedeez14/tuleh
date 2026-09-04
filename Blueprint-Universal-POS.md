@@ -142,7 +142,7 @@ Tiga archetype awal (bisa bertambah, mis. `booking` untuk barbershop/rental):
 |---|---|---|
 | `inventory_sale` | Minimarket, toko kelontong, apotek* | Bayar = selesai. Stok FIFO. Tanpa tahapan. |
 | `food_order` | Bakso, warung makan, kafe, coffee shop | Pesan (kasir/QR meja) → bayar → **dapur** memproses per antrian → ready → diantar/diambil. |
-| `service_job` | Laundry, sablon, servis sepatu | Terima order → **tahapan produksi** berhari-hari → siap diambil → diserahkan. Pelanggan memantau progres. |
+| `service_job` | Laundry, sablon, servis sepatu; **bengkel, salon/barbershop, doorsmeer** via `manifest_override` (§5.1, §9.5) | Terima order → **tahapan produksi** (menit hingga hari) → siap diambil → diserahkan. Pelanggan memantau progres. |
 
 ### 5.1 Alur jasa khas yang dikirim server (tanpa rilis app)
 
@@ -159,7 +159,9 @@ dikenal ditampilkan Title Case (`lib/stage-label.js`).
 | `salon` (barbershop) | ANTRIAN → DILAYANI → SELESAI (pelanggan hadir, tanpa ambil) | Kasir, Kursi/Kapster | S |
 | `doorsmeer`, `car_wash` | ANTRIAN → PENCUCIAN → PENGERINGAN → FINISHING → SIAP_AMBIL → SELESAI | Kasir, Pencucian, Finishing & Poles | D |
 
-Mode Demo memuat contoh bengkel (`TOKO-4`, katalog `BKL-*`, antrian `B-xxx`).
+Mode Demo memuat ketiganya: bengkel (`TOKO-4`, katalog `BKL-*`, antrian
+`B-xxx`), doorsmeer (`TOKO-5`, `DSM-*`, `D-xxx`), dan salon/barbershop
+(`TOKO-6`, `SLN-*`, `S-xxx`) — rincian pemodelan di §9.5.
 
 Modul yang tampil di Beranda MPos ditentukan archetype + capabilities:
 
@@ -504,6 +506,42 @@ Scan QR pada nota → timeline visual:
 Plus: rincian nota, total & status bayar, tombol "Hubungi toko" (WA/telepon).
 Opsional per toko: notifikasi WhatsApp saat `SIAP_AMBIL`.
 
+### 9.5 Varian `service_job` lain: bengkel, doorsmeer, salon/barbershop (Sep 2026)
+
+Tiga bidang usaha jasa ini **tidak butuh archetype baru**: semuanya "terima
+order → tahapan → siap → diserahkan" seperti laundry, hanya berbeda pada
+*lifecycle*, jenis stasiun, dan identitas item. Server mengirimnya lewat
+`manifest_override` (§5.1); Mode Demo mencerminkannya sebagai toko 4–6 agar
+seluruh alur bisa dijajal offline. Layar Kasir, Papan Proses/Antrian,
+Stasiun, dan halaman lacak dipakai apa adanya (kolom papan mengikuti
+`lifecycle.states`).
+
+| | **Bengkel** (`bengkel`) | **Doorsmeer** (`doorsmeer`) | **Salon / Barbershop** (`salon`) |
+|---|---|---|---|
+| Lifecycle | `ANTRIAN → PEMERIKSAAN → PENGERJAAN → SIAP_AMBIL → SELESAI` | `ANTRIAN → PENCUCIAN → PENGERINGAN → FINISHING → SIAP_AMBIL → SELESAI` | `ANTRIAN → DILAYANI → SELESAI` (pelanggan hadir, tanpa tahap ambil) |
+| Papan staf | Antrian Servis (`proses`) | Papan Cuci (`proses`) | Antrian Cukur (`antrian`) — cocok untuk layar TV |
+| Stasiun | `cashier`, `mechanic`, `bay` (pit) | `cashier`, `washing` (bay mobil/motor), `finishing` | `cashier`, `chair` (satu kursi = satu kapster/barber) |
+| Katalog | Jasa servis + **suku cadang & oli berstok** (stok dipotong saat checkout) | Jasa cuci/detailing + produk retail berstok (parfum, shampo) | Jasa potong/perawatan + produk berstok (pomade, tonic) |
+| Identitas item | — | Nopol kendaraan (`item_config.identity = plate`) | — |
+| Bayar | Saat ambil (`PAYMENT_OR_LATER`) | Di muka **atau** saat ambil | Setelah dilayani (nota → "Lunasi & Serahkan" di kolom terakhir) |
+| Prefix antrian | `B-001` | `D-001` | `S-001` |
+
+Keputusan desain:
+
+- **Barbershop = antrian walk-in**, bukan reservasi. Kursi/kapster dimodelkan
+  sebagai stasiun `chair` (AKTIF/ISTIRAHAT) — nomor antrian dipanggil ke kursi
+  yang kosong. Archetype `booking` (reservasi jam, §16 butir 6) tetap terbuka
+  dan bisa ditambahkan di atasnya kelak tanpa mengubah alur ini.
+- **Katalog campur jasa + barang** (ketiganya): kasir memuat `?tipe=SEMUA`;
+  item `kelola_stok = true` dipotong stoknya saat checkout, jasa tidak —
+  persis aturan Inventory yang sudah ada. `tipe` ditetapkan per item di
+  katalog, bukan diturunkan dari bidang usaha toko.
+- **Doorsmeer** memakai tahap `FINISHING` (semir ban, vacuum, poles) sebagai
+  pengganti `LIPAT` laundry; durasinya menit, bukan jam.
+- Label tahap baru (`PEMERIKSAAN`, `PENGERJAAN`, `DILAYANI`, `FINISHING`)
+  ada di `lib/stage-label.js` (papan staf) dan di label pelacakan demo;
+  tahap lain yang dikirim server tetap terbaca lewat fallback Title Case.
+
 ---
 
 ## 10. Pelacakan & Pemesanan Pelanggan via QR
@@ -552,9 +590,9 @@ Perubahan pada aplikasi Electron yang sudah ada (semuanya aditif):
      (dapur bakso = 3 kolom; laundry = 6 kolom — komponen yang sama).
    - `stations.js` — CRUD stasiun + status + penetapan perangkat.
    - `tables.js` — kelola meja + cetak PDF stiker QR (hanya bila `tables_qr`).
-5. **Demo mode diperluas**: tiga toko contoh (Minimarket TES, Bakso Demo,
-   Laundry Demo) agar seluruh alur bisa dijajal tanpa server — sekaligus jadi
-   alat pengembangan UI.
+5. **Demo mode diperluas**: enam toko contoh (Minimarket, Bakso, Laundry,
+   Bengkel, Doorsmeer, Salon/Barbershop) agar seluruh alur bisa dijajal tanpa
+   server — sekaligus jadi alat pengembangan UI.
 6. **Polling order**: layar KDS/Papan/Antrian menyegarkan tiap 3–5 dtk via
    gateway (cache dimatikan untuk `/orders`) sampai kanal push tersedia.
 
@@ -647,6 +685,7 @@ sekarang; `/orders` tanpa cache, `/tables` & `/stations` cache pendek).
 | **5. QR meja + order online** | Meja + QR + menu digital + `MENUNGGU_BAYAR` + konfirmasi kasir | Pelanggan bakso pesan sendiri dari meja | ✅ **Mode LAN** selesai (QRIS online: menunggu server) |
 | **6. Penyempurnaan** | Push/real-time, notifikasi WA, ~~layar antrian TV~~ ✅, ~~suara KDS~~ ✅, laporan tahapan, routing round-robin, kiosk | Skala & kenyamanan | ⏳ Sebagian |
 | **7. Bon Meja (open bill)** | Peta Meja (status/timer/pax/total), buka meja, ronde pesanan, cetak pra-bon, bayar-di-akhir, gabung meja, label MEJA besar di KDS, QR meja menyatu ke bon (§8.5) | Warung bakso dine-in bayar saat pulang | ✅ **Mode LAN/Demo** selesai (kontrak server `/bills`: menunggu MOVERA) |
+| **8. Bidang usaha jasa baru** | Bengkel, doorsmeer, salon/barbershop di atas `service_job` via `manifest_override` server (§5.1) + Mode Demo 3 toko (§9.5): lifecycle, stasiun (mekanik/bay/kursi), katalog jasa + produk berstok, prefix antrian `B-`/`D-`/`S-`, nota bayar-saat-ambil | Tiga bidang usaha dapat dijajal penuh di Mode Demo dan siap dipakai toko produksi | ✅ Selesai (Sep 2026) |
 
 Prinsip urutan: tiap fase berdiri sendiri dan langsung berguna; fitur pelanggan
 (QR) menyusul setelah alur staf stabil.
@@ -670,6 +709,11 @@ Perlu keputusan Anda / tim server sebelum implementasi:
 6. Bidang usaha ke-3 untuk memvalidasi generalisasi archetype (barbershop =
    `booking`?) — disarankan dirancang di atas kertas sebelum fase 2 selesai
    agar `lifecycle` tidak bias ke dua kasus pertama.
+   **Diputuskan (Sep 2026):** bengkel, salon/barbershop, dan doorsmeer
+   berjalan di atas `service_job` hanya dengan `manifest_override` server
+   (§5.1, §9.5) — generalisasi terbukti tanpa archetype baru. Barbershop
+   dimodelkan sebagai antrian walk-in; `booking` (reservasi jam) tetap
+   terbuka sebagai lapisan tambahan bila dibutuhkan.
 
 ---
 

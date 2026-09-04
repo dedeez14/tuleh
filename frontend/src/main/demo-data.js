@@ -116,6 +116,23 @@ const TOKOS = [
     bidang_usaha: { code: 'bengkel', nama: 'Bengkel Motor/Mobil', kategori: 'Jasa Lifecycle', archetype: 'service_lifecycle' },
     manifest_version: 1,
     is_active: true
+  },
+  // --- Doorsmeer & salon/barbershop (Sep 2026): cermin manifest_override server
+  //     (Blueprint §5.1) — alur jasa bertahap seperti bengkel di atas, dibedakan
+  //     lewat lifecycle/stasiun/prefix antrian di manifest, bukan kode khusus di layar.
+  {
+    id: 'TOKO-5',
+    nama: 'Doorsmeer Kinclong Demo',
+    bidang_usaha: { code: 'doorsmeer', nama: 'Doorsmeer / Cuci Mobil & Motor', kategori: 'Jasa Lifecycle', archetype: 'service_lifecycle' },
+    manifest_version: 1,
+    is_active: true
+  },
+  {
+    id: 'TOKO-6',
+    nama: 'Barbershop Rapi Demo',
+    bidang_usaha: { code: 'salon', nama: 'Salon / Barbershop', kategori: 'Jasa Lifecycle', archetype: 'service_lifecycle' },
+    manifest_version: 1,
+    is_active: true
   }
 ]
 
@@ -287,6 +304,86 @@ const MANIFESTS = {
       { type: 'bay', label: 'Pit / Bay', min: 0 }
     ],
     revision: 1
+  },
+  // Doorsmeer — cermin manifest_override server (§5.1): cuci kendaraan bertahap,
+  // bayar di muka atau saat ambil, identitas item = nopol. Prefix antrian D.
+  'TOKO-5': {
+    vertical_code: 'doorsmeer',
+    schema_version: 1,
+    min_app_build: 1,
+    menus: [
+      menuItem('dashboard', 'Dashboard', 1),
+      menuItem('kasir', 'Kasir / Penerimaan', 2),
+      menuItem('proses', 'Papan Cuci', 3),
+      menuItem('produk', 'Layanan & Produk', 4),
+      menuItem('inventory', 'Inventory', 5),
+      menuItem('riwayat', 'Riwayat', 6),
+      menuItem('sesi', 'Sesi Kasir', 7),
+      menuItem('stasiun', 'Bay & Stasiun', 8),
+      menuItem('pelanggan', 'Pelanggan', 9),
+      menuItem('pengeluaran', 'Pengeluaran', 10),
+      menuItem('laporan', 'Laporan', 11),
+      menuItem('pengaturan', 'Pengaturan', 12)
+    ],
+    premium_features: PREMIUM_FEATURES,
+    capabilities: ['cart', 'payment', 'receipt_print', 'stages', 'queue', 'customer_tracking'],
+    transaction_flow: ['INTAKE', 'PAYMENT_OR_LATER', 'STAGES', 'PICKUP'],
+    lifecycle: {
+      states: ['ANTRIAN', 'PENCUCIAN', 'PENGERINGAN', 'FINISHING', 'SIAP_AMBIL', 'SELESAI'],
+      transitions: [
+        { from: 'ANTRIAN', to: 'PENCUCIAN', actor: 'staff' },
+        { from: 'PENCUCIAN', to: 'PENGERINGAN', actor: 'staff' },
+        { from: 'PENGERINGAN', to: 'FINISHING', actor: 'staff' },
+        { from: 'FINISHING', to: 'SIAP_AMBIL', actor: 'staff' },
+        { from: 'SIAP_AMBIL', to: 'SELESAI', actor: 'cashier' }
+      ]
+    },
+    item_config: { unit_mode: 'unit', identity: 'plate', weighable: false, notes: true },
+    payment_modes: ['TUNAI', 'QRIS', 'TRANSFER'],
+    station_types: [
+      { type: 'cashier', label: 'Kasir', min: 1 },
+      { type: 'washing', label: 'Pencucian', min: 1 },
+      { type: 'finishing', label: 'Finishing & Poles', min: 0 }
+    ],
+    revision: 1
+  },
+  // Salon / barbershop — cermin manifest_override server (§5.1): antrian walk-in
+  // per kursi, pelanggan hadir (tanpa tahap ambil), bayar setelah dilayani. Prefix S.
+  'TOKO-6': {
+    vertical_code: 'salon',
+    schema_version: 1,
+    min_app_build: 1,
+    menus: [
+      menuItem('dashboard', 'Dashboard', 1),
+      menuItem('kasir', 'Kasir', 2),
+      menuItem('antrian', 'Antrian Cukur', 3),
+      menuItem('produk', 'Layanan & Produk', 4),
+      menuItem('inventory', 'Inventory', 5),
+      menuItem('riwayat', 'Riwayat', 6),
+      menuItem('sesi', 'Sesi Kasir', 7),
+      menuItem('stasiun', 'Kursi & Kapster', 8),
+      menuItem('pelanggan', 'Pelanggan', 9),
+      menuItem('pengeluaran', 'Pengeluaran', 10),
+      menuItem('laporan', 'Laporan', 11),
+      menuItem('pengaturan', 'Pengaturan', 12)
+    ],
+    premium_features: PREMIUM_FEATURES,
+    capabilities: ['cart', 'payment', 'receipt_print', 'stages', 'queue', 'customer_tracking'],
+    transaction_flow: ['QUEUE', 'SERVICE', 'PAYMENT_OR_LATER'],
+    lifecycle: {
+      states: ['ANTRIAN', 'DILAYANI', 'SELESAI'],
+      transitions: [
+        { from: 'ANTRIAN', to: 'DILAYANI', actor: 'staff' },
+        { from: 'DILAYANI', to: 'SELESAI', actor: 'cashier' }
+      ]
+    },
+    item_config: { unit_mode: 'unit', identity: 'none', weighable: false, notes: true },
+    payment_modes: ['TUNAI', 'QRIS', 'TRANSFER'],
+    station_types: [
+      { type: 'cashier', label: 'Kasir', min: 1 },
+      { type: 'chair', label: 'Kursi / Kapster', min: 1 }
+    ],
+    revision: 1
   }
 }
 
@@ -382,6 +479,77 @@ function buatProdukBengkel() {
   ]
 }
 
+// ---------- Katalog doorsmeer & salon/barbershop ----------
+// Seperti bengkel: campuran JASA (tanpa stok, harga_beli null) dan PRODUK berstok
+// (retail di kasir yang sama) — `tipe` ditetapkan eksplisit, bukan dari default per toko.
+
+const KATEGORI_DOORSMEER = [
+  { id: 'KD-1', kode: 'MTR', nama: 'Motor' },
+  { id: 'KD-2', kode: 'MBL', nama: 'Mobil' },
+  { id: 'KD-3', kode: 'DTL', nama: 'Detailing' },
+  { id: 'KD-4', kode: 'PRD', nama: 'Produk' }
+]
+
+const KATEGORI_SALON = [
+  { id: 'KS-1', kode: 'PTG', nama: 'Potong' },
+  { id: 'KS-2', kode: 'RWT', nama: 'Perawatan' },
+  { id: 'KS-3', kode: 'PRD', nama: 'Produk' }
+]
+
+/** Pabrik item bertipe eksplisit untuk satu toko: `jasa()` tanpa stok, `produk()` berstok. */
+function pabrikItemJasa(prefix) {
+  let n = 0
+  const id = () => `${prefix}-${String(++n).padStart(3, '0')}`
+  const jasa = (kode, nama, harga, kategori, satuan = 'Unit') => ({
+    id: id(), kode, nama, barcode: null, tipe: 'JASA',
+    harga_jual: harga, harga_beli: null, pajak_persen: 0,
+    satuan, satuan_id: null, kategori,
+    kelola_stok: false, stok: 0, gambar: null
+  })
+  const produk = (kode, nama, harga, kategori, stok, barcode = null, satuan = 'Pcs') => ({
+    id: id(), kode, nama, barcode, tipe: 'PRODUK',
+    harga_jual: harga, harga_beli: Math.round(harga * 0.65), pajak_persen: 0,
+    satuan, satuan_id: null, kategori,
+    kelola_stok: true, stok, gambar: null
+  })
+  return { jasa, produk }
+}
+
+function buatProdukDoorsmeer() {
+  const { jasa, produk } = pabrikItemJasa('DSM')
+  return [
+    jasa('MTR-001', 'Cuci Motor', 15000, 'Motor'),
+    jasa('MTR-002', 'Cuci Motor Besar / Moge', 25000, 'Motor'),
+    jasa('MTR-003', 'Cuci Motor + Semir Ban', 20000, 'Motor'),
+    jasa('MBL-001', 'Cuci Mobil Kecil (City Car)', 40000, 'Mobil'),
+    jasa('MBL-002', 'Cuci Mobil Besar (SUV/MPV)', 55000, 'Mobil'),
+    jasa('MBL-003', 'Cuci + Vacuum Interior', 70000, 'Mobil'),
+    jasa('DTL-001', 'Cuci Mesin', 60000, 'Detailing'),
+    jasa('DTL-002', 'Poles Body', 150000, 'Detailing'),
+    jasa('DTL-003', 'Coating Kaca', 120000, 'Detailing'),
+    produk('PRD-001', 'Parfum Mobil Gantung', 25000, 'Produk', 12, '8991007101'),
+    produk('PRD-002', 'Shampo Mobil 1L', 35000, 'Produk', 4, '8991007102', 'Botol'),
+    produk('PRD-003', 'Kanebo / Lap Chamois', 20000, 'Produk', 9, '8991007103')
+  ]
+}
+
+function buatProdukSalon() {
+  const { jasa, produk } = pabrikItemJasa('SLN')
+  return [
+    jasa('PTG-001', 'Potong Rambut Dewasa', 35000, 'Potong'),
+    jasa('PTG-002', 'Potong Rambut Anak', 25000, 'Potong'),
+    jasa('PTG-003', 'Potong + Cuci + Pijat', 55000, 'Potong'),
+    jasa('PTG-004', 'Cukur Jenggot & Kumis', 15000, 'Potong'),
+    jasa('PTG-005', 'Hair Tattoo / Ukir', 20000, 'Potong'),
+    jasa('RWT-001', 'Creambath', 45000, 'Perawatan'),
+    jasa('RWT-002', 'Semir Rambut', 60000, 'Perawatan'),
+    jasa('RWT-003', 'Masker Wajah', 30000, 'Perawatan'),
+    produk('PRD-001', 'Pomade Water Based 100g', 60000, 'Produk', 9, '8991008101'),
+    produk('PRD-002', 'Hair Tonic 120ml', 45000, 'Produk', 3, '8991008102', 'Botol'),
+    produk('PRD-003', 'Sisir Saku', 10000, 'Produk', 20, '8991008103')
+  ]
+}
+
 // Meja ber-QR untuk toko F&B (kode dipakai di URL /o/{kode} — stabil & unik)
 const TABLES = [
   { id: 'MEJA-1', toko_id: 'TOKO-2', nomor: '1', kode: 'MJ-BAKSO-01' },
@@ -403,6 +571,6 @@ const PELANGGAN_AWAL = [
 
 module.exports = {
   COMPANY, USER, BRANCH, KATEGORI, GUDANG, SATUAN, PELANGGAN_AWAL, TOKOS, MANIFESTS, TABLES,
-  buatProduk, buatProdukBakso, buatProdukLaundry, buatProdukBengkel,
-  KATEGORI_BAKSO, KATEGORI_LAUNDRY, KATEGORI_BENGKEL
+  buatProduk, buatProdukBakso, buatProdukLaundry, buatProdukBengkel, buatProdukDoorsmeer, buatProdukSalon,
+  KATEGORI_BAKSO, KATEGORI_LAUNDRY, KATEGORI_BENGKEL, KATEGORI_DOORSMEER, KATEGORI_SALON
 }

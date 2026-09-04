@@ -49,7 +49,7 @@ const MODULES = {
   pengaturan: { screen: 'settings', title: 'Pengaturan', icon: null, desc: 'Server, akun, dan informasi aplikasi.' },
   dapur: { screen: 'orders', title: 'Dapur (KDS)', iconKey: 'kitchen', desc: 'Layar dapur: klaim pesanan, mulai masak, tandai siap.' },
   antrian: { screen: 'orders', title: 'Antrian', iconKey: 'queue', desc: 'Papan nomor antrian pesanan yang sedang berjalan.' },
-  proses: { screen: 'orders', title: 'Papan Proses', iconKey: 'kanban', desc: 'Tahapan pengerjaan: cuci, kering, lipat, siap ambil.' },
+  proses: { screen: 'orders', title: 'Papan Proses', iconKey: 'kanban', desc: 'Tahapan pengerjaan pesanan, dari antrian sampai siap diambil.' },
   meja: { screen: 'peta-meja', title: 'Meja', iconKey: 'store', desc: 'Buka meja, catat pesanan, dan bayar saat pulang.' },
   stasiun: { screen: 'stations', title: 'Stasiun', iconKey: 'station', desc: 'Atur jumlah & status stasiun kerja di toko ini.' },
   produk: { screen: 'products', title: 'Produk', iconKey: 'box', desc: 'Jelajahi katalog — harga, barcode, dan posisi stok.' },
