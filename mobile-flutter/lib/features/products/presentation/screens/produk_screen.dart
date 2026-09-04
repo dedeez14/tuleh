@@ -74,10 +74,13 @@ class _Tile extends StatelessWidget {
   const _Tile({required this.product});
   final Product product;
 
+  bool get _jasa => (product.tipe ?? '').toUpperCase() == 'JASA';
+
   @override
   Widget build(BuildContext context) {
     final stok = product.stok;
-    final habis = stok != null && stok <= 0;
+    final habis = !_jasa && stok != null && stok <= 0;
+    final menipis = !_jasa && stok != null && stok > 0 && stok <= 5;
     return Card(
       margin: EdgeInsets.zero,
       child: ListTile(
@@ -102,21 +105,21 @@ class _Tile extends StatelessWidget {
           if (product.satuan != null) '/ ${product.satuan}',
           if (product.kategori != null) '· ${product.kategori}',
         ].join(' ')),
-        trailing: stok == null
-            ? null
-            : Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: (habis ? AppColors.danger : AppColors.mint600)
-                      .withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text('Stok ${stok.toInt()}',
-                    style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: habis ? AppColors.danger : AppColors.mint700)),
-              ),
+        // Jasa tidak punya stok: sebelumnya tampil "Stok 0" merah seolah habis,
+        // menyesatkan pemilik toko. Kini jasa berlencana "Jasa", barang
+        // berlencana stok dengan warna habis/menipis/aman.
+        trailing: _jasa
+            ? _Lencana(teks: 'Jasa', warna: AppColors.mint700, ikon: Icons.handyman_outlined)
+            : stok == null
+                ? null
+                : _Lencana(
+                    teks: habis ? 'Habis' : 'Stok ${stok.toInt()}',
+                    warna: habis
+                        ? AppColors.danger
+                        : menipis
+                            ? AppColors.warn
+                            : AppColors.mint700,
+                  ),
       ),
     );
   }
@@ -147,7 +150,8 @@ class _Detail extends ConsumerWidget {
             _kv('Satuan', product.satuan),
             _kv('Kategori', product.kategori),
             _kv('Barcode', product.barcode),
-            _kv('Stok', product.stok?.toInt().toString()),
+            if ((product.tipe ?? '').toUpperCase() != 'JASA')
+              _kv('Stok', product.stok?.toInt().toString()),
             const SizedBox(height: 16),
             Row(
               children: [
@@ -158,14 +162,17 @@ class _Detail extends ConsumerWidget {
                     label: const Text('Edit'),
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton.tonalIcon(
-                    onPressed: () => _tambahStok(context, ref),
-                    icon: const Icon(Icons.add_box_outlined),
-                    label: const Text('Tambah Stok'),
+                // Tambah stok tidak relevan untuk jasa.
+                if ((product.tipe ?? '').toUpperCase() != 'JASA') ...[
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton.tonalIcon(
+                      onPressed: () => _tambahStok(context, ref),
+                      icon: const Icon(Icons.add_box_outlined),
+                      label: const Text('Tambah Stok'),
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
           ],
@@ -229,4 +236,32 @@ class _Detail extends ConsumerWidget {
             content: Text(e.firstError() ?? e.message)));
     }
   }
+}
+
+class _Lencana extends StatelessWidget {
+  const _Lencana({required this.teks, required this.warna, this.ikon});
+  final String teks;
+  final Color warna;
+  final IconData? ikon;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: warna.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (ikon != null) ...[
+              Icon(ikon, size: 13, color: warna),
+              const SizedBox(width: 4),
+            ],
+            Text(teks,
+                style: TextStyle(
+                    fontSize: 12, fontWeight: FontWeight.w700, color: warna)),
+          ],
+        ),
+      );
 }

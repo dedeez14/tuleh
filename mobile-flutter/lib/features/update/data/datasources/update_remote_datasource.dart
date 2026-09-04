@@ -1,16 +1,37 @@
 import 'package:dio/dio.dart';
 
 import '../../domain/entities/app_version_info.dart';
+import 'github_release_source.dart';
 
-/// Cek versi ke server (Auto-Update). `GET /app/versi?versi=<v>` — TANPA auth.
-/// FAIL-OPEN: error jaringan / bentuk tak terduga → [AppVersionInfo.none]
-/// (kegagalan cek TAK PERNAH memblokir app; penegakan keras lewat HTTP 426).
+/// Cek versi (Auto-Update). Dua sumber, berurutan:
+///
+/// 1. Server MOVERA `GET /app/versi?versi=<v>` (tanpa auth). Hanya server yang
+///    boleh menyatakan `wajib` (penegakan keras lewat HTTP 426).
+/// 2. Bila server tidak menawarkan apa pun: GitHub Releases `flutter-v*` —
+///    tempat APK Flutter benar-benar diterbitkan. Server hanya mengenal versi
+///    aplikasi Android lama (0.9.x), sehingga tanpa langkah ini aplikasi
+///    Flutter tidak pernah tahu ada versi baru.
+///
+/// FAIL-OPEN: kegagalan cek TAK PERNAH memblokir aplikasi.
 class UpdateRemoteDataSource {
-  UpdateRemoteDataSource(this._dio);
+  UpdateRemoteDataSource(this._dio, {GithubReleaseSource? github})
+    : _github = github ?? GithubReleaseSource();
 
   final Dio _dio;
+  final GithubReleaseSource _github;
 
-  Future<AppVersionInfo> cek(String versi) async {
+  Future<AppVersionInfo> cek(
+    String versi, {
+    List<String> abiPerangkat = const [],
+  }) async {
+    final dariServer = await _cekServer(versi);
+    if (dariServer.wajib || dariServer.updateTersedia) return dariServer;
+
+    final dariGithub = await _github.cek(versi, abiPerangkat: abiPerangkat);
+    return dariGithub ?? dariServer;
+  }
+
+  Future<AppVersionInfo> _cekServer(String versi) async {
     try {
       final res = await _dio.get<dynamic>(
         '/app/versi',

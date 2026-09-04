@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/network/api_client.dart';
@@ -12,11 +15,24 @@ final updateRemoteProvider = Provider<UpdateRemoteDataSource>(
   (ref) => UpdateRemoteDataSource(ref.watch(dioProvider)),
 );
 
-/// Cek versi ke server (fail-open). Di-refresh saat start & kembali foreground
-/// (UpdateGate memanggil `ref.invalidate`).
+/// ABI yang didukung perangkat (urutan prioritas sistem) — menentukan APK
+/// mana yang diunduh dari rilis split-per-abi. Kosong bila tak terbaca.
+final abiPerangkatProvider = FutureProvider<List<String>>((ref) async {
+  if (!Platform.isAndroid) return const [];
+  try {
+    final info = await DeviceInfoPlugin().androidInfo;
+    return info.supportedAbis;
+  } catch (_) {
+    return const [];
+  }
+});
+
+/// Cek versi: server dulu, lalu GitHub Releases (fail-open). Di-refresh saat
+/// start & kembali foreground (UpdateGate memanggil `ref.invalidate`).
 final appVersionInfoProvider = FutureProvider<AppVersionInfo>((ref) async {
   final versi = ref.watch(appVersionProvider);
-  return ref.watch(updateRemoteProvider).cek(versi);
+  final abi = await ref.watch(abiPerangkatProvider.future);
+  return ref.watch(updateRemoteProvider).cek(versi, abiPerangkat: abi);
 });
 
 String _todayKey() {
