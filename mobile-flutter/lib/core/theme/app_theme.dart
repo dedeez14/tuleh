@@ -83,7 +83,7 @@ class AppTheme {
         style: FilledButton.styleFrom(
           backgroundColor: AppColors.mint400,
           foregroundColor: AppColors.mint900,
-          minimumSize: const Size.fromHeight(54),
+          minimumSize: const Size(64, 54), // BUKAN fromHeight: lebar tak hingga meledak di Row/dialog
           textStyle: GoogleFonts.plusJakartaSans(
             fontSize: 16,
             fontWeight: FontWeight.w800,
@@ -95,7 +95,7 @@ class AppTheme {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          minimumSize: const Size.fromHeight(50),
+          minimumSize: const Size(64, 50),
           side: BorderSide(color: scheme.outline),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(radius),
@@ -154,6 +154,93 @@ class AppTheme {
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(radius),
+        ),
+      ),
+      // Navigasi utama (Material 3): indikator pil mint, label selalu tampak
+      // agar tujuan terbaca tanpa menebak ikon.
+      navigationBarTheme: NavigationBarThemeData(
+        height: 68,
+        elevation: 0,
+        backgroundColor: scheme.surface,
+        indicatorColor: AppColors.mint400.withValues(alpha: isDark ? 0.28 : 0.4),
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        iconTheme: WidgetStateProperty.resolveWith(
+          (s) => IconThemeData(
+            color: s.contains(WidgetState.selected)
+                ? (isDark ? AppColors.mint100 : AppColors.mint900)
+                : scheme.onSurface.withValues(alpha: 0.65),
+          ),
+        ),
+        labelTextStyle: WidgetStateProperty.resolveWith(
+          (s) => GoogleFonts.plusJakartaSans(
+            fontSize: 12,
+            fontWeight: s.contains(WidgetState.selected)
+                ? FontWeight.w800
+                : FontWeight.w600,
+            color: s.contains(WidgetState.selected)
+                ? scheme.onSurface
+                : scheme.onSurface.withValues(alpha: 0.65),
+          ),
+        ),
+      ),
+      navigationRailTheme: NavigationRailThemeData(
+        backgroundColor: scheme.surface,
+        indicatorColor: AppColors.mint400.withValues(alpha: isDark ? 0.28 : 0.4),
+        selectedIconTheme: IconThemeData(
+          color: isDark ? AppColors.mint100 : AppColors.mint900,
+        ),
+        unselectedIconTheme: IconThemeData(
+          color: scheme.onSurface.withValues(alpha: 0.65),
+        ),
+        selectedLabelTextStyle: GoogleFonts.plusJakartaSans(
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+          color: scheme.onSurface,
+        ),
+        unselectedLabelTextStyle: GoogleFonts.plusJakartaSans(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: scheme.onSurface.withValues(alpha: 0.65),
+        ),
+      ),
+      badgeTheme: const BadgeThemeData(
+        backgroundColor: AppColors.danger,
+        textColor: Colors.white,
+      ),
+      chipTheme: ChipThemeData(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(999),
+        ),
+        side: BorderSide(color: scheme.outline),
+        labelStyle: GoogleFonts.plusJakartaSans(
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      ),
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: SegmentedButton.styleFrom(
+          selectedBackgroundColor: AppColors.mint400.withValues(alpha: 0.35),
+          selectedForegroundColor: isDark
+              ? AppColors.mint100
+              : AppColors.mint900,
+          side: BorderSide(color: scheme.outline),
+          textStyle: GoogleFonts.plusJakartaSans(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: scheme.surface,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(radius + 6),
+        ),
+        titleTextStyle: GoogleFonts.plusJakartaSans(
+          fontSize: 18,
+          fontWeight: FontWeight.w800,
+          color: scheme.onSurface,
         ),
       ),
       materialTapTargetSize: MaterialTapTargetSize.padded,

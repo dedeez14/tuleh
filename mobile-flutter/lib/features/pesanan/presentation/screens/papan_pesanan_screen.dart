@@ -434,9 +434,12 @@ class _Kartu extends StatelessWidget {
           const SizedBox(height: 10),
           Row(
             children: [
-              Text(
-                fmtIDR(pesanan.total),
-                style: const TextStyle(fontWeight: FontWeight.w700),
+              Flexible(
+                child: Text(
+                  fmtIDR(pesanan.total),
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
               ),
               if (pesanan.belumBayar) ...[
                 const SizedBox(width: 8),
@@ -459,20 +462,28 @@ class _Kartu extends StatelessWidget {
                   ),
                 ),
               ],
-              const Spacer(),
-              if (aksi != null)
-                FilledButton(
-                  onPressed: busy ? null : () => onAksi(pesanan, aksi),
-                  child: busy
-                      ? const SizedBox(
-                          height: 16,
-                          width: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Text(labelAksi(aksi, pesanan.stage, states)),
-                ),
             ],
           ),
+          // Tombol aksi selebar kartu di baris sendiri: sasaran sentuh besar
+          // untuk layar dapur/bengkel, dan label panjang ("→ Siap Diambil")
+          // tidak pernah berebut ruang dengan total di ponsel sempit.
+          if (aksi != null) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                style: FilledButton.styleFrom(minimumSize: const Size(64, 46)),
+                onPressed: busy ? null : () => onAksi(pesanan, aksi),
+                child: busy
+                    ? const SizedBox(
+                        height: 16,
+                        width: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Text(labelAksi(aksi, pesanan.stage, states)),
+              ),
+            ),
+          ],
         ],
       ),
     );

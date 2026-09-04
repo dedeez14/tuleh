@@ -66,13 +66,18 @@ class _Body extends ConsumerWidget {
             border: Border.all(color: cs.outline),
           ),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Total bulan ini',
-                  style: TextStyle(color: cs.onSurface.withValues(alpha: 0.65))),
-              Text(fmtIDR(total),
-                  style: const TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.danger)),
+              Expanded(
+                child: Text('Total bulan ini',
+                    style: TextStyle(color: cs.onSurface.withValues(alpha: 0.65))),
+              ),
+              const SizedBox(width: 12),
+              Flexible(
+                child: Text(fmtIDR(total),
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.danger)),
+              ),
             ],
           ),
         ),
@@ -107,11 +112,18 @@ class _Tile extends ConsumerWidget {
         title: Text(p.keterangan, style: const TextStyle(fontWeight: FontWeight.w600)),
         subtitle: Text(fmtTanggal(p.tanggal),
             style: TextStyle(color: cs.onSurface.withValues(alpha: 0.6), fontSize: 12)),
+        // Trailing dibatasi lebarnya: ListTile memberi trailing ruang bebas,
+        // dan nominal panjang + tombol hapus pernah mendorong judul keluar
+        // layar pada ponsel 320px.
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(fmtIDR(p.nominal),
-                style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.danger)),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 120),
+              child: Text(fmtIDR(p.nominal),
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.danger)),
+            ),
             IconButton(
               icon: Icon(Icons.delete_outline, color: cs.onSurface.withValues(alpha: 0.5)),
               onPressed: () => _hapus(context, ref),

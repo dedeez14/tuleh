@@ -341,24 +341,29 @@ class _KartuProduk extends StatelessWidget {
                     const SizedBox(height: 6),
                     Row(
                       children: [
-                        Text(
-                          fmtIDR(product.harga),
-                          style: TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 15,
-                            color: cs.primary,
+                        Flexible(
+                          child: Text(
+                            fmtIDR(product.harga),
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 15,
+                              color: cs.primary,
+                            ),
                           ),
                         ),
                         if (product.satuan != null &&
-                            product.satuan!.isNotEmpty) ...[
-                          Text(
-                            ' / ${product.satuan}',
-                            style: TextStyle(
-                              fontSize: 12.5,
-                              color: cs.onSurface.withValues(alpha: 0.55),
+                            product.satuan!.isNotEmpty)
+                          Flexible(
+                            child: Text(
+                              ' / ${product.satuan}',
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                color: cs.onSurface.withValues(alpha: 0.55),
+                              ),
                             ),
                           ),
-                        ],
                       ],
                     ),
                     if (!_jasa && product.stok != null) ...[

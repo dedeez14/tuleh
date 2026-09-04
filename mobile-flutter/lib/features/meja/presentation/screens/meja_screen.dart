@@ -37,13 +37,19 @@ class MejaScreen extends ConsumerWidget {
                     child: Center(child: Text('Toko ini tidak menggunakan meja.')),
                   ),
                 ])
-              : GridView.count(
-                  crossAxisCount: 2,
+              // Kolom mengikuti lebar layar (bukan tetap 2) dan tinggi kartu
+              // tetap, bukan rasio: rasio membuat kartu terlalu pendek di
+              // ponsel sempit sehingga isinya meluber.
+              : GridView.builder(
                   padding: const EdgeInsets.all(16),
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 12,
-                  childAspectRatio: 1.35,
-                  children: [for (final m in list) _MejaCard(meja: m)],
+                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: 220,
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    mainAxisExtent: 118,
+                  ),
+                  itemCount: list.length,
+                  itemBuilder: (_, i) => _MejaCard(meja: list[i]),
                 ),
         ),
       ),
@@ -82,9 +88,12 @@ class _MejaCard extends ConsumerWidget {
                 children: [
                   Icon(Icons.table_restaurant_outlined, color: fg, size: 22),
                   const SizedBox(width: 8),
-                  Text('Meja ${meja.nomor}',
-                      style: TextStyle(
-                          color: fg, fontWeight: FontWeight.w800, fontSize: 16)),
+                  Expanded(
+                    child: Text('Meja ${meja.nomor}',
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            color: fg, fontWeight: FontWeight.w800, fontSize: 16)),
+                  ),
                 ],
               ),
               if (terisi)
@@ -92,9 +101,13 @@ class _MejaCard extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('Terisi${meja.pax != null ? ' · ${meja.pax} org' : ''}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(color: fg.withValues(alpha: 0.85), fontSize: 12)),
                     if (meja.billTotal != null)
                       Text(fmtIDR(meja.billTotal!),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(color: fg, fontWeight: FontWeight.w800)),
                   ],
                 )
@@ -103,8 +116,11 @@ class _MejaCard extends ConsumerWidget {
                   children: [
                     Icon(Icons.add_circle_outline, color: cs.primary, size: 18),
                     const SizedBox(width: 6),
-                    Text('Buka bon',
-                        style: TextStyle(color: cs.primary, fontWeight: FontWeight.w700)),
+                    Flexible(
+                      child: Text('Buka bon',
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: cs.primary, fontWeight: FontWeight.w700)),
+                    ),
                   ],
                 ),
             ],

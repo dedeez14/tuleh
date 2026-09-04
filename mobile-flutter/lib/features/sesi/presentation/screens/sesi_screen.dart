@@ -151,16 +151,26 @@ class _RekapView extends ConsumerWidget {
         ),
       );
 
+  // Label memakai Expanded dan nilai Flexible: dua Text telanjang di Row
+  // spaceBetween meluber begitu label panjang bertemu nominal jutaan di
+  // ponsel 320px.
   Widget _row(String label, String value, {bool bold = false}) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 3),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(label, style: TextStyle(fontWeight: bold ? FontWeight.w700 : FontWeight.w400)),
-            Text(value,
-                style: TextStyle(
-                    fontWeight: bold ? FontWeight.w800 : FontWeight.w600,
-                    fontSize: bold ? 15 : 14)),
+            Expanded(
+              child: Text(label,
+                  style: TextStyle(fontWeight: bold ? FontWeight.w700 : FontWeight.w400)),
+            ),
+            const SizedBox(width: 12),
+            Flexible(
+              child: Text(value,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                      fontWeight: bold ? FontWeight.w800 : FontWeight.w600,
+                      fontSize: bold ? 15 : 14)),
+            ),
           ],
         ),
       );

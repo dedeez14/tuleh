@@ -32,10 +32,6 @@ final dioProvider = Provider<Dio>((ref) {
     ),
   );
 
-  // Mode Demo dipasang paling depan: bila aktif, permintaan dijawab dari
-  // mesin demo lokal dan tidak pernah keluar ke jaringan.
-  dio.interceptors.add(DemoInterceptor(ref.watch(demoSessionProvider)));
-
   dio.interceptors.add(
     InterceptorsWrapper(
       onRequest: (options, handler) async {
@@ -63,6 +59,12 @@ final dioProvider = Provider<Dio>((ref) {
       },
     ),
   );
+
+  // Mode Demo dipasang SETELAH interceptor header/toko: `handler.resolve`
+  // menghentikan rantai, jadi bila demo di depan, `toko_id` tidak pernah
+  // ditambahkan dan semua data demo jatuh ke toko pertama apa pun toko yang
+  // dipilih pengguna. Saat demo aktif, permintaan tetap tidak keluar ke jaringan.
+  dio.interceptors.add(DemoInterceptor(ref.watch(demoSessionProvider)));
 
   return dio;
 });
