@@ -63,8 +63,12 @@ if (!app.requestSingleInstanceLock()) {
         smokeLog.push(`did-fail-load: ${code} ${desc}`)
       })
       mainWindow.webContents.once('did-finish-load', () => {
-        // Uji tunnel butuh waktu koneksi edge lebih lama
-        const tundaSmokeMs = process.env.IPOS_SMOKE_TUNNEL === '1' ? 30000
+        // Uji tunnel butuh waktu koneksi edge lebih lama. IPOS_SMOKE_DELAY (ms)
+        // menimpa semua: screenshot layar butuh > durasi splash (2800 ms),
+        // jika tidak yang tertangkap hanya splash "Memuat…".
+        const delayEnv = Number(process.env.IPOS_SMOKE_DELAY)
+        const tundaSmokeMs = Number.isFinite(delayEnv) && delayEnv > 0 ? delayEnv
+          : process.env.IPOS_SMOKE_TUNNEL === '1' ? 30000
           : process.env.IPOS_SMOKE_FLOW ? 3000 : 1500
         setTimeout(async () => {
           if (process.env.IPOS_SMOKE_SHOT) {
