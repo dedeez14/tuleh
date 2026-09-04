@@ -21,6 +21,8 @@ import 'package:tuleh_pos/features/pengaturan/domain/entities/pengaturan_pembaya
 import 'package:tuleh_pos/features/pengaturan/presentation/providers/pengaturan_providers.dart';
 import 'package:tuleh_pos/features/products/domain/entities/product.dart';
 import 'package:tuleh_pos/features/toko/presentation/providers/toko_providers.dart';
+import 'helpers/masa_coba_palsu.dart';
+import 'package:tuleh_pos/features/demo/data/masa_coba_service.dart';
 
 /// Alur bayar di kasir — temuan uji lapangan 4 Sep 2026 dengan akun sungguhan:
 /// 1. kolom uang tanpa pemisah ribuan menyulitkan kasir;
@@ -101,7 +103,10 @@ void main() {
 
     setUp(() {
       c = ProviderContainer(
-        overrides: [secureStorageProvider.overrideWithValue(_FakeStorage())],
+        overrides: [
+        secureStorageProvider.overrideWithValue(_FakeStorage()),
+        masaCobaServiceProvider.overrideWithValue(MasaCobaPalsu()),
+      ],
       );
       // Aktifkan listener (Notifier dibangun saat pertama dibaca).
       c.read(cartControllerProvider);
@@ -146,6 +151,7 @@ void main() {
       final c = ProviderContainer(
         overrides: [
           secureStorageProvider.overrideWithValue(_FakeStorage()),
+          masaCobaServiceProvider.overrideWithValue(MasaCobaPalsu()),
           pengaturanPembayaranProvider.overrideWith((_) async => pembayaran),
         ],
       );

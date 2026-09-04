@@ -12,7 +12,7 @@ import { ringkasLangganan } from './langganan.js'
 import { mulaiPembayaran } from './langganan-bayar.js'
 import { esc, fmtIDR, fmtNumber, toISODate } from './utils/format.js'
 import { LOGO_DATA_URI } from './assets/logo.js'
-import { renderLogin } from './screens/login.js'
+import { renderLogin, tampilkanDemoBerakhir } from './screens/login.js'
 import { PosScreen } from './screens/pos.js'
 import { HistoryScreen } from './screens/history.js'
 import { SessionsScreen } from './screens/sessions.js'
@@ -30,6 +30,7 @@ import { StokScreen } from './screens/stok.js'
 import { InventoryScreen } from './screens/inventory.js'
 import { analisisStok } from './lib/stok-store.js'
 import { mulaiPemantau, hentikanPemantau } from './pemantau-pesanan.js'
+import { bukaBantuanPintasan } from './components/pintasan.js'
 
 const SCREENS = [
   PosScreen, HistoryScreen, SessionsScreen, ReportsScreen, SettingsScreen,
@@ -377,7 +378,7 @@ function openPerpanjang() {
 // ---------- Shell: top bar + area layar ----------
 
 function renderShell() {
-  const { user, demo, toko, tokoList } = getState()
+  const { user, demo, toko, tokoList, demoSisaHari } = getState()
   const initials = (user?.name || '?')
     .split(/\s+/)
     .map((w) => w[0])
@@ -410,7 +411,7 @@ function renderShell() {
         </button>
         <span class="topbar__screen" id="tb-screen"></span>
         <div class="topbar__spacer"></div>
-        ${demo ? '<span class="topbar__demo" title="Semua data hanya simulasi lokal">DEMO</span>' : ''}
+        ${demo ? `<span class="topbar__demo" title="Semua data hanya simulasi lokal">DEMO${demoSisaHari != null ? ` · ${demoSisaHari} hari` : ''}</span>` : ''}
         <div class="topbar__notif" id="tb-notif-wrap">
           <button type="button" class="icon-btn topbar__bell" id="tb-notif" title="Notifikasi" aria-label="Notifikasi" aria-haspopup="true" aria-expanded="false">
             ${icons.bell}
@@ -764,7 +765,8 @@ async function enterApp(identity) {
     permissions: identity.permissions || [],
     modules: identity.modules || {},
     paymentMethods: identity.payment_methods || [],
-    demo: !!identity.demo
+    demo: !!identity.demo,
+    demoSisaHari: identity.demo && identity.masaCoba ? identity.masaCoba.sisaHari : null
   })
   // Toko dulu (menetapkan toko aktif) baru workspace, agar /gudang, /kategori,
   // /langganan otomatis membawa ?toko_id (MOVERA §1.3).
@@ -785,11 +787,54 @@ setInterval(async () => {
   const result = await api.net.ping()
   const online = !!result.ok
   if (getState().online !== online) setState({ online })
+  await periksaMasaCobaDemo()
 }, PING_INTERVAL_MS)
 
+// Masa coba Mode Demo (7 hari, waktu server): diperiksa berkala; bila berakhir
+// saat demo sedang dipakai → keluar ke layar masuk dengan pesan kunci.
+let demoTerkunci = false
+async function periksaMasaCobaDemo() {
+  const st = getState()
+  if (!st.demo || !st.user || demoTerkunci) return
+  const r = await api.demo.status()
+  if (!r.ok || !r.data) return
+  if (r.data.kode === 'BERAKHIR' || r.data.kode === 'RUSAK') {
+    demoTerkunci = true
+    toast('Masa coba Mode Demo 7 hari sudah berakhir.', 'error')
+    enterLogin()
+    tampilkanDemoBerakhir(appRoot)
+    demoTerkunci = false
+    return
+  }
+  if (r.data.sisaHari !== st.demoSisaHari) setState({ demoSisaHari: r.data.sisaHari })
+}
+
+// Pintasan global. Layar kasir menangani F1/Esc-nya sendiri (lebih spesifik);
+// di layar lain: F1 = bantuan, Esc = kembali ke Beranda bila tidak ada modal
+// dan fokus tidak di kolom isian, Ctrl+Shift+Q = keluar akun.
+function targetIsian(el) {
+  return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)
+}
 document.addEventListener('keydown', (e) => {
+  const st = getState()
+  if (!st.user) return
+  if (e.key === 'F1' && st.screen !== 'pos') {
+    e.preventDefault()
+    bukaBantuanPintasan('umum')
+    return
+  }
+  if (e.key === 'Escape' && st.screen !== 'pos' && st.screen !== 'home' &&
+      !document.querySelector('.modal-overlay') && !targetIsian(e.target)) {
+    e.preventDefault()
+    showScreen('home')
+    return
+  }
+  if (e.ctrlKey && e.shiftKey && !e.altKey && (e.key === 'Q' || e.key === 'q')) {
+    e.preventDefault()
+    doLogout()
+    return
+  }
   if (!e.ctrlKey || e.altKey || e.shiftKey) return
-  if (!getState().user) return
   if (e.key === '0') {
     e.preventDefault()
     showScreen('home')

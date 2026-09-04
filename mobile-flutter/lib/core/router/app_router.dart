@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/demo/presentation/demo_berakhir_screen.dart';
 import '../../features/auth/presentation/controllers/auth_controller.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/home/presentation/screens/home_screen.dart';
@@ -46,6 +47,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         if (auth.isLoading) return null;
         return loggedIn ? '/home' : '/login';
       }
+      if (loc == '/demo-berakhir') return null; // layar kunci masa coba
       if (!loggedIn && loc != '/login') return '/login';
       if (loggedIn && loc == '/login') return '/home';
       return null;
@@ -53,6 +55,10 @@ final routerProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(path: '/splash', builder: (_, _) => const SplashScreen()),
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
+      GoRoute(
+        path: '/demo-berakhir',
+        builder: (_, _) => const DemoBerakhirScreen(),
+      ),
 
       // ---- Tab utama ----
       StatefulShellRoute.indexedStack(

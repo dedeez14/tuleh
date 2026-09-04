@@ -4,6 +4,8 @@
 import { api, firstError } from '../api.js'
 import { hargaJual, hargaNormalSaatPromo } from '../utils/harga.js'
 import { pasangFormatRupiah } from '../utils/rupiah-input.js'
+import { hitungKolom, indeksTujuan, karakterCetak } from '../utils/navigasi-grid.js'
+import { bukaBantuanPintasan } from '../components/pintasan.js'
 import { getState, subscribe } from '../state.js'
 import { esc, fmtIDR, fmtNumber, parseAmount, debounce } from '../utils/format.js'
 import { toast, showModal, confirmDialog, emptyStateHTML, loadingHTML, icons } from '../components/ui.js'
@@ -139,7 +141,7 @@ function renderPos(container) {
             <span class="search-box__icon">${icons.barcode}</span>
             <input class="input input--lg" id="pos-search" type="text"
                    placeholder="Cari produk / scan barcode…" autocomplete="off" spellcheck="false" />
-            <span class="pos-search__keys"><span class="kbd">F2</span></span>
+            <span class="pos-search__keys" title="F2 fokus cari · Tab ke produk · panah pilih · Enter tambah · F1 semua pintasan"><span class="kbd">F2</span></span>
           </form>
           <div class="pos-chips" id="pos-chips" aria-label="Filter kategori">
             <button type="button" class="pos-chip is-active" data-id="">Semua</button>
@@ -159,7 +161,8 @@ function renderPos(container) {
           <div class="pos-cart__head-act">
             <button type="button" class="btn btn--ghost btn--sm" id="pos-cust-display" aria-pressed="false" title="Tampilkan pesanan ke pelanggan">Display</button>
             <button type="button" class="btn btn--ghost btn--icon btn--sm" id="pos-cust-cfg" title="Pengaturan Display Pelanggan (video promosi & URL LAN)">${icons.settings}</button>
-            <button type="button" class="btn btn--ghost btn--sm" id="pos-clear">Kosongkan</button>
+            <button type="button" class="btn btn--ghost btn--sm" id="pos-clear" title="F8">Kosongkan</button>
+            <button type="button" class="btn btn--ghost btn--icon btn--sm" id="pos-help" title="Pintasan keyboard (F1)" aria-label="Pintasan keyboard"><span class="kbd">F1</span></button>
           </div>
         </div>
         <div class="pos-cart__cust" id="pos-cust"></div>
@@ -827,6 +830,7 @@ function renderPos(container) {
       </button>`
 
     let modalClosed = false // dijaga oleh kelanjutan async QRIS (await bisa selesai pasca-tutup)
+    let lepasKeyMetode = null // pintasan F5–F7 metode bayar, dilepas saat modal tutup
     const modal = showModal({
       title: 'Pembayaran',
       body,
@@ -834,6 +838,7 @@ function renderPos(container) {
       size: 'md',
       onClose: () => {
         modalClosed = true
+        if (lepasKeyMetode) lepasKeyMetode()
         stopQris() // hentikan poll/countdown QRIS bila modal ditutup di tengah alur
         cdPayment = null; cdDone = false; cdDoneData = null
         pushCustomerDisplay() // kembalikan Display Pelanggan ke keranjang/sambutan
@@ -920,6 +925,17 @@ function renderPos(container) {
       metode = btn.dataset.metode
       applyMetode()
     })
+    // F5/F6/F7 = metode ke-1/2/3 (urutan tombol) — tanpa melepas fokus dari kolom uang.
+    const tombolMetode = [...body.querySelectorAll('.pos-pay__method')]
+    tombolMetode.forEach((b, i) => { b.title = `F${5 + i}` })
+    function onKeyMetode(e) {
+      const idx = { F5: 0, F6: 1, F7: 2 }[e.key]
+      if (idx === undefined || !tombolMetode[idx]) return
+      e.preventDefault()
+      tombolMetode[idx].click()
+    }
+    document.addEventListener('keydown', onKeyMetode)
+    lepasKeyMetode = () => document.removeEventListener('keydown', onKeyMetode)
 
     quickEl.addEventListener('click', (e) => {
       const btn = e.target.closest('.pos-pay__cash')
@@ -1340,26 +1356,101 @@ function renderPos(container) {
       el.tagName === 'SELECT' || el.isContentEditable)
   }
 
+  // Kartu produk yang bisa dipilih (urutan tampil).
+  const daftarKartu = () => [...gridEl.querySelectorAll('.pos-card:not([disabled])')]
+  const kartuFokus = () => (document.activeElement && document.activeElement.closest ? document.activeElement.closest('.pos-card') : null)
+
+  function fokusKartu(kartu) {
+    if (!kartu) return false
+    kartu.focus()
+    kartu.scrollIntoView({ block: 'nearest' })
+    return true
+  }
+
+  function produkDariKartu(kartu) {
+    return kartu ? produkList.find((p) => String(p.id) === kartu.dataset.id) : null
+  }
+
+  /** Baris keranjang yang sedang "dibidik": produk kartu berfokus, atau baris terakhir. */
+  function barisBidik() {
+    const p = produkDariKartu(kartuFokus())
+    if (p) return cart.find((l) => String(l.produk.id) === String(p.id)) || null
+    return cart.length ? cart[cart.length - 1] : null
+  }
+
+  function fokusCari() {
+    searchInput.focus()
+    searchInput.select()
+  }
+
   function onKeydown(e) {
-    if (e.key === 'F4') {
-      e.preventDefault()
-      if (cart.length) openPaymentModal()
-      return
-    }
     const modalOpen = !!document.querySelector('.modal-overlay')
-    if (e.key === 'F2' && !modalOpen) {
+    const editable = isEditableTarget(e.target)
+
+    if (e.key === 'F1') { e.preventDefault(); bukaBantuanPintasan('pos'); return }
+    if (e.key === 'F4' || (e.key === 'Enter' && e.ctrlKey)) {
       e.preventDefault()
-      searchInput.focus()
-      searchInput.select()
+      if (!modalOpen && cart.length) openPaymentModal()
       return
     }
-    if (e.key === '/' && !modalOpen && !isEditableTarget(e.target)) {
+    if (modalOpen) return // modal punya tombolnya sendiri (Esc ditangani ui.js)
+
+    if (e.key === 'F2') { e.preventDefault(); fokusCari(); return }
+    if (e.key === 'F8') { e.preventDefault(); clearBtn.click(); return }
+    if (e.key === '/' && !editable) { e.preventDefault(); fokusCari(); return }
+
+    // Esc bertingkat: kosongkan pencarian → kembali ke Beranda.
+    if (e.key === 'Escape') {
       e.preventDefault()
-      searchInput.focus()
-      searchInput.select()
+      if (e.target === searchInput && searchInput.value) {
+        searchInput.value = ''
+        searchInput.dispatchEvent(new Event('input', { bubbles: true }))
+        return
+      }
+      if (editable && e.target !== searchInput) { e.target.blur(); fokusCari(); return }
+      import('../app.js').then(({ showScreen }) => showScreen('home'))
+      return
     }
+
+    // Tab dari kolom cari → langsung ke produk pertama (lewati filter kategori).
+    if (e.key === 'Tab' && !e.shiftKey && e.target === searchInput) {
+      const kartu = daftarKartu()
+      if (kartu.length) { e.preventDefault(); fokusKartu(kartu[0]) }
+      return
+    }
+
+    const kartu = kartuFokus()
+    if (kartu) {
+      const semua = daftarKartu()
+      const i = semua.indexOf(kartu)
+      if (e.key === 'Tab' && e.shiftKey) { e.preventDefault(); fokusCari(); return }
+      const tujuan = indeksTujuan(e.key, i, semua.length, hitungKolom(semua))
+      if (tujuan >= 0) { e.preventDefault(); fokusKartu(semua[tujuan]); return }
+      // Enter/Spasi ditangani tombol (klik) → addToCart lewat gridEl click.
+      if (e.key === '+' || e.key === '=' || e.key === '-' || e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault()
+        const p = produkDariKartu(kartu)
+        const line = cart.find((l) => String(l.produk.id) === String(p && p.id))
+        if (e.key === 'Delete' || e.key === 'Backspace') { if (line) setQty(line, 0); return }
+        if (e.key === '-') { if (line) setQty(line, Number(line.kuantitas) - 1); return }
+        if (line) setQty(line, Number(line.kuantitas) + 1); else if (p) addToCart(p)
+        return
+      }
+      // Mengetik huruf/angka saat di grid → lompat ke pencarian (juga jalur scanner barcode).
+      if (karakterCetak(e)) { fokusCari(); searchInput.value = ''; return }
+      return
+    }
+
+    if (editable) return
+    // Tanpa fokus khusus: +/- mengubah baris terakhir keranjang; Delete menghapusnya.
+    const line = barisBidik()
+    if (line && (e.key === '+' || e.key === '=')) { e.preventDefault(); setQty(line, Number(line.kuantitas) + 1); return }
+    if (line && e.key === '-') { e.preventDefault(); setQty(line, Number(line.kuantitas) - 1); return }
+    if (line && e.key === 'Delete') { e.preventDefault(); setQty(line, 0); return }
+    if (karakterCetak(e)) { fokusCari(); searchInput.value = '' }
   }
   document.addEventListener('keydown', onKeydown)
+  container.querySelector('#pos-help').addEventListener('click', () => bukaBantuanPintasan('pos'))
 
   // ---------- Mulai ----------
 

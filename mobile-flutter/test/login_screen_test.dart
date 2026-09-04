@@ -8,6 +8,8 @@ import 'package:tuleh_pos/core/widgets/splash_screen.dart';
 import 'package:tuleh_pos/features/auth/presentation/controllers/auth_controller.dart';
 import 'package:tuleh_pos/features/auth/presentation/screens/login_screen.dart';
 import 'package:tuleh_pos/features/demo/demo_session.dart';
+import 'helpers/masa_coba_palsu.dart';
+import 'package:tuleh_pos/features/demo/data/masa_coba_service.dart';
 
 /// Layar masuk — tata letak dan jalur Mode Demo.
 /// Ukuran layar diuji dari ponsel kecil sampai tablet karena form yang meluber
@@ -81,7 +83,10 @@ void main() {
 
   setUp(() {
     container = ProviderContainer(
-      overrides: [secureStorageProvider.overrideWithValue(_FakeStorage())],
+      overrides: [
+        secureStorageProvider.overrideWithValue(_FakeStorage()),
+        masaCobaServiceProvider.overrideWithValue(MasaCobaPalsu()),
+      ],
     );
   });
 

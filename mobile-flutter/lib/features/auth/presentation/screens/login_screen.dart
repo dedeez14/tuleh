@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_config.dart';
 import '../../../../core/network/api_exception.dart';
+import '../../../demo/domain/masa_coba.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/app_background.dart' show PolaTitikPainter;
 import '../../../../core/widgets/splash_screen.dart' show BrandAssets;
@@ -100,8 +102,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     ref.listen(authControllerProvider, (prev, next) {
       if (next is AsyncError) {
         final e = next.error;
+        if (e is MasaCobaException &&
+            e.status.kode != KodeMasaCoba.butuhKoneksi) {
+          context.go('/demo-berakhir');
+          return;
+        }
         final msg = e is ApiException
             ? (e.firstError() ?? e.message)
+            : e is MasaCobaException
+            ? e.pesan
             : 'Gagal masuk.';
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()

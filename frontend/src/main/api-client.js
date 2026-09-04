@@ -193,4 +193,28 @@ async function upload(endpoint, { query, file, auth = true } = {}) {
   }
 }
 
-module.exports = { request, get, post, upload, setBaseUrl, setGateway, setToken, hasToken, setActiveTokoId, getActiveTokoId, setUpgradeHandler, appVersion }
+/**
+ * Waktu server (header `Date` dari endpoint publik /app/versi). Dipakai masa
+ * coba Mode Demo agar jam perangkat tidak menentukan. null bila tak terjangkau.
+ * Langsung ke MOVERA (bukan lewat gateway) supaya cap waktu benar-benar dari server.
+ */
+async function waktuServer() {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 6000)
+  try {
+    const response = await net.fetch(buildUrl('/app/versi', { versi: appVersion() }), {
+      method: 'GET',
+      headers: { Accept: 'application/json', 'X-Tuleh-Version': appVersion() },
+      signal: controller.signal
+    })
+    const date = response.headers.get('date')
+    const d = date ? new Date(date) : null
+    return d && Number.isFinite(d.getTime()) ? d : null
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+module.exports = { request, get, post, upload, setBaseUrl, setGateway, setToken, hasToken, setActiveTokoId, getActiveTokoId, setUpgradeHandler, appVersion, waktuServer }

@@ -45,19 +45,37 @@ function migrateLegacyGatewayUrl(baseUrl) {
   return baseUrl
 }
 
-function load() {
+function readRaw() {
   try {
-    const raw = fs.readFileSync(settingsPath(), 'utf8')
-    const parsed = JSON.parse(raw)
-    if (parsed && typeof parsed.baseUrl === 'string' && isAllowedBaseUrl(parsed.baseUrl)) {
-      const migrated = migrateLegacyGatewayUrl(normalizeBaseUrl(parsed.baseUrl))
-      if (migrated !== parsed.baseUrl) save({ ...parsed, baseUrl: migrated })
-      return { baseUrl: migrated }
-    }
+    const parsed = JSON.parse(fs.readFileSync(settingsPath(), 'utf8'))
+    return parsed && typeof parsed === 'object' ? parsed : {}
   } catch {
-    // File belum ada atau korup — pakai default
+    return {} // File belum ada atau korup
+  }
+}
+
+function load() {
+  const parsed = readRaw()
+  if (typeof parsed.baseUrl === 'string' && isAllowedBaseUrl(parsed.baseUrl)) {
+    const migrated = migrateLegacyGatewayUrl(normalizeBaseUrl(parsed.baseUrl))
+    if (migrated !== parsed.baseUrl) save({ ...parsed, baseUrl: migrated })
+    return { baseUrl: migrated }
   }
   return { baseUrl: DEFAULT_BASE_URL }
+}
+
+/** Catatan masa coba Mode Demo ({mulai, serverTerakhir, tanda}) atau null. */
+function getDemoTrial() {
+  const d = readRaw().demo
+  return d && typeof d === 'object' ? d : null
+}
+
+function setDemoTrial(catatan) {
+  const cur = readRaw()
+  const next = { ...cur, baseUrl: load().baseUrl }
+  if (catatan) next.demo = catatan
+  else delete next.demo
+  save(next)
 }
 
 function save(settings) {
@@ -69,10 +87,10 @@ function setBaseUrl(value) {
   if (typeof value !== 'string' || !isAllowedBaseUrl(value)) {
     return { ok: false, message: 'URL server harus HTTPS (atau http://localhost untuk pengembangan).' }
   }
-  const settings = load()
-  const next = { ...settings, baseUrl: normalizeBaseUrl(value) }
+  // Pertahankan kunci lain (mis. catatan masa coba demo) saat mengganti server.
+  const next = { ...readRaw(), baseUrl: normalizeBaseUrl(value) }
   save(next)
   return { ok: true, baseUrl: next.baseUrl }
 }
 
-module.exports = { load, setBaseUrl, DEFAULT_BASE_URL, isAllowedBaseUrl }
+module.exports = { load, setBaseUrl, getDemoTrial, setDemoTrial, DEFAULT_BASE_URL, isAllowedBaseUrl }

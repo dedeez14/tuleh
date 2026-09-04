@@ -722,3 +722,11 @@
 .bayar-flow__row { display: flex; justify-content: space-between; gap: 12px; font-size: var(--text-sm); color: var(--text-2); }
 .bayar-flow__total { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding-top: 8px; border-top: 1px solid var(--surface-3); }
 .bayar-flow__total strong { font-family: var(--font-display); font-size: var(--text-xl); }
+
+/* Panel bantuan pintasan keyboard (F1). */
+.pintasan { display: grid; gap: var(--sp-5, 20px); }
+.pintasan__judul { margin: 0 0 var(--sp-2, 8px); font-size: var(--text-sm); text-transform: uppercase; letter-spacing: .06em; color: var(--text-2); }
+.pintasan__daftar { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; align-items: baseline; }
+.pintasan__daftar dt { white-space: nowrap; }
+.pintasan__daftar dd { margin: 0; color: var(--text-2); }
+.pintasan__atau { margin: 0 4px; color: var(--text-3, var(--text-2)); }

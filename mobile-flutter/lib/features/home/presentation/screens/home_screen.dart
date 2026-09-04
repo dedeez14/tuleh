@@ -9,6 +9,7 @@ import '../../../../core/widgets/motion.dart';
 import '../../../../core/widgets/states.dart';
 import '../../../auth/domain/entities/user.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
+import '../../../demo/data/masa_coba_service.dart';
 import '../../../demo/demo_session.dart';
 import '../../../laporan/presentation/providers/laporan_providers.dart';
 import '../../../riwayat/domain/entities/transaksi.dart';
@@ -76,6 +77,9 @@ class HomeScreen extends ConsumerWidget {
                         onMuatUlangToko: () => ref.invalidate(tokoListProvider),
                         bisaGanti: tokos.length > 1,
                         isDemo: ref.read(demoSessionProvider).active,
+                        sisaHariDemo: ref.read(demoSessionProvider).active
+                            ? ref.watch(masaCobaStatusProvider).valueOrNull?.sisaHari
+                            : null,
                         onGantiToko: tokos.length > 1
                             ? () => _pilihToko(context, ref, tokos, activeId)
                             : null,
@@ -173,7 +177,11 @@ class _Header extends StatelessWidget {
     required this.onLogout,
     this.tokoGagal = false,
     this.onMuatUlangToko,
+    this.sisaHariDemo,
   });
+
+  /// Sisa hari masa coba Mode Demo (null = tidak diketahui / bukan demo).
+  final int? sisaHariDemo;
 
   final User? user;
   final Toko? toko;
@@ -239,9 +247,11 @@ class _Header extends StatelessWidget {
                         color: AppColors.warn.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(999),
                       ),
-                      child: const Text(
-                        'DEMO',
-                        style: TextStyle(
+                      child: Text(
+                        sisaHariDemo == null
+                            ? 'DEMO'
+                            : 'DEMO · $sisaHariDemo HARI',
+                        style: const TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w800,
                           letterSpacing: 0.6,

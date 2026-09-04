@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tuleh_pos/core/network/api_client.dart';
 import 'package:tuleh_pos/core/storage/secure_storage.dart';
 import 'package:tuleh_pos/features/demo/demo_session.dart';
+import 'helpers/masa_coba_palsu.dart';
+import 'package:tuleh_pos/features/demo/data/masa_coba_service.dart';
 
 /// Regresi: Mode Demo harus menghormati toko yang dipilih pengguna.
 ///
@@ -25,7 +27,10 @@ class _FakeStorage extends SecureStorage {
 void main() {
   Future<List<dynamic>> produkUntuk(String toko) async {
     final c = ProviderContainer(
-      overrides: [secureStorageProvider.overrideWithValue(_FakeStorage(toko))],
+      overrides: [
+        secureStorageProvider.overrideWithValue(_FakeStorage(toko)),
+        masaCobaServiceProvider.overrideWithValue(MasaCobaPalsu()),
+      ],
     );
     addTearDown(c.dispose);
     c.read(demoSessionProvider).start();
@@ -49,7 +54,10 @@ void main() {
 
   test('sesi aktif & pesanan demo juga ter-scope per toko', () async {
     final c = ProviderContainer(
-      overrides: [secureStorageProvider.overrideWithValue(_FakeStorage('TOKO-6'))],
+      overrides: [
+        secureStorageProvider.overrideWithValue(_FakeStorage('TOKO-6')),
+        masaCobaServiceProvider.overrideWithValue(MasaCobaPalsu()),
+      ],
     );
     addTearDown(c.dispose);
     c.read(demoSessionProvider).start();
@@ -66,7 +74,10 @@ void main() {
 
   test('tanpa demo aktif, interceptor demo tidak mencampuri permintaan', () async {
     final c = ProviderContainer(
-      overrides: [secureStorageProvider.overrideWithValue(_FakeStorage('TOKO-6'))],
+      overrides: [
+        secureStorageProvider.overrideWithValue(_FakeStorage('TOKO-6')),
+        masaCobaServiceProvider.overrideWithValue(MasaCobaPalsu()),
+      ],
     );
     addTearDown(c.dispose);
     expect(c.read(demoSessionProvider).active, isFalse);

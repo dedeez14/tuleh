@@ -24,6 +24,7 @@ const state = {
   kategori: [],
   online: true,
   demo: false,
+  demoSisaHari: null, // sisa hari masa coba Mode Demo (null = bukan demo)
   screen: 'pos'
 }
 

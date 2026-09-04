@@ -58,7 +58,8 @@ contextBridge.exposeInMainWorld('iposAPI', {
     setBaseUrl: invoke('settings:setBaseUrl')
   },
   demo: {
-    start: invoke('demo:start')
+    start: invoke('demo:start'),
+    status: invoke('demo:status')
   },
   net: {
     ping: invoke('net:ping')

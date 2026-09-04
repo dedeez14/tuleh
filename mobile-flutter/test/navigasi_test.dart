@@ -12,6 +12,8 @@ import 'package:tuleh_pos/features/laporan/presentation/screens/laporan_screen.d
 import 'package:tuleh_pos/features/pesanan/presentation/screens/papan_pesanan_screen.dart';
 import 'package:tuleh_pos/features/riwayat/presentation/screens/riwayat_screen.dart';
 import 'package:tuleh_pos/features/toko/presentation/providers/toko_providers.dart';
+import 'helpers/masa_coba_palsu.dart';
+import 'package:tuleh_pos/features/demo/data/masa_coba_service.dart';
 
 /// Kerangka navigasi Material 3 — dijalankan lewat router sungguhan dengan
 /// Mode Demo, sehingga yang diuji adalah alur yang benar-benar dipakai:
@@ -54,7 +56,10 @@ void main() {
     addTearDown(t.view.reset);
 
     c = ProviderContainer(
-      overrides: [secureStorageProvider.overrideWithValue(_FakeStorage())],
+      overrides: [
+        secureStorageProvider.overrideWithValue(_FakeStorage()),
+        masaCobaServiceProvider.overrideWithValue(MasaCobaPalsu()),
+      ],
     );
     addTearDown(c.dispose);
 

@@ -7,6 +7,8 @@ import 'package:tuleh_pos/core/storage/secure_storage.dart';
 import 'package:tuleh_pos/core/theme/app_theme.dart';
 import 'package:tuleh_pos/features/auth/presentation/controllers/auth_controller.dart';
 import 'package:tuleh_pos/features/toko/presentation/providers/toko_providers.dart';
+import 'helpers/masa_coba_palsu.dart';
+import 'package:tuleh_pos/features/demo/data/masa_coba_service.dart';
 
 /// Jaring pengaman tata letak: SETIAP layar dirender lewat router sungguhan
 /// dengan data Mode Demo, pada ponsel sempit dan tablet, tema terang & gelap.
@@ -75,7 +77,10 @@ void main() {
     addTearDown(t.view.reset);
 
     final c = ProviderContainer(
-      overrides: [secureStorageProvider.overrideWithValue(_FakeStorage())],
+      overrides: [
+        secureStorageProvider.overrideWithValue(_FakeStorage()),
+        masaCobaServiceProvider.overrideWithValue(MasaCobaPalsu()),
+      ],
     );
     addTearDown(c.dispose);
     await t.runAsync(() async {

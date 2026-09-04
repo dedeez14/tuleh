@@ -27,8 +27,6 @@ function umurMenit(order) {
   return Math.max(0, Math.floor((Date.now() - t) / 60000))
 }
 
-}
-
 export const OrdersScreen = {
   id: 'orders',
   title: 'Pesanan',

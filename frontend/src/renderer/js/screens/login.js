@@ -181,12 +181,19 @@ export function renderLogin(container, { onSuccess }) {
     btn.textContent = 'Menyiapkan data demo…'
     const result = await api.demo.start()
     if (result.ok && result.data) {
-      toast('Mode Demo aktif — data simulasi lokal & direset tiap 24 jam.', 'info')
+      const sisa = result.data.masaCoba && result.data.masaCoba.sisaHari
+      toast(sisa != null
+        ? `Mode Demo aktif — sisa masa coba ${sisa} hari. Data simulasi lokal.`
+        : 'Mode Demo aktif — data simulasi lokal & direset tiap 24 jam.', 'info')
       onSuccess(result.data)
       return
     }
     btn.disabled = false
     btn.textContent = 'Coba Mode Demo'
+    if (result.code === 'DEMO_BERAKHIR' || result.code === 'DEMO_RUSAK') {
+      tampilkanDemoBerakhir(container)
+      return
+    }
     toast(firstError(result), 'error')
   })
 
@@ -252,5 +259,28 @@ export function renderLogin(container, { onSuccess }) {
       close()
       syncServerLabel()
     })
+  })
+}
+
+/**
+ * Masa coba Mode Demo berakhir → kunci demo, arahkan ke akun berlangganan.
+ * Tidak ada jalan lain: tombol demo dinonaktifkan sampai aplikasi masuk dengan
+ * akun berbayar.
+ */
+export function tampilkanDemoBerakhir(container) {
+  const btn = container && container.querySelector('#btn-demo')
+  if (btn) {
+    btn.disabled = true
+    btn.textContent = 'Masa coba demo berakhir'
+  }
+  const body = document.createElement('div')
+  body.innerHTML = `
+    <p>Masa coba Mode Demo <b>7 hari</b> di komputer ini sudah berakhir.</p>
+    <p>Untuk terus memakai Tuléh, masuk dengan akun berlangganan. Belum punya akun?
+       Daftar dan berlangganan di <b>tatreport.com</b>, lalu masuk dengan email &amp; kata sandi Anda di sini.</p>`
+  showModal({
+    title: 'Masa coba berakhir',
+    body,
+    footer: `<button type="button" class="btn btn--primary" data-close>Masuk dengan akun</button>`
   })
 }

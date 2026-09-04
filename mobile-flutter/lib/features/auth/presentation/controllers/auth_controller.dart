@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/storage/secure_storage.dart';
+import '../../../demo/data/masa_coba_service.dart';
 import '../../../demo/demo_session.dart';
+import '../../../demo/domain/masa_coba.dart';
 import '../../domain/entities/user.dart';
 import '../providers/auth_providers.dart';
 
@@ -37,6 +39,15 @@ class AuthController extends AsyncNotifier<User?> {
   /// memeriksa token (mis. auto-login & interceptor toko) tetap berjalan.
   Future<void> startDemo() async {
     state = const AsyncLoading();
+    // Masa coba 7 hari (waktu server). Berakhir/rusak → layar kunci;
+    // belum pernah mulai tanpa koneksi → pesan di layar masuk.
+    final masaCoba = await ref
+        .read(masaCobaServiceProvider)
+        .periksa(mulaiBaru: true);
+    if (!masaCoba.aktif) {
+      state = AsyncError(MasaCobaException(masaCoba), StackTrace.current);
+      return;
+    }
     ref.read(demoSessionProvider).start();
     final storage = ref.read(secureStorageProvider);
     await storage.writeToken('demo-token');

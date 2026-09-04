@@ -6,6 +6,7 @@ const api = require('./api-client')
 const authStore = require('./auth-store')
 const settingsStore = require('./settings-store')
 const demo = require('./demo')
+const masaCoba = require('./lib/masa-coba')
 const gateway = require('./gateway')
 const tracker = require('./tracker')
 const tunnel = require('./tunnel')
@@ -236,9 +237,42 @@ function registerIpcHandlers(getMainWindow) {
 
   // Mode Demo: seluruh data disimulasikan lokal, tidak ada permintaan jaringan.
   // Server pelacakan pelanggan (LAN) ikut dinyalakan agar QR struk berfungsi.
-  handle('demo:start', () => {
+  // Masa coba demo 7 hari (waktu server). Identitas mesin ikut dalam tanda
+  // HMAC catatan agar berkas settings tidak bisa disalin antar komputer.
+  const identitasMesin = () => {
+    try { return `${os.hostname()}|${os.userInfo().username}` } catch { return os.hostname() }
+  }
+  async function periksaMasaCoba({ mulaiBaru }) {
+    const waktu = await api.waktuServer()
+    const hasil = masaCoba.periksa({
+      catatan: settingsStore.getDemoTrial(),
+      waktuServer: waktu,
+      perangkat: new Date(),
+      identitas: identitasMesin(),
+      mulaiBaru
+    })
+    if (hasil.catatan && hasil.catatan !== settingsStore.getDemoTrial()) settingsStore.setDemoTrial(hasil.catatan)
+    return hasil
+  }
+  const pesanMasaCoba = {
+    BUTUH_KONEKSI: 'Mode Demo perlu koneksi internet saat pertama kali dibuka (untuk mencatat waktu mulai masa coba).',
+    BERAKHIR: 'Masa coba Mode Demo 7 hari sudah berakhir. Masuk dengan akun berlangganan untuk melanjutkan.',
+    RUSAK: 'Catatan masa coba tidak sah. Masuk dengan akun berlangganan untuk melanjutkan.'
+  }
+
+  handle('demo:status', async () => {
+    const h = await periksaMasaCoba({ mulaiBaru: false })
+    return { ok: true, data: { kode: h.kode, sisaHari: h.sisaHari, berakhirPada: h.berakhirPada || null, belumMulai: !!h.belumMulai } }
+  })
+
+  handle('demo:start', async () => {
+    const h = await periksaMasaCoba({ mulaiBaru: true })
+    if (h.kode !== 'AKTIF') {
+      return { ok: false, code: `DEMO_${h.kode}`, message: pesanMasaCoba[h.kode] || 'Mode Demo tidak tersedia.', data: { sisaHari: h.sisaHari } }
+    }
     const result = demo.start()
     if (result.ok) {
+      result.data.masaCoba = { sisaHari: h.sisaHari, berakhirPada: h.berakhirPada || null }
       tracker.start({
         tracking: demo.trackingInfo,
         menu: demo.menuInfo,

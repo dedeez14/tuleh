@@ -5,6 +5,10 @@ sebagai isi Release GitHub (workflow flutter-release.yml), dan empat baris
 pertamanya tampil di banner pembaruan dalam aplikasi. Tulis untuk kasir, bukan
 untuk programmer.
 
+## 2.5.0
+
+- Mode Demo kini masa coba 7 hari sejak pertama dibuka di ponsel ini, dihitung dengan waktu server (mengubah jam ponsel tidak berpengaruh). Lencana DEMO menampilkan sisa hari. Setelah berakhir, aplikasi terkunci sampai masuk dengan akun berlangganan. Membuka demo pertama kali perlu koneksi internet.
+
 ## 2.4.1
 
 - Perbaikan: lembar "Pilih toko" tertutup bilah navigasi bawah dan tidak bisa digulir, sehingga toko di bawah tidak bisa dipilih. Lembar kini tampil di atas bilah dan bisa digulir; berlaku juga untuk keranjang dan menu Lainnya.
