@@ -1,4 +1,10 @@
-# Tuléh Android (Capacitor)
+# Tuléh Android (Capacitor) — LEGACY
+
+> **Status: beku.** Aplikasi Android utama kini [`../mobile-flutter/`](../mobile-flutter)
+> (Flutter native, paket `com.tuleh.tuleh_pos`). Folder ini dipertahankan hanya
+> untuk pengguna lama (`com.tuleh.kasir`) yang masih menerima pembaruan lewat
+> mirror MOVERA; jangan tambahkan fitur baru di sini. Aset logo di `assets/`
+> tetap menjadi sumber ikon untuk kedua aplikasi.
 
 Versi **Android** dari Tuléh — membungkus **UI web yang sama** (`../frontend/src/renderer`)
 dengan [Capacitor](https://capacitorjs.com/) di dalam WebView native, lalu

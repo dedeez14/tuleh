@@ -14,7 +14,24 @@ usaha: menu & alur kerja menyesuaikan jenis toko secara otomatis (*manifest-driv
 |---|---|---|
 | [`frontend/`](frontend) | Electron (vanilla ES modules, tanpa framework/bundler) | Aplikasi kasir desktop |
 | [`backend/`](backend) | Go (stdlib murni, tanpa dependency) | Gateway lokal — proxy ke MOVERA API |
-| [`mobile/`](mobile) | Capacitor (Android) | Versi Android — bungkus UI web + jembatan API langsung |
+| [`mobile-flutter/`](mobile-flutter) | Flutter (Android, minSdk 29) | **Aplikasi Android utama** — native, Material 3, mode demo, cetak thermal Bluetooth |
+| [`mobile/`](mobile) | Capacitor (Android) | **Legacy** — bungkus UI web desktop + jembatan API langsung; dipertahankan hanya untuk pengguna lama |
+
+### Dua aplikasi Android — mana yang dipakai?
+
+| | `mobile-flutter/` (utama) | `mobile/` (legacy) |
+|---|---|---|
+| Teknologi | Flutter native | WebView + UI web desktop |
+| ID paket di ponsel | `com.tuleh.tuleh_pos` | `com.tuleh.kasir` |
+| Rilis | tag `flutter-vX.Y.Z` ([flutter-release.yml](.github/workflows/flutter-release.yml)), APK per ABI | ikut rilis desktop `vX.Y.Z` sebagai `Tuleh-<versi>-android.apk` |
+| Pembaruan di aplikasi | server `/app/versi` lalu GitHub Releases | server `/app/versi` (di-mirror MOVERA) |
+| Status | dikembangkan aktif | beku — hanya perbaikan kritis |
+
+Keduanya memakai **logo Tuléh yang sama** (notepad + pensil, sumber di `mobile/assets/`),
+jadi bila kedua aplikasi terpasang di satu ponsel akan tampak dua ikon "Tuléh".
+Pengguna aplikasi lama sebaiknya memasang versi Flutter lalu mencopot yang lama.
+Rencana: hentikan build Capacitor dari rilis desktop setelah mirror MOVERA
+(`SERVER-AUTO-UPDATE.md`) diarahkan ke APK Flutter.
 
 Backend cloud sesungguhnya (Laravel/MOVERA) berada di `tatreport.com` — di luar repo
 ini. `backend/` di sini adalah **gateway lokal** yang menyala otomatis saat aplikasi
