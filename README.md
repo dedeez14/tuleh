@@ -106,6 +106,27 @@ perlu menyetel apa pun. Ikon diambil dari `frontend/build/icon.png`.
 - **Langganan & Kontak CS** — banner masa langganan + tombol Hubungi CS
   (fondasi Sistem Mitra/afiliasi).
 
+## Pintasan keyboard (desktop)
+
+Tekan **F1** di dalam aplikasi untuk daftar lengkap. Yang paling sering dipakai kasir:
+
+| Tombol | Aksi |
+|---|---|
+| `F2` atau `/` | Fokus ke kolom cari / scan barcode |
+| `Tab` (dari kolom cari) | Langsung ke produk pertama, lewati filter kategori |
+| `↑ ↓ ← →`, `Home`, `End` | Pilih produk di katalog; `Enter`/`Spasi` menambahkan |
+| `+` / `−` / `Delete` | Ubah jumlah / hapus baris (produk terpilih, atau baris terakhir) |
+| `Esc` | Kosongkan pencarian → kembali ke Beranda; di layar lain: Beranda |
+| `F4` atau `Ctrl+Enter` | Bayar · `F8` kosongkan keranjang |
+| `F5` / `F6` / `F7` | Metode bayar ke-1/2/3 di jendela pembayaran |
+| `Ctrl+0…9` | Beranda / pindah layar · `Ctrl+Shift+Q` keluar akun |
+
+Mengetik huruf atau angka di mana pun pada layar kasir langsung mengisi kolom cari, jadi scanner barcode bekerja tanpa harus mengklik kolom itu dulu.
+
+## Mode Demo: masa coba 7 hari
+
+Mode Demo di desktop dan Android berlaku **7 hari** sejak pertama dibuka di perangkat itu, dihitung dengan **waktu server** (mengubah jam perangkat tidak berpengaruh; membuka demo pertama kali perlu koneksi). Setelah berakhir, aplikasi terkunci sampai masuk dengan akun berlangganan. Batas yang diketahui: menghapus aplikasi atau mereset perangkat mengulang masa coba; menutupnya butuh pendaftaran perangkat di server MOVERA.
+
 ## Arsitektur & keamanan
 
 ```
