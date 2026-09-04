@@ -16,6 +16,7 @@ import '../../features/products/presentation/screens/produk_screen.dart';
 import '../../features/riwayat/presentation/screens/riwayat_screen.dart';
 import '../../features/sesi/presentation/screens/sesi_screen.dart';
 import '../../features/stok/presentation/screens/stok_screen.dart';
+import '../widgets/motion.dart';
 import '../widgets/splash_screen.dart';
 
 /// Router aplikasi (go_router). Redirect berbasis status auth; jembatan
@@ -45,19 +46,67 @@ final routerProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(path: '/splash', builder: (_, _) => const SplashScreen()),
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
-      GoRoute(path: '/home', builder: (_, _) => const HomeScreen()),
-      GoRoute(path: '/kasir', builder: (_, _) => const KasirScreen()),
-      GoRoute(path: '/riwayat', builder: (_, _) => const RiwayatScreen()),
-      GoRoute(path: '/laporan', builder: (_, _) => const LaporanScreen()),
-      GoRoute(path: '/meja', builder: (_, _) => const MejaScreen()),
+      GoRoute(
+        path: '/home',
+        pageBuilder: (_, state) =>
+            halamanBeranimasi<void>(key: state.pageKey, child: const HomeScreen()),
+      ),
+      GoRoute(
+        path: '/kasir',
+        pageBuilder: (_, state) =>
+            halamanBeranimasi<void>(key: state.pageKey, child: const KasirScreen()),
+      ),
+      GoRoute(
+        path: '/riwayat',
+        pageBuilder: (_, state) =>
+            halamanBeranimasi<void>(key: state.pageKey, child: const RiwayatScreen()),
+      ),
+      GoRoute(
+        path: '/laporan',
+        pageBuilder: (_, state) =>
+            halamanBeranimasi<void>(key: state.pageKey, child: const LaporanScreen()),
+      ),
+      GoRoute(
+        path: '/meja',
+        pageBuilder: (_, state) =>
+            halamanBeranimasi<void>(key: state.pageKey, child: const MejaScreen()),
+      ),
       // Satu layar untuk KDS dapur / Antrian / Papan Proses — kolom dari manifest.
-      GoRoute(path: '/pesanan', builder: (_, _) => const PapanPesananScreen()),
-      GoRoute(path: '/produk', builder: (_, _) => const ProdukScreen()),
-      GoRoute(path: '/pelanggan', builder: (_, _) => const PelangganScreen()),
-      GoRoute(path: '/pengeluaran', builder: (_, _) => const PengeluaranScreen()),
-      GoRoute(path: '/sesi', builder: (_, _) => const SesiScreen()),
-      GoRoute(path: '/stok', builder: (_, _) => const StokScreen()),
-      GoRoute(path: '/pengaturan', builder: (_, _) => const PengaturanScreen()),
+      GoRoute(
+        path: '/pesanan',
+        pageBuilder: (_, state) =>
+            halamanBeranimasi<void>(key: state.pageKey, child: const PapanPesananScreen()),
+      ),
+      GoRoute(
+        path: '/produk',
+        pageBuilder: (_, state) =>
+            halamanBeranimasi<void>(key: state.pageKey, child: const ProdukScreen()),
+      ),
+      GoRoute(
+        path: '/pelanggan',
+        pageBuilder: (_, state) =>
+            halamanBeranimasi<void>(key: state.pageKey, child: const PelangganScreen()),
+      ),
+      GoRoute(
+        path: '/pengeluaran',
+        pageBuilder: (_, state) =>
+            halamanBeranimasi<void>(key: state.pageKey, child: const PengeluaranScreen()),
+      ),
+      GoRoute(
+        path: '/sesi',
+        pageBuilder: (_, state) =>
+            halamanBeranimasi<void>(key: state.pageKey, child: const SesiScreen()),
+      ),
+      GoRoute(
+        path: '/stok',
+        pageBuilder: (_, state) =>
+            halamanBeranimasi<void>(key: state.pageKey, child: const StokScreen()),
+      ),
+      GoRoute(
+        path: '/pengaturan',
+        pageBuilder: (_, state) =>
+            halamanBeranimasi<void>(key: state.pageKey, child: const PengaturanScreen()),
+      ),
     ],
   );
 });

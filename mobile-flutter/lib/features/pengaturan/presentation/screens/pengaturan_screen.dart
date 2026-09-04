@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
+import '../../../cetak/presentation/screens/printer_screen.dart';
 import '../../../toko/domain/entities/toko.dart';
 import '../../../toko/presentation/providers/toko_providers.dart';
 import 'profil_usaha_screen.dart';
@@ -97,6 +98,18 @@ class PengaturanScreen extends ConsumerWidget {
               trailing: const Icon(Icons.chevron_right),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(builder: (_) => const ProfilUsahaScreen()),
+              ),
+            ),
+          ),
+          Card(
+            margin: const EdgeInsets.only(bottom: 8),
+            child: ListTile(
+              leading: Icon(Icons.print_outlined, color: cs.primary),
+              title: const Text('Printer Struk'),
+              subtitle: const Text('Printer thermal Bluetooth & uji cetak'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const PrinterScreen()),
               ),
             ),
           ),

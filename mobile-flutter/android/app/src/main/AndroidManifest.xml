@@ -6,6 +6,18 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <!-- Auto-Update: memasang APK pembaruan dari dalam app (sumber tak dikenal). -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
+
+    <!-- Cetak struk ke printer thermal Bluetooth.
+         Android 12+ (API 31) memakai izin runtime BLUETOOTH_CONNECT/SCAN;
+         android:usesPermissionFlags="neverForLocation" menegaskan pemindaian
+         TIDAK dipakai untuk melacak lokasi sehingga izin lokasi tak diminta.
+         Dua izin lama dibatasi sampai API 30 untuk perangkat Android 10/11. -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation"/>
+    <uses-feature android:name="android.hardware.bluetooth" android:required="false"/>
     <application
         android:label="Tuléh"
         android:name="${applicationName}"

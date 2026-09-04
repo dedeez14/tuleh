@@ -43,6 +43,15 @@ class SecureStorage {
   Future<void> writeRestokAmbang(int value) =>
       _storage.write(key: _kRestokAmbang, value: value.toString());
 
+  /// Nilai preferensi bebas (mis. printer terpilih). Dipisah dari kunci sesi
+  /// agar tidak ikut terhapus saat pengguna keluar.
+  Future<String?> bacaNilai(String kunci) => _storage.read(key: 'tuleh_$kunci');
+
+  Future<void> tulisNilai(String kunci, String? nilai) =>
+      nilai == null || nilai.isEmpty
+      ? _storage.delete(key: 'tuleh_$kunci')
+      : _storage.write(key: 'tuleh_$kunci', value: nilai);
+
   Future<void> clearSession() async {
     await _storage.delete(key: _kToken);
     await _storage.delete(key: _kActiveToko);

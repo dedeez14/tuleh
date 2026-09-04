@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/format.dart';
+import '../../../../core/widgets/app_background.dart';
+import '../../../../core/widgets/motion.dart';
 import '../../../auth/domain/entities/user.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../../../demo/demo_session.dart';
@@ -73,22 +75,8 @@ class HomeScreen extends ConsumerWidget {
       ..._menu,
     ];
 
-    final cs = Theme.of(context).colorScheme;
-
     return Scaffold(
-      body: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              cs.primary.withValues(alpha: 0.07),
-              Theme.of(context).scaffoldBackgroundColor,
-              Theme.of(context).scaffoldBackgroundColor,
-            ],
-            stops: const [0, 0.28, 1],
-          ),
-        ),
+      body: AppBackground(
         child: SafeArea(
           child: LayoutBuilder(
             builder: (context, constraints) {
@@ -104,30 +92,41 @@ class HomeScreen extends ConsumerWidget {
                   28,
                 ),
                 children: [
-                  _Header(
-                    user: user,
-                    isDemo: ref.read(demoSessionProvider).active,
-                    onLogout: () =>
-                        ref.read(authControllerProvider.notifier).logout(),
+                  MunculBertahap(
+                    child: _Header(
+                      user: user,
+                      isDemo: ref.read(demoSessionProvider).active,
+                      onLogout: () =>
+                          ref.read(authControllerProvider.notifier).logout(),
+                    ),
                   ),
                   const SizedBox(height: 18),
                   if (tokos.isNotEmpty)
-                    _TokoChip(
-                      toko: activeToko,
-                      switchable: tokos.length > 1,
-                      onTap: tokos.length > 1
-                          ? () => _pickToko(context, ref, tokos, activeId)
-                          : null,
+                    MunculBertahap(
+                      urutan: 1,
+                      child: _TokoChip(
+                        toko: activeToko,
+                        switchable: tokos.length > 1,
+                        onTap: tokos.length > 1
+                            ? () => _pickToko(context, ref, tokos, activeId)
+                            : null,
+                      ),
                     ),
                   const SizedBox(height: 16),
-                  const _RingkasanCard(),
+                  const MunculBertahap(urutan: 2, child: _RingkasanCard()),
                   const SizedBox(height: 16),
-                  _FeaturedKasir(onTap: () => context.push('/kasir')),
+                  MunculBertahap(
+                    urutan: 3,
+                    child: _FeaturedKasir(onTap: () => context.push('/kasir')),
+                  ),
                   const SizedBox(height: 24),
-                  Text(
-                    'Menu',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
+                  MunculBertahap(
+                    urutan: 4,
+                    child: Text(
+                      'Menu',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -141,7 +140,10 @@ class HomeScreen extends ConsumerWidget {
                       crossAxisSpacing: 12,
                       mainAxisExtent: tileHeight,
                     ),
-                    itemBuilder: (_, i) => _ModuleTile(mod: menu[i]),
+                    itemBuilder: (_, i) => MunculBertahap(
+                      urutan: 5 + i,
+                      child: _ModuleTile(mod: menu[i]),
+                    ),
                   ),
                 ],
               );
@@ -426,65 +428,76 @@ class _FeaturedKasir extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Ink(
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [AppColors.mint600, AppColors.mint800],
+    // Container di dalam Material (bukan `Ink`): `Ink` melukis dekorasinya ke
+    // Material terdekat, sehingga gradiennya pudar/salah tempat begitu kartu
+    // dibungkus lapisan animasi (fade/slide).
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.mint600.withValues(alpha: 0.35),
+            blurRadius: 22,
+            offset: const Offset(0, 8),
           ),
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.mint600.withValues(alpha: 0.35),
-              blurRadius: 22,
-              offset: const Offset(0, 8),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        clipBehavior: Clip.antiAlias,
+        child: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [AppColors.mint600, AppColors.mint800],
             ),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Row(
-            children: [
-              Container(
-                height: 52,
-                width: 52,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: const Icon(
-                  Icons.point_of_sale_rounded,
-                  color: Colors.white,
-                  size: 28,
-                ),
-              ),
-              const SizedBox(width: 16),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Buka Kasir',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                      ),
+          ),
+          child: InkWell(
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  Container(
+                    height: 52,
+                    width: 52,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(14),
                     ),
-                    SizedBox(height: 2),
-                    Text(
-                      'Catat penjualan & terima pembayaran',
-                      style: TextStyle(color: Colors.white70, fontSize: 13),
+                    child: const Icon(
+                      Icons.point_of_sale_rounded,
+                      color: Colors.white,
+                      size: 28,
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 16),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Buka Kasir',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Catat penjualan & terima pembayaran',
+                          style: TextStyle(color: Colors.white70, fontSize: 13),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.arrow_forward_rounded, color: Colors.white),
+                ],
               ),
-              const Icon(Icons.arrow_forward_rounded, color: Colors.white),
-            ],
+            ),
           ),
         ),
       ),
