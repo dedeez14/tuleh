@@ -11,6 +11,17 @@ String fmtTanggal(String? iso) {
   return '${dt.day} ${_bulanId[dt.month]} ${dt.year}';
 }
 
+/// Kuantitas item: bilangan bulat tanpa desimal, pecahan sampai 2 angka
+/// (mis. 2 → "2", 4.5 → "4,5" untuk layanan kiloan).
+String fmtQty(num value) {
+  if (value == value.roundToDouble()) return value.round().toString();
+  return value
+      .toStringAsFixed(2)
+      .replaceFirst(RegExp(r'0+$'), '')
+      .replaceFirst(RegExp(r'\.$'), '')
+      .replaceAll('.', ',');
+}
+
 /// Format Rupiah tanpa dependensi eksternal (mis. 51000 → "Rp 51.000").
 String fmtIDR(num value) {
   final n = value.round();

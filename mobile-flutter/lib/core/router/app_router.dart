@@ -11,6 +11,7 @@ import '../../features/meja/presentation/screens/meja_screen.dart';
 import '../../features/pelanggan/presentation/screens/pelanggan_screen.dart';
 import '../../features/pengaturan/presentation/screens/pengaturan_screen.dart';
 import '../../features/pengeluaran/presentation/screens/pengeluaran_screen.dart';
+import '../../features/pesanan/presentation/screens/papan_pesanan_screen.dart';
 import '../../features/products/presentation/screens/produk_screen.dart';
 import '../../features/riwayat/presentation/screens/riwayat_screen.dart';
 import '../../features/sesi/presentation/screens/sesi_screen.dart';
@@ -49,6 +50,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/riwayat', builder: (_, _) => const RiwayatScreen()),
       GoRoute(path: '/laporan', builder: (_, _) => const LaporanScreen()),
       GoRoute(path: '/meja', builder: (_, _) => const MejaScreen()),
+      // Satu layar untuk KDS dapur / Antrian / Papan Proses — kolom dari manifest.
+      GoRoute(path: '/pesanan', builder: (_, _) => const PapanPesananScreen()),
       GoRoute(path: '/produk', builder: (_, _) => const ProdukScreen()),
       GoRoute(path: '/pelanggan', builder: (_, _) => const PelangganScreen()),
       GoRoute(path: '/pengeluaran', builder: (_, _) => const PengeluaranScreen()),

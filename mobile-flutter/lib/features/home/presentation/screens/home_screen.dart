@@ -27,6 +27,14 @@ class HomeScreen extends ConsumerWidget {
     _Mod('Pengaturan', Icons.settings_outlined, '/pengaturan'),
   ];
 
+  /// Ikon papan pesanan mengikuti bidang usaha: dapur (KDS) vs antrian vs
+  /// papan proses bertahap (laundry, bengkel, doorsmeer, salon).
+  static IconData _ikonPapan(String routeKey) => switch (routeKey) {
+    'dapur' => Icons.soup_kitchen_outlined,
+    'antrian' => Icons.confirmation_number_outlined,
+    _ => Icons.view_kanban_outlined,
+  };
+
   static int _menuColumns(double width) {
     if (width >= 920) return 5;
     if (width >= 700) return 4;
@@ -49,6 +57,20 @@ class HomeScreen extends ConsumerWidget {
     for (final t in tokos) {
       if (t.id == activeId) activeToko = t;
     }
+
+    // Menu papan pesanan (KDS / Antrian / Papan Proses) hanya muncul untuk
+    // bidang usaha bertahap; label & ikon mengikuti manifest toko aktif.
+    final manifest = ref.watch(activeManifestProvider).valueOrNull;
+    final menuPapan = manifest?.menuPapan;
+    final menu = <_Mod>[
+      if (manifest != null && manifest.punyaPapanPesanan)
+        _Mod(
+          menuPapan?.label ?? 'Papan Pesanan',
+          _ikonPapan(menuPapan?.routeKey ?? 'proses'),
+          '/pesanan',
+        ),
+      ..._menu,
+    ];
 
     final cs = Theme.of(context).colorScheme;
 
@@ -110,14 +132,14 @@ class HomeScreen extends ConsumerWidget {
                   GridView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    itemCount: _menu.length,
+                    itemCount: menu.length,
                     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: columns,
                       mainAxisSpacing: 12,
                       crossAxisSpacing: 12,
                       mainAxisExtent: tileHeight,
                     ),
-                    itemBuilder: (_, i) => _ModuleTile(mod: _menu[i]),
+                    itemBuilder: (_, i) => _ModuleTile(mod: menu[i]),
                   ),
                 ],
               );

@@ -5,6 +5,7 @@ import '../../../../core/storage/secure_storage.dart';
 import '../../data/datasources/toko_remote_datasource.dart';
 import '../../data/repositories/toko_repository_impl.dart';
 import '../../domain/entities/toko.dart';
+import '../../domain/entities/toko_manifest.dart';
 import '../../domain/repositories/toko_repository.dart';
 
 final tokoRepositoryProvider = Provider<TokoRepository>(
@@ -31,3 +32,13 @@ class ActiveTokoNotifier extends AsyncNotifier<String?> {
 
 final activeTokoIdProvider =
     AsyncNotifierProvider<ActiveTokoNotifier, String?>(ActiveTokoNotifier.new);
+
+/// Manifest toko aktif — menentukan menu & alur yang tampil (papan pesanan
+/// hanya untuk bidang usaha bertahap). Kosong bila toko belum dipilih atau
+/// server belum menyediakan endpoint manifest.
+final activeManifestProvider = FutureProvider<TokoManifest>((ref) async {
+  final id = ref.watch(activeTokoIdProvider).valueOrNull;
+  if (id == null || id.isEmpty) return const TokoManifest();
+  final r = await ref.watch(tokoRepositoryProvider).manifest(id);
+  return r.when(ok: (v) => v, err: (e) => throw e);
+});
