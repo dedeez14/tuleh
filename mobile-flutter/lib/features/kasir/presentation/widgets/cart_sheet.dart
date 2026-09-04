@@ -144,6 +144,7 @@ class _CartSheetState extends ConsumerState<CartSheet> {
     if (!mounted) return;
     await showModalBottomSheet<void>(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       useSafeArea: true,
       showDragHandle: true,

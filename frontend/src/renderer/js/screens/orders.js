@@ -6,6 +6,7 @@ import { api, firstError } from '../api.js'
 import { getState } from '../state.js'
 import { esc, fmtIDR, fmtNumber, fmtTime, debounce } from '../utils/format.js'
 import { toast, icons, emptyStateHTML, loadingHTML, showModal } from '../components/ui.js'
+import { ting } from '../utils/suara.js'
 import { stageLabel } from '../lib/stage-label.js'
 
 const POLL_MS = 4000
@@ -26,23 +27,6 @@ function umurMenit(order) {
   return Math.max(0, Math.floor((Date.now() - t) / 60000))
 }
 
-// Bunyi "ting" singkat saat pesanan baru masuk (tanpa berkas audio)
-let audioCtx = null
-function ting() {
-  try {
-    audioCtx = audioCtx || new AudioContext()
-    const osc = audioCtx.createOscillator()
-    const gain = audioCtx.createGain()
-    osc.type = 'sine'
-    osc.frequency.value = 1046 // C6
-    gain.gain.setValueAtTime(0.15, audioCtx.currentTime)
-    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.35)
-    osc.connect(gain).connect(audioCtx.destination)
-    osc.start()
-    osc.stop(audioCtx.currentTime + 0.35)
-  } catch {
-    // Audio tidak tersedia — abaikan
-  }
 }
 
 export const OrdersScreen = {

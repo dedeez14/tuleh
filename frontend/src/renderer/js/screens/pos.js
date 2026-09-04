@@ -2,6 +2,8 @@
 // Keranjang disimpan di level modul agar tetap ada saat berpindah layar.
 
 import { api, firstError } from '../api.js'
+import { hargaJual, hargaNormalSaatPromo } from '../utils/harga.js'
+import { pasangFormatRupiah } from '../utils/rupiah-input.js'
 import { getState, subscribe } from '../state.js'
 import { esc, fmtIDR, fmtNumber, parseAmount, debounce } from '../utils/format.js'
 import { toast, showModal, confirmDialog, emptyStateHTML, loadingHTML, icons } from '../components/ui.js'
@@ -25,7 +27,7 @@ let pelanggan = null // { id, nama, kode?, telepon? } | null
 
 function cartLines() {
   return cart.map((l) => ({
-    harga: Number(l.produk.harga_jual) || 0,
+    harga: hargaJual(l.produk),
     kuantitas: Number(l.kuantitas) || 0,
     diskonPersen: Number(l.diskonPersen) || 0,
     pajakPersen: Number(l.produk.pajak_persen) || 0
@@ -200,7 +202,7 @@ function renderPos(container) {
     if (cdDone && cdDoneData) return cdDoneData // layar terima kasih pakai total dari struk
     const totals = cartTotals(cartLines())
     const items = cart.map((l) => {
-      const harga = Number(l.produk.harga_jual) || 0
+      const harga = hargaJual(l.produk)
       const qty = Number(l.kuantitas) || 0
       const lt = lineTotals({ harga, kuantitas: qty, diskonPersen: Number(l.diskonPersen) || 0, pajakPersen: Number(l.produk.pajak_persen) || 0 })
       return { nama: l.produk.nama, qty, satuan: l.produk.satuan || '', harga, subtotal: lt.bruto }
@@ -341,7 +343,7 @@ function renderPos(container) {
         <div class="pos-card__media">${media}${badge}</div>
         <div class="pos-card__name">${esc(p.nama)}</div>
         <div class="pos-card__code mono">${esc(p.kode)}</div>
-        <div class="pos-card__price num">${fmtIDR(p.harga_jual)}</div>
+        <div class="pos-card__price num">${fmtIDR(hargaJual(p))}${hargaNormalSaatPromo(p) != null ? ` <s class="pos-card__price-old">${fmtIDR(hargaNormalSaatPromo(p))}</s>` : ''}</div>
       </button>`
   }
 
@@ -441,7 +443,7 @@ function renderPos(container) {
         <label class="field__label" for="berat-in">Berat hasil timbangan (kg)</label>
         <input class="input input--lg num" id="berat-in" type="text" inputmode="decimal"
                placeholder="mis. 4,5" autocomplete="off" />
-        <div class="field__hint num" id="berat-view">${fmtIDR(produk.harga_jual)} / kg</div>
+        <div class="field__hint num" id="berat-view">${fmtIDR(hargaJual(produk))} / kg</div>
       </div>
       <div class="u-flex" id="berat-cepat" style="flex-wrap:wrap">
         ${[1, 2, 3, 4, 5].map((n) => `
@@ -457,8 +459,8 @@ function renderPos(container) {
     input.addEventListener('input', () => {
       const kg = parseDesimal(input.value) || 0
       view.textContent = kg > 0
-        ? `${fmtNumber(kg)} kg × ${fmtIDR(produk.harga_jual)} = ${fmtIDR(kg * produk.harga_jual)}`
-        : `${fmtIDR(produk.harga_jual)} / kg`
+        ? `${fmtNumber(kg)} kg × ${fmtIDR(hargaJual(produk))} = ${fmtIDR(kg * hargaJual(produk))}`
+        : `${fmtIDR(hargaJual(produk))} / kg`
     })
 
     body.querySelector('#berat-cepat').addEventListener('click', (e) => {
@@ -519,7 +521,7 @@ function renderPos(container) {
   function lineHTML(l) {
     const p = l.produk
     const line = lineTotals({
-      harga: p.harga_jual,
+      harga: hargaJual(p),
       kuantitas: l.kuantitas,
       diskonPersen: l.diskonPersen,
       pajakPersen: p.pajak_persen
@@ -533,7 +535,7 @@ function renderPos(container) {
           </button>
         </div>
         <div class="pos-line__price num">
-          ${fmtIDR(p.harga_jual)}${p.satuan ? ` <span class="pos-line__unit">/ ${esc(p.satuan)}</span>` : ''}
+          ${fmtIDR(hargaJual(p))}${p.satuan ? ` <span class="pos-line__unit">/ ${esc(p.satuan)}</span>` : ''}
         </div>
         <div class="pos-line__ctrl">
           <div class="pos-step">
@@ -842,6 +844,7 @@ function renderPos(container) {
     const payInput = body.querySelector('#pay-input')
     const payFmt = body.querySelector('#pay-fmt')
     const quickEl = body.querySelector('#pay-quick')
+    pasangFormatRupiah(payInput) // 50000 → 50.000 saat diketik; "350rb" tetap boleh
     const statusEl = body.querySelector('#pay-status')
     const noteEl = body.querySelector('#pay-note')
     const errorEl = body.querySelector('#pay-error')
@@ -1111,7 +1114,7 @@ function renderPos(container) {
       const result = await api.trx.checkout({
         items: cart.map((l) => ({
           idProduk: l.produk.id,
-          harga: Number(l.produk.harga_jual) || 0,
+          harga: hargaJual(l.produk),
           kuantitas: Number(l.kuantitas) || 0,
           diskonPersen: Number(l.diskonPersen) || 0,
           pajakPersen: Number(l.produk.pajak_persen) || 0
@@ -1152,7 +1155,7 @@ function renderPos(container) {
       const result = await api.trx.checkout({
         items: cart.map((l) => ({
           idProduk: l.produk.id,
-          harga: Number(l.produk.harga_jual) || 0,
+          harga: hargaJual(l.produk),
           kuantitas: Number(l.kuantitas) || 0,
           diskonPersen: Number(l.diskonPersen) || 0,
           pajakPersen: Number(l.produk.pajak_persen) || 0
@@ -1198,7 +1201,7 @@ function renderPos(container) {
         const result = await api.order.simpanNota({
           items: cart.map((l) => ({
             idProduk: l.produk.id,
-            harga: Number(l.produk.harga_jual) || 0,
+            harga: hargaJual(l.produk),
             kuantitas: Number(l.kuantitas) || 0
           })),
           idPelanggan: pelanggan ? pelanggan.id : undefined,

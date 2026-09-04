@@ -29,6 +29,7 @@ import { PengeluaranScreen } from './screens/pengeluaran.js'
 import { StokScreen } from './screens/stok.js'
 import { InventoryScreen } from './screens/inventory.js'
 import { analisisStok } from './lib/stok-store.js'
+import { mulaiPemantau, hentikanPemantau } from './pemantau-pesanan.js'
 
 const SCREENS = [
   PosScreen, HistoryScreen, SessionsScreen, ReportsScreen, SettingsScreen,
@@ -739,6 +740,7 @@ async function doLogout() {
 }
 
 function enterLogin() {
+  hentikanPemantau()
   if (typeof currentCleanup === 'function') {
     try { currentCleanup() } catch { /* abaikan */ }
     currentCleanup = null
@@ -771,6 +773,9 @@ async function enterApp(identity) {
   renderShell()
   await showScreen('home')
   hideSplash()
+  // Pesanan/permintaan bayar dari QR meja → notifikasi sistem + bunyi, walau
+  // kasir sedang di layar lain (padanan layanan latar belakang Android).
+  mulaiPemantau({ onBuka: (id) => showScreen(id) })
 }
 
 // ---------- Pemantau koneksi & pintasan global ----------

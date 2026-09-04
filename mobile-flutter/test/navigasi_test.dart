@@ -185,4 +185,43 @@ void main() {
     // Grid menu lama sudah tidak ada.
     expect(find.text('Menu'), findsNothing);
   });
+
+  testWidgets(
+    'pilih toko: lembar di atas bilah bawah, bisa digulir, toko terakhir bisa dipilih',
+    (t) async {
+      // Ponsel pendek agar 6 toko demo tidak muat tanpa gulir — kasus nyata:
+      // pilihan tertutup bilah bawah dan toko di bawah tak bisa dipilih.
+      await jalankan(t, toko: 'TOKO-1');
+      t.view.physicalSize = const Size(320, 520);
+      await t.pump();
+
+      await t.tap(find.textContaining('Minimarket Demo').first);
+      for (var i = 0; i < 12; i++) {
+        await t.pump(const Duration(milliseconds: 50));
+      }
+      expect(find.text('Pilih toko'), findsOneWidget);
+
+      // Lembar berada di navigator akar: bilah navigasi tertutup penghalang,
+      // bukan sebaliknya (lembar di bawah bilah).
+      final sheet = find.byType(BottomSheet);
+      expect(sheet, findsOneWidget);
+      final bilah = find.byType(NavigationBar);
+      expect(
+        t.getBottomLeft(sheet).dy,
+        greaterThan(t.getTopLeft(bilah).dy),
+        reason: 'lembar harus menutupi area bilah bawah',
+      );
+
+      // Toko terakhir ada di luar layar → gulir lalu ketuk.
+      final terakhir = find.byKey(const ValueKey('toko-TOKO-6'));
+      await t.scrollUntilVisible(terakhir, 120, scrollable: find.byType(Scrollable).last);
+      await t.pump();
+      await t.tap(terakhir);
+      for (var i = 0; i < 12; i++) {
+        await t.pump(const Duration(milliseconds: 50));
+      }
+      expect(c.read(activeTokoIdProvider).valueOrNull, 'TOKO-6');
+      expect(find.text('Pilih toko'), findsNothing);
+    },
+  );
 }

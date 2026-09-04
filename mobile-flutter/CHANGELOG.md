@@ -5,6 +5,10 @@ sebagai isi Release GitHub (workflow flutter-release.yml), dan empat baris
 pertamanya tampil di banner pembaruan dalam aplikasi. Tulis untuk kasir, bukan
 untuk programmer.
 
+## 2.4.1
+
+- Perbaikan: lembar "Pilih toko" tertutup bilah navigasi bawah dan tidak bisa digulir, sehingga toko di bawah tidak bisa dipilih. Lembar kini tampil di atas bilah dan bisa digulir; berlaku juga untuk keranjang dan menu Lainnya.
+
 ## 2.4.0
 
 - Baru: Notifikasi pesanan meja. Nyalakan di Pengaturan; aplikasi memantau pesanan dan permintaan bayar dari QR meja di latar belakang, lalu berbunyi walau aplikasi ditutup.

@@ -74,6 +74,7 @@ class MainShell extends ConsumerWidget {
     final manifest = ref.read(activeManifestProvider).valueOrNull;
     return showModalBottomSheet<void>(
       context: context,
+      useRootNavigator: true,
       showDragHandle: true,
       useSafeArea: true,
       isScrollControlled: true,

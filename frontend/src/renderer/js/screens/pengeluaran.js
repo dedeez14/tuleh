@@ -3,6 +3,7 @@
 // O/M). Uang integer rupiah. Menggantikan versi localStorage sebelumnya.
 
 import { api, firstError } from '../api.js'
+import { pasangFormatRupiah } from '../utils/rupiah-input.js'
 import { toast, icons, confirmDialog, emptyStateHTML } from '../components/ui.js'
 import { esc, fmtIDR, fmtDate, toISODate, parseAmount } from '../utils/format.js'
 
@@ -61,6 +62,7 @@ function bind(ctx) {
   const c = ctx.container
   c.querySelector('#ex-add').addEventListener('click', () => tambah(ctx))
   c.querySelector('#ex-nom').addEventListener('keydown', (e) => { if (e.key === 'Enter') tambah(ctx) })
+  pasangFormatRupiah(c.querySelector('#ex-nom')) // 50000 → 50.000 saat diketik
   c.querySelector('#ex-bulan').addEventListener('change', (e) => { ctx.bulan = e.target.value || bulanIni(); refresh(ctx) })
 }
 

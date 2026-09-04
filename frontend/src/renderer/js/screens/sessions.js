@@ -1,6 +1,7 @@
 // Layar Sesi Kasir — buka/tutup sesi, rekap X/Z, dan riwayat sesi per shift.
 
 import { api, firstError } from '../api.js'
+import { pasangFormatRupiah } from '../utils/rupiah-input.js'
 import { getState } from '../state.js'
 import { icons, toast, showModal, emptyStateHTML, loadingHTML } from '../components/ui.js'
 import {
@@ -351,6 +352,7 @@ export const SessionsScreen = {
       if (!form) return
       const kasInput = activeHost.querySelector('#ses-kas-awal')
       const kasView = activeHost.querySelector('#ses-kas-awal-view')
+      pasangFormatRupiah(kasInput) // 100000 → 100.000 saat diketik
 
       kasInput.addEventListener('input', () => {
         const raw = kasInput.value.trim()
@@ -425,6 +427,7 @@ export const SessionsScreen = {
       const root = modal.el
       const inputFisik = root.querySelector('#ses-kas-fisik')
       const fisikView = root.querySelector('#ses-fisik-view')
+      pasangFormatRupiah(inputFisik)
       const diffBox = root.querySelector('#ses-diff')
       const diffValue = root.querySelector('#ses-diff-value')
       const btnSubmit = root.querySelector('[data-close-submit]')

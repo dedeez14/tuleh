@@ -142,6 +142,7 @@ class _PapanPesananScreenState extends ConsumerState<PapanPesananScreen> {
 
     return showModalBottomSheet<String>(
       context: context,
+      useRootNavigator: true,
       showDragHandle: true,
       builder: (sheetContext) => SafeArea(
         child: Column(

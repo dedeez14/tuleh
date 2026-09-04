@@ -104,46 +104,60 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
+  /// Lembar pilih toko. Dibuka di navigator AKAR (bukan cabang tab) agar
+  /// menutupi bilah navigasi bawah, dan daftarnya bisa digulir — dengan
+  /// banyak toko, Column biasa meluber sehingga toko di bawah tak bisa dipilih.
   Future<void> _pilihToko(
     BuildContext context,
     WidgetRef ref,
     List<Toko> tokos,
     String? activeId,
   ) async {
+    final tinggiLayar = MediaQuery.sizeOf(context).height;
     await showModalBottomSheet<void>(
       context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
       showDragHandle: true,
       useSafeArea: true,
-      builder: (_) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-              child: Text(
-                'Pilih toko',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-              ),
+      constraints: BoxConstraints(maxHeight: tinggiLayar * 0.8),
+      builder: (ctx) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+            child: Text(
+              'Pilih toko',
+              style: Theme.of(
+                ctx,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
             ),
-            for (final t in tokos)
-              ListTile(
-                leading: const Icon(Icons.storefront_outlined),
-                title: Text(t.nama),
-                subtitle: t.bidangUsaha != null ? Text(t.bidangUsaha!) : null,
-                trailing: t.id == activeId
-                    ? const Icon(Icons.check_circle, color: AppColors.mint600)
-                    : null,
-                onTap: () {
-                  ref.read(activeTokoIdProvider.notifier).select(t.id);
-                  Navigator.of(context).pop();
-                },
-              ),
-            const SizedBox(height: 8),
-          ],
-        ),
+          ),
+          Flexible(
+            child: ListView.builder(
+              shrinkWrap: true,
+              padding: const EdgeInsets.only(bottom: 12),
+              itemCount: tokos.length,
+              itemBuilder: (_, i) {
+                final t = tokos[i];
+                return ListTile(
+                  key: ValueKey('toko-${t.id}'),
+                  leading: const Icon(Icons.storefront_outlined),
+                  title: Text(t.nama),
+                  subtitle: t.bidangUsaha != null ? Text(t.bidangUsaha!) : null,
+                  trailing: t.id == activeId
+                      ? const Icon(Icons.check_circle, color: AppColors.mint600)
+                      : null,
+                  onTap: () {
+                    ref.read(activeTokoIdProvider.notifier).select(t.id);
+                    Navigator.of(ctx).pop();
+                  },
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

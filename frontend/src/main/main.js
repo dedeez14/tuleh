@@ -109,6 +109,9 @@ if (!app.requestSingleInstanceLock()) {
     }
   })
 
+  // Windows: notifikasi sistem (pemantau pesanan meja) butuh AppUserModelID yang
+  // sama dengan appId electron-builder agar toast memakai nama & ikon Tuléh.
+  if (process.platform === 'win32') app.setAppUserModelId('com.movera.mpos')
   app.whenReady().then(() => {
     Menu.setApplicationMenu(null)
     registerIpcHandlers(() => mainWindow)

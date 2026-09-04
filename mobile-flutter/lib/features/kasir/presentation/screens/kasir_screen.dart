@@ -53,6 +53,7 @@ class _KasirScreenState extends ConsumerState<KasirScreen> {
     FocusScope.of(context).unfocus();
     showModalBottomSheet<void>(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       useSafeArea: true,
       showDragHandle: true,

@@ -235,6 +235,15 @@
   font-weight: 800;
 }
 
+/* Harga normal dicoret saat promo aktif (harga_efektif dari server). */
+.pos-card__price-old {
+  margin-left: 4px;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--text-muted, #7a8a85);
+  text-decoration: line-through;
+}
+
 .pos-more {
   display: flex;
   flex-direction: column;
