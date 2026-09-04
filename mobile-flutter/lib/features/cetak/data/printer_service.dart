@@ -44,12 +44,22 @@ class PrinterException implements Exception {
 class PrinterService {
   const PrinterService();
 
-  /// Minta izin Bluetooth (Android 12+). Mengembalikan false bila ditolak.
+  /// Minta izin Bluetooth secara "usaha terbaik".
+  ///
+  /// Sengaja TIDAK dijadikan penghalang: di Android 10/11 izin runtime
+  /// BLUETOOTH_CONNECT/SCAN belum ada, sehingga permintaannya bisa membalas
+  /// "ditolak" padahal Bluetooth tetap boleh dipakai. Yang menentukan adalah
+  /// hasil pemanggilan Bluetooth-nya sendiri, bukan jawaban dialog izin.
   Future<bool> mintaIzin() async {
     if (!Platform.isAndroid) return true;
-    final hasil = await [Permission.bluetoothConnect, Permission.bluetoothScan]
-        .request();
-    return hasil.values.every((s) => s.isGranted || s.isLimited);
+    try {
+      final hasil = await [Permission.bluetoothConnect, Permission.bluetoothScan]
+          .request();
+      return hasil.values.every((s) => s.isGranted || s.isLimited);
+    } catch (_) {
+      // Perangkat lama: izin tidak dikenal → dianggap tidak menghalangi.
+      return true;
+    }
   }
 
   Future<bool> bluetoothMenyala() async {
@@ -61,19 +71,18 @@ class PrinterService {
   }
 
   /// Daftar printer yang sudah dipasangkan di setelan Bluetooth HP.
+  ///
+  /// Hanya membaca perangkat TERPASANG, tidak memindai. Bedanya penting untuk
+  /// Android 10/11: pemindaian di sana menuntut izin lokasi, sedangkan membaca
+  /// daftar perangkat terpasang tidak.
   Future<List<PrinterTersimpan>> daftarPrinter() async {
-    if (!await mintaIzin()) {
-      throw const PrinterException(
-        'Izin Bluetooth ditolak.',
-        saran: 'Aktifkan izin "Perangkat di sekitar" untuk Tuléh di setelan aplikasi.',
-      );
-    }
     if (!await bluetoothMenyala()) {
       throw const PrinterException(
         'Bluetooth belum aktif.',
         saran: 'Nyalakan Bluetooth di HP, lalu coba lagi.',
       );
     }
+    final diizinkan = await mintaIzin();
     try {
       final list = await PrintBluetoothThermal.pairedBluetooths;
       return [
@@ -84,6 +93,14 @@ class PrinterService {
           ),
       ];
     } catch (e) {
+      // Gagal SETELAH izin ditolak → hampir pasti soal izin (Android 12+).
+      if (!diizinkan) {
+        throw const PrinterException(
+          'Izin Bluetooth ditolak.',
+          saran: 'Aktifkan izin "Perangkat di sekitar" untuk Tuléh di '
+              'Setelan → Aplikasi → Izin.',
+        );
+      }
       throw PrinterException('Gagal membaca daftar perangkat: $e');
     }
   }
@@ -100,14 +117,15 @@ class PrinterService {
   /// perangkat yang sama, sambungan dipakai ulang.
   Future<void> hubungkan(PrinterTersimpan printer) async {
     if (await terhubung()) return;
+    await mintaIzin(); // usaha terbaik; Android 10/11 tidak memerlukannya
     final ok = await PrintBluetoothThermal.connect(
       macPrinterAddress: printer.mac,
     );
     if (!ok) {
       throw PrinterException(
         'Tidak bisa tersambung ke ${printer.nama}.',
-        saran: 'Pastikan printer menyala, kertas terpasang, dan tidak sedang '
-            'dipakai perangkat lain.',
+        saran: 'Pastikan printer menyala, kertas terpasang, tidak sedang '
+            'dipakai perangkat lain, dan izin Bluetooth aplikasi aktif.',
       );
     }
   }
