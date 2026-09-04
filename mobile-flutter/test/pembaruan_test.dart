@@ -2,6 +2,8 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tuleh_pos/features/update/data/datasources/github_release_source.dart';
 import 'package:tuleh_pos/features/update/data/datasources/update_remote_datasource.dart';
+import 'package:tuleh_pos/features/update/domain/entities/app_version_info.dart';
+import 'package:tuleh_pos/features/update/domain/sumber_apk.dart';
 import 'package:tuleh_pos/features/update/domain/versi.dart';
 
 /// Auto-update aplikasi Flutter.
@@ -188,6 +190,67 @@ void main() {
       final info = await ds.cek('1.4.0');
       expect(info.updateTersedia, isFalse);
       expect(info.wajib, isFalse);
+    });
+  });
+
+  group('sumber APK (kebijakan yang sama dengan MainActivity.kt)', () {
+    // Kasus nyata 4 Sep 2026: banner menawarkan 2.2.0 dari GitHub, tetapi
+    // tombol unduh gagal "URL unduhan tidak valid / host tidak diizinkan"
+    // karena native hanya mengizinkan tatreport.com.
+    test('aset Release GitHub repo ini diizinkan', () {
+      expect(
+        SumberApk.diizinkan(
+          'https://github.com/dedeez14/tuleh/releases/download/flutter-v2.2.0/Tuleh-2.2.0-arm64-v8a.apk',
+        ),
+        isTrue,
+      );
+      expect(
+        SumberApk.diizinkan('https://WWW.GitHub.com/dedeez14/tuleh/releases/download/x/y.apk'),
+        isTrue,
+      );
+    });
+
+    test('server MOVERA & subdomainnya diizinkan', () {
+      expect(SumberApk.diizinkan('https://pos.tatreport.com/unduh/Tuleh-0.9.12-android.apk'), isTrue);
+      expect(SumberApk.diizinkan('https://tatreport.com/x.apk'), isTrue);
+    });
+
+    test('ditolak: http, host lain, repo lain, host mirip', () {
+      expect(SumberApk.diizinkan('http://github.com/dedeez14/tuleh/releases/download/x/y.apk'), isFalse);
+      expect(SumberApk.diizinkan('https://github.com/orang-lain/tuleh/releases/download/x/y.apk'), isFalse);
+      expect(SumberApk.diizinkan('https://github.com/dedeez14/tuleh/archive/main.zip'), isFalse);
+      expect(SumberApk.diizinkan('https://evil-tatreport.com/x.apk'), isFalse);
+      expect(SumberApk.diizinkan('https://tatreport.com.evil.net/x.apk'), isFalse);
+      expect(SumberApk.diizinkan('https://objects.githubusercontent.com/x.apk'), isFalse);
+      expect(SumberApk.diizinkan(null), isFalse);
+      expect(SumberApk.diizinkan('bukan url'), isFalse);
+    });
+
+    test('pilihan rilis GitHub hanya memuat aset dengan URL yang diizinkan', () {
+      final rilis = [
+        {
+          'tag_name': 'flutter-v9.0.0',
+          'assets': [
+            {'name': 'Tuleh-9.0.0-arm64-v8a.apk', 'size': 1, 'browser_download_url': 'https://cdn-lain.example/arm64.apk'},
+            {'name': 'Tuleh-9.0.0-armeabi-v7a.apk', 'size': 2, 'browser_download_url': 'https://github.com/dedeez14/tuleh/releases/download/flutter-v9.0.0/Tuleh-9.0.0-armeabi-v7a.apk'},
+          ],
+        },
+      ];
+      final info = GithubReleaseSource.pilih(rilis, const Versi(1, 0, 0), abiPerangkat: ['arm64-v8a']);
+      // arm64 ada tetapi URL-nya tak diizinkan → jatuh ke aset lain yang sah.
+      expect(info!.androidNama, 'Tuleh-9.0.0-armeabi-v7a.apk');
+      expect(info.hasAndroidDownload, isTrue);
+    });
+
+    test('info dari server dengan URL host asing → tidak ditawarkan unduh dalam-app', () {
+      final info = AppVersionInfo.fromJson({
+        'wajib': false,
+        'update_tersedia': true,
+        'versi_terbaru': '9.9.9',
+        'unduhan': {'android': {'url': 'https://cdn-lain.example/x.apk', 'nama': 'x.apk'}},
+      });
+      expect(info.updateTersedia, isTrue);
+      expect(info.hasAndroidDownload, isFalse);
     });
   });
 }

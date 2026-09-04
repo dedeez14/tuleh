@@ -30,8 +30,14 @@ class MainActivity : FlutterActivity() {
     private val methodChannelName = "tuleh/updater"
     private val eventChannelName = "tuleh/updater/progress"
 
-    // Host yang diizinkan sebagai sumber APK (defense-in-depth atas cek https).
+    // Sumber APK yang diizinkan — HARUS sama dengan lib/features/update/domain/
+    // sumber_apk.dart (Dart memilih aset & tombol; ini penegakan akhir):
+    //  - tatreport.com dan subdomainnya (server MOVERA, /app/versi), path bebas;
+    //  - github.com hanya path aset Release repo ini (APK Flutter diterbitkan
+    //    di sana; DownloadManager mengikuti redirect ke objects.githubusercontent.com
+    //    sendiri, cek ini hanya pada URL awal).
     private val allowedHostSuffix = "tatreport.com"
+    private val githubReleasePathPrefix = "/dedeez14/tuleh/releases/download/"
 
     // Ambang macet: tanpa penambahan byte selama ~30 dtk (60 × 500ms) → gagalkan.
     private val stallTicksLimit = 60
@@ -118,8 +124,13 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun hostAllowed(url: String): Boolean {
-        val host = Uri.parse(url).host ?: return false
-        return host == allowedHostSuffix || host.endsWith(".$allowedHostSuffix")
+        val uri = Uri.parse(url)
+        val host = uri.host?.lowercase() ?: return false
+        if (host == allowedHostSuffix || host.endsWith(".$allowedHostSuffix")) return true
+        if (host == "github.com" || host == "www.github.com") {
+            return (uri.path ?: "").startsWith(githubReleasePathPrefix)
+        }
+        return false
     }
 
     /// APK sah hanya bila nama paketnya == paket app ini (update ke DIRI sendiri).

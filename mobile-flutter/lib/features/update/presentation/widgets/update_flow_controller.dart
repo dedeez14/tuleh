@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../../data/services/apk_installer.dart';
 import '../../domain/entities/app_version_info.dart';
+import '../../domain/sumber_apk.dart';
 
 enum UpdatePhase {
   checking,
@@ -39,9 +40,15 @@ class UpdateFlowController extends ChangeNotifier {
 
   /// Cek dukungan + izin instal. Panggil sekali saat mulai alur.
   Future<void> init() async {
-    if (!_installer.isSupported || !_info.hasAndroidDownload) {
+    if (!_installer.isSupported) {
       _set(UpdatePhase.error,
           err: 'Pembaruan dalam-app tak tersedia di perangkat ini.');
+      return;
+    }
+    if (!_info.hasAndroidDownload) {
+      _set(UpdatePhase.error,
+          err: 'Sumber unduhan tidak dikenal. Unduh versi terbaru dari '
+              'github.com/${SumberApk.repoGithub}/releases.');
       return;
     }
     final ok = await _installer.canInstall();

@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import '../../domain/entities/app_version_info.dart';
+import '../../domain/sumber_apk.dart';
 import '../../domain/versi.dart';
 
 /// Sumber pembaruan dari GitHub Releases — tempat APK Flutter sebenarnya
@@ -13,7 +14,7 @@ import '../../domain/versi.dart';
 /// Dio-nya TERPISAH dari klien API: tanpa baseUrl tatreport, tanpa header
 /// Authorization (token tidak boleh bocor ke GitHub), tanpa interceptor demo.
 class GithubReleaseSource {
-  GithubReleaseSource({Dio? dio, this.repo = 'dedeez14/tuleh'})
+  GithubReleaseSource({Dio? dio, this.repo = SumberApk.repoGithub})
     : _dio =
           dio ??
           Dio(
@@ -99,9 +100,13 @@ class GithubReleaseSource {
     List<String> abiPerangkat,
   ) {
     if (assets is! List) return null;
+    // Hanya aset .apk yang URL-nya lolos kebijakan sumber — URL lain akan
+    // ditolak native saat unduh, jadi lebih baik tak ditawarkan sama sekali.
     final apk = [
       for (final a in assets)
-        if (a is Map && '${a['name']}'.toLowerCase().endsWith('.apk'))
+        if (a is Map &&
+            '${a['name']}'.toLowerCase().endsWith('.apk') &&
+            SumberApk.diizinkan(a['browser_download_url']?.toString()))
           Map<String, dynamic>.from(a),
     ];
     if (apk.isEmpty) return null;

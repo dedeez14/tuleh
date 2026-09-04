@@ -1,3 +1,5 @@
+import '../sumber_apk.dart';
+
 /// Info versi dari `GET /app/versi?versi=<v>` (Auto-Update).
 /// Server yang MENENTUKAN `wajib` / `update_tersedia` berdasarkan versi klien —
 /// app tak perlu bandingkan sendiri (satu sumber kebenaran).
@@ -44,9 +46,9 @@ class AppVersionInfo {
     ukuran: null,
   );
 
-  /// APK bisa diunduh dalam-app (URL https valid).
-  bool get hasAndroidDownload =>
-      androidUrl != null && androidUrl!.startsWith('https://');
+  /// APK bisa diunduh dalam-app: https dari sumber yang diizinkan
+  /// ([SumberApk] — aturan yang sama dengan penegakan native).
+  bool get hasAndroidDownload => SumberApk.diizinkan(androidUrl);
 
   factory AppVersionInfo.fromJson(Map<String, dynamic> d) {
     final unduhan = d['unduhan'];

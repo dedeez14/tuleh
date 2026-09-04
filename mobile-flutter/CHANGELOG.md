@@ -5,6 +5,10 @@ sebagai isi Release GitHub (workflow flutter-release.yml), dan empat baris
 pertamanya tampil di banner pembaruan dalam aplikasi. Tulis untuk kasir, bukan
 untuk programmer.
 
+## 2.2.1
+
+- Perbaikan: tombol "Unduh" pembaruan gagal dengan "URL unduhan tidak valid / host tidak diizinkan" karena aplikasi hanya mengizinkan unduhan dari server, padahal versi baru diterbitkan di GitHub. Versi ini yang terakhir perlu dipasang manual; berikutnya cukup tekan Unduh.
+
 ## 2.2.0
 
 - Logo Tuléh (notepad + pensil) kembali dipakai untuk ikon aplikasi, splash, dan layar masuk — sama seperti desktop.
