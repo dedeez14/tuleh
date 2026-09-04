@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/utils/rupiah_input.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/format.dart';
@@ -227,10 +227,10 @@ class _TutupDialogState extends ConsumerState<_TutupDialog> {
   }
 
   double get _selisih =>
-      (double.tryParse(_fisik.text.trim()) ?? 0) - widget.rekap.kasAkhirSistem;
+      parseRupiah(_fisik.text) - widget.rekap.kasAkhirSistem;
 
   Future<void> _submit() async {
-    final fisik = double.tryParse(_fisik.text.trim()) ?? 0;
+    final fisik = parseRupiah(_fisik.text);
     // Tangkap navigator + messenger SEBELUM await (hindari BuildContext lintas-async).
     final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
@@ -272,9 +272,9 @@ class _TutupDialogState extends ConsumerState<_TutupDialog> {
           TextField(
             controller: _fisik,
             keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            inputFormatters: const [RupiahInputFormatter()],
             onChanged: (_) => setState(() {}),
-            decoration: const InputDecoration(labelText: 'Kas akhir fisik', prefixText: 'Rp '),
+            decoration: const InputDecoration(labelText: 'Kas akhir fisik', prefixText: 'Rp ', hintText: '0'),
           ),
           const SizedBox(height: 10),
           Row(

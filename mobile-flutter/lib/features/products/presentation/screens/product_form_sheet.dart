@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/utils/rupiah_input.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../domain/entities/product.dart';
 import '../providers/products_provider.dart';
@@ -31,8 +31,8 @@ class _ProductFormSheetState extends ConsumerState<ProductFormSheet> {
     super.initState();
     final p = widget.product;
     _nama = TextEditingController(text: p?.nama ?? '');
-    _hargaJual = TextEditingController(text: p != null ? p.harga.toInt().toString() : '');
-    _hargaBeli = TextEditingController(text: p?.hargaBeli != null ? p!.hargaBeli!.toInt().toString() : '');
+    _hargaJual = TextEditingController(text: p != null ? teksRupiah(p.harga) : '');
+    _hargaBeli = TextEditingController(text: p?.hargaBeli != null ? teksRupiah(p!.hargaBeli!) : '');
     _barcode = TextEditingController(text: p?.barcode ?? '');
     _tipe = (p?.tipe == 'JASA') ? 'JASA' : 'PRODUK';
   }
@@ -46,7 +46,7 @@ class _ProductFormSheetState extends ConsumerState<ProductFormSheet> {
     super.dispose();
   }
 
-  double? _num(String s) => s.trim().isEmpty ? null : double.tryParse(s.trim());
+  double? _num(String s) => s.trim().isEmpty ? null : parseRupiah(s);
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
@@ -135,7 +135,7 @@ class _ProductFormSheetState extends ConsumerState<ProductFormSheet> {
             TextFormField(
               controller: _hargaJual,
               keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              inputFormatters: const [RupiahInputFormatter()],
               textInputAction: TextInputAction.next,
               decoration: const InputDecoration(
                   labelText: 'Harga jual (Rp)', prefixIcon: Icon(Icons.sell_outlined)),
@@ -149,7 +149,7 @@ class _ProductFormSheetState extends ConsumerState<ProductFormSheet> {
             TextFormField(
               controller: _hargaBeli,
               keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              inputFormatters: const [RupiahInputFormatter()],
               textInputAction: TextInputAction.next,
               decoration: const InputDecoration(
                   labelText: 'Harga beli (opsional)',

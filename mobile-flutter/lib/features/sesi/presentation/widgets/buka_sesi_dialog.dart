@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+
+import '../../../../core/utils/rupiah_input.dart';
 
 /// Dialog input "kas awal" untuk buka sesi. Return nominal (double), atau null
 /// bila dibatalkan.
@@ -24,7 +25,7 @@ class _BukaSesiDialog extends StatefulWidget {
 }
 
 class _BukaSesiDialogState extends State<_BukaSesiDialog> {
-  final _ctrl = TextEditingController(text: '0');
+  final _ctrl = TextEditingController();
 
   @override
   void dispose() {
@@ -39,9 +40,14 @@ class _BukaSesiDialogState extends State<_BukaSesiDialog> {
       content: TextField(
         controller: _ctrl,
         keyboardType: TextInputType.number,
-        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        inputFormatters: const [RupiahInputFormatter()],
         autofocus: true,
-        decoration: const InputDecoration(labelText: 'Kas awal (Rp)', prefixText: 'Rp '),
+        decoration: const InputDecoration(
+          labelText: 'Kas awal (Rp)',
+          prefixText: 'Rp ',
+          hintText: '0',
+          helperText: 'Uang tunai di laci saat mulai, mis. 100.000',
+        ),
       ),
       actions: [
         TextButton(
@@ -50,7 +56,7 @@ class _BukaSesiDialogState extends State<_BukaSesiDialog> {
         ),
         FilledButton(
           onPressed: () =>
-              Navigator.pop(context, double.tryParse(_ctrl.text.trim()) ?? 0),
+              Navigator.pop(context, parseRupiah(_ctrl.text)),
           child: const Text('Buka'),
         ),
       ],

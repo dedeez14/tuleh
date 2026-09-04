@@ -5,10 +5,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/format.dart';
+import '../../../../core/utils/rupiah_input.dart';
 import '../../../../core/widgets/motion.dart';
 import '../../../../core/widgets/states.dart';
 import '../../../cetak/domain/entities/struk.dart';
 import 'hasil_transaksi_sheet.dart';
+import '../../../pengaturan/domain/entities/pengaturan_pembayaran.dart';
 import '../../../pengaturan/presentation/providers/pengaturan_providers.dart';
 import '../../../sesi/presentation/providers/sesi_providers.dart';
 import '../controllers/cart_controller.dart';
@@ -43,8 +45,7 @@ class _CartSheetState extends ConsumerState<CartSheet> {
     super.dispose();
   }
 
-  double get _uangDiterima =>
-      double.tryParse(_uangCtrl.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+  double get _uangDiterima => parseRupiah(_uangCtrl.text);
 
   /// Saran nominal uang: pas, pembulatan ribuan/puluh-ribuan terdekat di atas.
   List<double> _saranUang(double total) {
@@ -63,7 +64,13 @@ class _CartSheetState extends ConsumerState<CartSheet> {
     if (items.isEmpty) return;
 
     final tunai = _metodeTerpilih == 'TUNAI';
-    final dibayar = tunai && _uangDiterima > 0 ? _uangDiterima : total;
+    // Tunai: uang diterima WAJIB diisi dan cukup — tombol Bayar sudah
+    // dinonaktifkan oleh _Kaki bila belum; ini pengaman kedua.
+    final dibayar = tunai ? _uangDiterima : total;
+    if (tunai && dibayar <= 0) {
+      _pesan('Isi dulu uang yang diterima dari pelanggan.', gagal: true);
+      return;
+    }
     if (tunai && dibayar < total) {
       _pesan('Uang diterima kurang dari total.', gagal: true);
       return;
@@ -106,6 +113,7 @@ class _CartSheetState extends ConsumerState<CartSheet> {
         kembalian: tunai ? res.kembalian : null,
         catatanKaki: usaha?.strukFooter,
         barcode: res.nomor.isEmpty ? null : res.nomor,
+        logoUrl: (usaha?.strukTampilLogo ?? false) ? usaha?.logo : null,
       );
 
       ref.read(cartControllerProvider.notifier).clear();
@@ -172,6 +180,7 @@ class _CartSheetState extends ConsumerState<CartSheet> {
     final total = ref.watch(cartTotalProvider);
     final count = ref.watch(cartCountProvider);
     final cart = ref.read(cartControllerProvider.notifier);
+    final pembayaran = ref.watch(pengaturanPembayaranProvider);
     final cs = Theme.of(context).colorScheme;
 
     // Keranjang dikosongkan dari layar lain → tutup lembar ini.
@@ -212,6 +221,7 @@ class _CartSheetState extends ConsumerState<CartSheet> {
                         terpilih: _metodeTerpilih,
                         uangCtrl: _uangCtrl,
                         saran: _saranUang(total),
+                        pembayaran: pembayaran,
                         onPilihMetode: (m) =>
                             setState(() => _metodeTerpilih = m),
                         onUbahUang: () => setState(() {}),
@@ -447,6 +457,7 @@ class _FormBayar extends StatelessWidget {
     required this.terpilih,
     required this.uangCtrl,
     required this.saran,
+    required this.pembayaran,
     required this.onPilihMetode,
     required this.onUbahUang,
   });
@@ -456,6 +467,7 @@ class _FormBayar extends StatelessWidget {
   final String terpilih;
   final TextEditingController uangCtrl;
   final List<double> saran;
+  final AsyncValue<PengaturanPembayaran> pembayaran;
   final ValueChanged<String> onPilihMetode;
   final VoidCallback onUbahUang;
 
@@ -513,11 +525,14 @@ class _FormBayar extends StatelessWidget {
           TextField(
             controller: uangCtrl,
             keyboardType: TextInputType.number,
+            inputFormatters: const [RupiahInputFormatter()],
+            autofocus: true,
             onChanged: (_) => onUbahUang(),
             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
             decoration: const InputDecoration(
               prefixText: 'Rp ',
               hintText: '0',
+              helperText: 'Ketik 50000, tampil 50.000',
             ),
           ),
           const SizedBox(height: 10),
@@ -532,38 +547,16 @@ class _FormBayar extends StatelessWidget {
                     style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
                   onPressed: () {
-                    uangCtrl.text = s.round().toString();
+                    uangCtrl.text = teksRupiah(s);
                     onUbahUang();
                   },
                 ),
             ],
           ),
-        ] else
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: cs.primary.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Row(
-              children: [
-                Icon(_ikon(terpilih), color: cs.primary),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    terpilih == 'QRIS'
-                        ? 'Pelanggan memindai QRIS toko, lalu tekan Bayar setelah dana masuk.'
-                        : 'Pastikan transfer sudah diterima sebelum menekan Bayar.',
-                    style: TextStyle(
-                      fontSize: 13,
-                      height: 1.45,
-                      color: cs.onSurface.withValues(alpha: 0.75),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+        ] else if (terpilih == 'QRIS')
+          _PanduanQris(total: total, pembayaran: pembayaran)
+        else
+          _PanduanTransfer(pembayaran: pembayaran),
       ],
     );
   }
@@ -654,6 +647,10 @@ class _Kaki extends StatelessWidget {
     final tunai = metode == 'TUNAI';
     final kembalian = uangDiterima - total;
     final kurang = tunai && uangDiterima > 0 && kembalian < 0;
+    final belumIsi = tunai && uangDiterima <= 0;
+    // Tunai tanpa nominal atau kurang: Bayar dikunci; kasir tahu sebabnya
+    // dari baris di atas tombol, bukan dari snackbar setelah gagal.
+    final bisaBayar = !bayar || !tunai || (!belumIsi && !kurang);
 
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
@@ -707,9 +704,28 @@ class _Kaki extends StatelessWidget {
               ],
             ),
           ],
+          if (bayar && belumIsi) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Icon(Icons.info_outline_rounded, size: 16, color: cs.error),
+                const SizedBox(width: 6),
+                Text(
+                  'Isi uang diterima dulu',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: cs.error,
+                  ),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 14),
           FilledButton(
-            onPressed: loading ? null : (bayar ? onBayar : onLanjut),
+            onPressed: loading || !bisaBayar
+                ? null
+                : (bayar ? onBayar : onLanjut),
             child: loading
                 ? const SizedBox(
                     height: 22,
@@ -720,6 +736,180 @@ class _Kaki extends StatelessWidget {
                     ),
                   )
                 : Text(bayar ? 'Bayar ${fmtIDR(total)}' : 'Lanjut ke pembayaran'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Metode QRIS: tunjukkan gambar QRIS statis toko (diunggah pemilik di desktop,
+/// Pengaturan → Pembayaran) beserta total, sama seperti layar bayar desktop.
+class _PanduanQris extends StatelessWidget {
+  const _PanduanQris({required this.total, required this.pembayaran});
+  final double total;
+  final AsyncValue<PengaturanPembayaran> pembayaran;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final url = pembayaran.valueOrNull?.qrStatis;
+    if (pembayaran.isLoading) {
+      return const Kerangka(tinggi: 220, radius: 16);
+    }
+    if (url == null) {
+      return const _Catatan(
+        ikon: Icons.qr_code_2_rounded,
+        peringatan: true,
+        teks: 'QRIS statis belum diunggah. Pemilik/Manajer: buka Pengaturan → '
+            'Pembayaran di aplikasi desktop untuk mengunggah gambar QRIS usaha.',
+      );
+    }
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: cs.outline),
+          ),
+          child: AspectRatio(
+            aspectRatio: 1,
+            child: Image.network(
+              url,
+              fit: BoxFit.contain,
+              loadingBuilder: (_, anak, prog) => prog == null
+                  ? anak
+                  : const Center(child: CircularProgressIndicator()),
+              errorBuilder: (_, _, _) => const KeadaanKosong(
+                ikon: Icons.broken_image_outlined,
+                judul: 'Gambar QRIS gagal dimuat',
+                detail: 'Periksa koneksi, lalu buka ulang keranjang.',
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          fmtIDR(total),
+          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 8),
+        const _Catatan(
+          ikon: Icons.qr_code_scanner_rounded,
+          teks: 'Tunjukkan QR ke pelanggan. Setelah pelanggan membayar dan Anda '
+              'cek dananya masuk, tekan Bayar.',
+        ),
+      ],
+    );
+  }
+}
+
+/// Metode TRANSFER: daftar rekening toko dengan tombol salin.
+class _PanduanTransfer extends StatelessWidget {
+  const _PanduanTransfer({required this.pembayaran});
+  final AsyncValue<PengaturanPembayaran> pembayaran;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final bank = pembayaran.valueOrNull?.bank ?? const [];
+    if (pembayaran.isLoading) {
+      return const DaftarKerangka(jumlah: 2, tinggiBaris: 64);
+    }
+    if (bank.isEmpty) {
+      return const _Catatan(
+        ikon: Icons.account_balance_outlined,
+        peringatan: true,
+        teks: 'Belum ada rekening. Pemilik/Manajer: tambahkan di Pengaturan → '
+            'Pembayaran di aplikasi desktop.',
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final b in bank) ...[
+          Material(
+            color: cs.surface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+              side: BorderSide(color: cs.outline),
+            ),
+            child: ListTile(
+              leading: Icon(Icons.account_balance_outlined, color: cs.primary),
+              title: Text(
+                b.rekening,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontFeatures: [FontFeature.tabularFigures()],
+                  letterSpacing: 0.5,
+                ),
+              ),
+              subtitle: Text('${b.bank} · a.n. ${b.atasNama}'),
+              trailing: IconButton(
+                tooltip: 'Salin nomor rekening',
+                icon: const Icon(Icons.copy_rounded),
+                onPressed: () async {
+                  await Clipboard.setData(ClipboardData(text: b.rekening));
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context)
+                    ..hideCurrentSnackBar()
+                    ..showSnackBar(
+                      SnackBar(
+                        content: Text('No. rekening ${b.bank} disalin.'),
+                      ),
+                    );
+                },
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+        const _Catatan(
+          ikon: Icons.verified_outlined,
+          teks: 'Pelanggan transfer ke salah satu rekening. Setelah dana masuk, '
+              'tekan Bayar.',
+        ),
+      ],
+    );
+  }
+}
+
+class _Catatan extends StatelessWidget {
+  const _Catatan({
+    required this.ikon,
+    required this.teks,
+    this.peringatan = false,
+  });
+  final IconData ikon;
+  final String teks;
+  final bool peringatan;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final warna = peringatan ? AppColors.warn : cs.primary;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: warna.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(ikon, color: warna),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              teks,
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.45,
+                color: cs.onSurface.withValues(alpha: 0.78),
+              ),
+            ),
           ),
         ],
       ),

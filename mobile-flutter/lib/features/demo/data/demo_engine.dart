@@ -408,6 +408,15 @@ class DemoEngine {
 
     // --- pengaturan ---
     if (path == '/pengaturan/usaha' && m == 'GET') return _ok(_usaha);
+    if (path == '/pengaturan/pembayaran' && m == 'GET') {
+      return _ok({
+        'qr_statis': null, // demo tak punya gambar QRIS; UI tampilkan ajakan unggah
+        'bank': [
+          {'bank': 'BCA', 'rekening': '1234567890', 'atas_nama': 'Toko Demo'},
+        ],
+        'midtrans_aktif': false,
+      });
+    }
     if (path == '/pengaturan/usaha' && (m == 'PUT' || m == 'POST')) {
       _usaha = {
         ..._usaha,

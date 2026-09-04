@@ -1,10 +1,12 @@
 import 'dart:io';
 
 import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
+import 'package:image/image.dart' as img;
 import 'package:permission_handler/permission_handler.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 
 import '../domain/entities/struk.dart';
+import 'logo_struk.dart';
 import 'struk_esc_pos.dart';
 
 /// Printer thermal Bluetooth yang terpasang (sudah dipasangkan di setelan HP).
@@ -145,14 +147,33 @@ class PrinterService {
     required PrinterTersimpan printer,
     PaperSize lebar = PaperSize.mm58,
   }) async {
+    // Logo diambil SEBELUM sambungan dibuka agar printer tidak menunggu
+    // jaringan; gagal unduh → tanpa logo, bukan gagal cetak.
+    final logo = await _logoUntuk(struk, lebar);
     await hubungkan(printer);
-    final bytes = await StrukEscPos(lebar: lebar).bangun(struk);
+    final bytes = await StrukEscPos(lebar: lebar).bangun(struk, logo: logo);
     final ok = await PrintBluetoothThermal.writeBytes(bytes);
     if (!ok) {
       throw const PrinterException(
         'Data gagal dikirim ke printer.',
         saran: 'Coba matikan lalu nyalakan printer, kemudian cetak ulang.',
       );
+    }
+  }
+
+  static Future<img.Image?> _logoUntuk(Struk struk, PaperSize lebar) async {
+    final url = struk.logoUrl;
+    if (url == null || url.isEmpty) return null;
+    try {
+      final bytes = await LogoStruk.ambil(url);
+      if (bytes == null) return null;
+      // 58 mm ≈ 384 titik, 80 mm ≈ 576 titik; logo ~60% lebar kertas.
+      return LogoStruk.siapkan(
+        bytes,
+        lebarPx: lebar == PaperSize.mm80 ? 336 : 224,
+      );
+    } catch (_) {
+      return null;
     }
   }
 

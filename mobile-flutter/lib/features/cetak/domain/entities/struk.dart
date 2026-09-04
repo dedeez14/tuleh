@@ -29,6 +29,7 @@ class Struk {
     this.kembalian,
     this.catatanKaki,
     this.barcode,
+    this.logoUrl,
   });
 
   final String namaToko;
@@ -46,6 +47,9 @@ class Struk {
 
   /// Isi barcode/QR di kaki struk (mis. nomor nota untuk pelacakan).
   final String? barcode;
+
+  /// URL logo toko untuk kepala struk (null = tanpa logo).
+  final String? logoUrl;
 
   int get jumlahItem =>
       baris.fold<int>(0, (s, b) => s + b.kuantitas.round());

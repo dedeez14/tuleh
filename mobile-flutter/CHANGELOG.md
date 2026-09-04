@@ -5,6 +5,14 @@ sebagai isi Release GitHub (workflow flutter-release.yml), dan empat baris
 pertamanya tampil di banner pembaruan dalam aplikasi. Tulis untuk kasir, bukan
 untuk programmer.
 
+## 2.3.0
+
+- Kolom uang berformat rupiah saat diketik: 50000 tampil 50.000 (uang diterima, kas awal/akhir sesi, pengeluaran, harga produk).
+- Bayar tunai terkunci sampai uang diterima diisi dan cukup; kembalian tampil sebelum menekan Bayar.
+- Saat QRIS: gambar QRIS statis toko tampil beserta total. Saat TRANSFER: daftar rekening toko dengan tombol salin. Keduanya dari pengaturan yang diisi di desktop.
+- Logo struk yang diatur di desktop tampil di lembar hasil dan ikut dicetak ke printer thermal.
+- Perbaikan: "items.0.id_produk harus bilangan bulat" saat bayar setelah berpindah dari Mode Demo ke akun sungguhan. Keranjang kini dikosongkan saat ganti toko atau akun.
+
 ## 2.2.1
 
 - Perbaikan: tombol "Unduh" pembaruan gagal dengan "URL unduhan tidak valid / host tidak diizinkan" karena aplikasi hanya mengizinkan unduhan dari server, padahal versi baru diterbitkan di GitHub. Versi ini yang terakhir perlu dipasang manual; berikutnya cukup tekan Unduh.

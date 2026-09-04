@@ -1,4 +1,5 @@
 import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
+import 'package:image/image.dart' as img;
 
 import '../../../core/utils/format.dart';
 import '../domain/entities/struk.dart';
@@ -15,12 +16,18 @@ class StrukEscPos {
 
   int get _kolom => lebar == PaperSize.mm80 ? 48 : 32;
 
-  Future<List<int>> bangun(Struk s) async {
+  /// [logo] = bitmap hitam-putih siap cetak (lihat LogoStruk.siapkan); null
+  /// bila toko tak punya logo atau unduhannya gagal — struk tetap tercetak.
+  Future<List<int>> bangun(Struk s, {img.Image? logo}) async {
     final profil = await CapabilityProfile.load();
     final g = Generator(lebar, profil);
     final b = <int>[];
 
     // --- kepala ---
+    if (logo != null) {
+      b.addAll(g.image(logo, align: PosAlign.center));
+      b.addAll(g.feed(1));
+    }
     b.addAll(
       g.text(
         s.namaToko,

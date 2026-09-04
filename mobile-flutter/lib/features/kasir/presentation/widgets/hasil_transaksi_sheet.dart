@@ -180,6 +180,26 @@ class _HasilTransaksiSheetState extends ConsumerState<HasilTransaksiSheet> {
             ],
             _Baris(label: 'Metode', nilai: s.metode ?? '-'),
             const SizedBox(height: 18),
+            if (s.logoUrl != null && s.logoUrl!.isNotEmpty) ...[
+              // Logo struk yang diatur pemilik di desktop — pratinjau kepala
+              // struk, sama dengan yang dicetak ke printer thermal.
+              Center(
+                child: Image.network(
+                  s.logoUrl!,
+                  height: 56,
+                  fit: BoxFit.contain,
+                  semanticLabel: 'Logo ${s.namaToko}',
+                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                s.namaToko,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 14),
+            ],
             if (s.barcode != null && s.barcode!.isNotEmpty) ...[
               Center(
                 child: Container(

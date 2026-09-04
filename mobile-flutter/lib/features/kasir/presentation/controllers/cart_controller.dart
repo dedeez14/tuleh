@@ -1,12 +1,32 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../../../products/domain/entities/product.dart';
+import '../../../toko/presentation/providers/toko_providers.dart';
 import '../../domain/entities/cart_item.dart';
 
 /// Keranjang belanja (state lokal, imutable). Sumber kebenaran transaksi kasir.
+///
+/// Keranjang HANYA sah untuk toko & akun tempat item ditambahkan. Berganti
+/// toko atau akun (termasuk keluar dari Mode Demo lalu masuk akun sungguhan)
+/// mengosongkannya. Kasus nyata: item demo (id "MIN-003") tertinggal di
+/// keranjang lalu dibayar ke server sungguhan → "items.0.id_produk harus
+/// bilangan bulat".
 class CartController extends Notifier<List<CartItem>> {
   @override
-  List<CartItem> build() => const [];
+  List<CartItem> build() {
+    ref.listen<AsyncValue<String?>>(activeTokoIdProvider, (prev, next) {
+      final sebelum = prev?.valueOrNull;
+      final sesudah = next.valueOrNull;
+      if (prev != null && sebelum != sesudah) state = const [];
+    });
+    ref.listen(authControllerProvider, (prev, next) {
+      final sebelum = prev?.valueOrNull?.id;
+      final sesudah = next.valueOrNull?.id;
+      if (prev != null && sebelum != sesudah) state = const [];
+    });
+    return const [];
+  }
 
   void add(Product p) {
     final idx = state.indexWhere((e) => e.product.id == p.id);

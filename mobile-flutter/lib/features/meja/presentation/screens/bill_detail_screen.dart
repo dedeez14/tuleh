@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/utils/rupiah_input.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/format.dart';
@@ -144,9 +144,9 @@ class _Body extends ConsumerWidget {
             TextField(
               controller: ctrl,
               keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              inputFormatters: const [RupiahInputFormatter()],
               autofocus: true,
-              decoration: const InputDecoration(labelText: 'Uang diterima'),
+              decoration: const InputDecoration(labelText: 'Uang diterima', prefixText: 'Rp '),
             ),
           ],
         ),
@@ -156,7 +156,7 @@ class _Body extends ConsumerWidget {
         ],
       ),
     );
-    final dibayar = double.tryParse(ctrl.text.trim()) ?? total;
+    final dibayar = ctrl.text.trim().isEmpty ? total : parseRupiah(ctrl.text);
     ctrl.dispose();
     if (ok != true || !context.mounted) return;
     final r = await ref.read(mejaRepositoryProvider).bayar(billId, tipe: 'TUNAI', dibayar: dibayar);

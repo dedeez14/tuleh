@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/utils/rupiah_input.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/format.dart';
@@ -196,7 +196,7 @@ class _TambahSheetState extends ConsumerState<_TambahSheet> {
 
   Future<void> _simpan() async {
     final ket = _keterangan.text.trim();
-    final nom = double.tryParse(_nominal.text.trim()) ?? 0;
+    final nom = parseRupiah(_nominal.text);
     if (ket.isEmpty || nom <= 0) {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
@@ -255,10 +255,10 @@ class _TambahSheetState extends ConsumerState<_TambahSheet> {
           TextField(
             controller: _nominal,
             keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            inputFormatters: const [RupiahInputFormatter()],
             decoration: const InputDecoration(
               labelText: 'Nominal',
-              hintText: '50000',
+              hintText: '50.000',
               prefixText: 'Rp ',
               prefixIcon: Icon(Icons.payments_outlined),
             ),

@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 
 import '../../../../core/network/api_error_mapper.dart';
 import '../../../../core/network/api_exception.dart';
+import '../../domain/entities/pengaturan_pembayaran.dart';
 import '../../domain/entities/profil_usaha.dart';
 
 class PengaturanRemoteDataSource {
@@ -20,9 +21,34 @@ class PengaturanRemoteDataSource {
       telepon: d['telepon']?.toString(),
       email: d['email']?.toString(),
       npwp: d['npwp']?.toString(),
-      logo: d['logo']?.toString(),
+      // Logo struk yang diunggah di desktop ada di `struk.logo`; `logo`
+      // tingkat atas (logo usaha) sering null — sebelumnya hanya yang ini
+      // dibaca, sehingga struk Android tak pernah berlogo.
+      logo: (struk['logo'] ?? d['logo'])?.toString(),
       strukFooter: struk['footer']?.toString(),
       strukTampilLogo: struk['tampil_logo'] != false,
+    );
+  }
+
+  /// GET /pengaturan/pembayaran → QRIS statis + daftar rekening.
+  Future<PengaturanPembayaran> pembayaran() async {
+    final body = await _send(() => _dio.get<dynamic>('/pengaturan/pembayaran'));
+    final d = body['data'] is Map ? Map<String, dynamic>.from(body['data'] as Map) : const <String, dynamic>{};
+    final bank = d['bank'];
+    final qr = d['qr_statis']?.toString();
+    return PengaturanPembayaran(
+      qrStatis: qr == null || qr.isEmpty ? null : qr,
+      bank: [
+        if (bank is List)
+          for (final b in bank)
+            if (b is Map)
+              RekeningBank(
+                bank: (b['bank'] ?? '').toString(),
+                rekening: (b['rekening'] ?? '').toString(),
+                atasNama: (b['atas_nama'] ?? '').toString(),
+              ),
+      ],
+      midtransAktif: d['midtrans_aktif'] == true,
     );
   }
 
