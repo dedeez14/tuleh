@@ -30,7 +30,7 @@ function renderLayout(container) {
       <div class="page-head">
         <div>
           <h1 class="page-head__title">Inventory</h1>
-          <p class="page-head__desc">Tambah &amp; kurangi stok, dan pantau riwayat perubahan stok toko.</p>
+          <p class="page-head__desc">Tambah &amp; kurangi stok, dan pantau riwayat perubahan stok. Angka stok berlaku tingkat perusahaan (gudang bersama).</p>
         </div>
         <button type="button" class="btn btn--outline" id="inv-reload">${icons.refresh}<span>Muat ulang</span></button>
       </div>

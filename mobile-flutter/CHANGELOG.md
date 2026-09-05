@@ -5,6 +5,10 @@ sebagai isi Release GitHub (workflow flutter-release.yml), dan empat baris
 pertamanya tampil di banner pembaruan dalam aplikasi. Tulis untuk kasir, bukan
 untuk programmer.
 
+## 2.6.1
+
+- Daftar toko selalu diambil ulang dari server saat berganti akun. Sejak 5 September server hanya memberi toko yang ditugaskan ke pengguna; daftar dari akun sebelumnya tidak lagi tersisa di pemilih toko.
+
 ## 2.6.0
 
 - Masa coba demo kini tercatat di server per perangkat dan, bila server memintanya, per nomor WhatsApp atau email lewat kode verifikasi. Menghapus aplikasi atau mereset ponsel tidak mengulang masa coba. Aktif otomatis setelah server MOVERA memasang endpointnya; sebelum itu perilaku sama dengan versi 2.5.0.

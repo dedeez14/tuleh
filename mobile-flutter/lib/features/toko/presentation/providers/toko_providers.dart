@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/network/api_client.dart';
 import '../../../../core/storage/secure_storage.dart';
+import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../../data/datasources/toko_remote_datasource.dart';
 import '../../data/repositories/toko_repository_impl.dart';
 import '../../domain/entities/toko.dart';
@@ -12,8 +13,13 @@ final tokoRepositoryProvider = Provider<TokoRepository>(
   (ref) => TokoRepositoryImpl(TokoRemoteDataSource(ref.watch(dioProvider))),
 );
 
-/// Daftar toko tenant (dari server).
+/// Daftar toko yang menjadi hak pengguna (dari server, tidak pernah disimpan
+/// di perangkat). Server menyaringnya per pengguna (users.pos_toko_id), jadi
+/// daftar WAJIB diambil ulang setiap kali pengguna berganti — tanpa ini,
+/// keluar lalu masuk dengan akun lain di proses yang sama masih menampilkan
+/// toko akun sebelumnya, dan setiap buka sesi di sana ditolak server.
 final tokoListProvider = FutureProvider<List<Toko>>((ref) async {
+  ref.watch(authControllerProvider.select((a) => a.valueOrNull?.id));
   final result = await ref.watch(tokoRepositoryProvider).list();
   return result.when(ok: (v) => v, err: (e) => throw e);
 });
