@@ -46,7 +46,9 @@ class _MasaCobaGateState extends ConsumerState<MasaCobaGate>
       final st = await ref.read(masaCobaServiceProvider).periksa();
       if (!mounted) return;
       ref.invalidate(masaCobaStatusProvider);
-      if (st.kode == KodeMasaCoba.berakhir || st.kode == KodeMasaCoba.rusak) {
+      if (st.kode == KodeMasaCoba.berakhir ||
+          st.kode == KodeMasaCoba.rusak ||
+          st.kode == KodeMasaCoba.diblokir) {
         await ref.read(authControllerProvider.notifier).logout();
         if (mounted) ref.read(routerProvider).go('/demo-berakhir');
       }

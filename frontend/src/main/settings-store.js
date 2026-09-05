@@ -64,7 +64,61 @@ function load() {
   return { baseUrl: DEFAULT_BASE_URL }
 }
 
-/** Catatan masa coba Mode Demo ({mulai, serverTerakhir, tanda}) atau null. */
+// ---- Catatan masa coba Mode Demo ({mulai, serverTerakhir, tanda}) ----
+// Disimpan di TIGA tempat agar bertahan saat aplikasi dihapus/dipasang ulang
+// (settings.json ikut terhapus bila pengguna membersihkan folder data):
+//  1. settings.json (userData)
+//  2. %ProgramData%\Tuleh\masa-coba.json
+//  3. Registry HKCU\Software\Tuleh, nilai MasaCoba (JSON)
+// Pembaca mengambil semua salinan; pemilih (lib/masa-coba pilihCatatan) memakai
+// yang sah dengan `mulai` paling awal, lalu semua salinan ditulis ulang.
+
+const { execFileSync } = require('node:child_process')
+const REG_KEY = 'HKCU\\Software\\Tuleh'
+
+function programDataPath() {
+  const base = process.env.ProgramData || process.env.ALLUSERSPROFILE || ''
+  return base ? path.join(base, 'Tuleh', 'masa-coba.json') : ''
+}
+
+function bacaProgramData() {
+  const p = programDataPath()
+  if (!p) return null
+  try { return JSON.parse(fs.readFileSync(p, 'utf8')) } catch { return null }
+}
+
+function tulisProgramData(catatan) {
+  const p = programDataPath()
+  if (!p) return
+  try {
+    fs.mkdirSync(path.dirname(p), { recursive: true })
+    fs.writeFileSync(p, JSON.stringify(catatan), 'utf8')
+  } catch { /* tanpa hak tulis — salinan lain tetap ada */ }
+}
+
+function bacaRegistry() {
+  if (process.platform !== 'win32') return null
+  try {
+    const out = execFileSync('reg', ['query', REG_KEY, '/v', 'MasaCoba'], { encoding: 'utf8', windowsHide: true, timeout: 3000 })
+    const m = out.match(/MasaCoba\s+REG_SZ\s+(.+)$/m)
+    return m ? JSON.parse(m[1].trim()) : null
+  } catch { return null }
+}
+
+function tulisRegistry(catatan) {
+  if (process.platform !== 'win32') return
+  try {
+    execFileSync('reg', ['add', REG_KEY, '/v', 'MasaCoba', '/t', 'REG_SZ', '/d', JSON.stringify(catatan), '/f'], { windowsHide: true, timeout: 3000 })
+  } catch { /* abaikan */ }
+}
+
+/** Semua salinan catatan (bisa berisi null / rusak; pemilih yang menyaring). */
+function getDemoTrialSemua() {
+  const d = readRaw().demo
+  return [d && typeof d === 'object' ? d : null, bacaProgramData(), bacaRegistry()].filter(Boolean)
+}
+
+/** Salinan di settings.json saja (kompatibilitas). */
 function getDemoTrial() {
   const d = readRaw().demo
   return d && typeof d === 'object' ? d : null
@@ -75,6 +129,23 @@ function setDemoTrial(catatan) {
   const next = { ...cur, baseUrl: load().baseUrl }
   if (catatan) next.demo = catatan
   else delete next.demo
+  save(next)
+  if (catatan) {
+    tulisProgramData(catatan)
+    tulisRegistry(catatan)
+  }
+}
+
+/** Token identitas (hasil OTP) untuk /demo/perangkat; disimpan bersama catatan. */
+function getDemoIdentitasToken() {
+  const t = readRaw().demoIdentitasToken
+  return typeof t === 'string' && t ? t : null
+}
+
+function setDemoIdentitasToken(token) {
+  const next = { ...readRaw(), baseUrl: load().baseUrl }
+  if (token) next.demoIdentitasToken = token
+  else delete next.demoIdentitasToken
   save(next)
 }
 
@@ -93,4 +164,4 @@ function setBaseUrl(value) {
   return { ok: true, baseUrl: next.baseUrl }
 }
 
-module.exports = { load, setBaseUrl, getDemoTrial, setDemoTrial, DEFAULT_BASE_URL, isAllowedBaseUrl }
+module.exports = { load, setBaseUrl, getDemoTrial, getDemoTrialSemua, setDemoTrial, getDemoIdentitasToken, setDemoIdentitasToken, DEFAULT_BASE_URL, isAllowedBaseUrl }

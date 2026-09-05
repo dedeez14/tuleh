@@ -111,8 +111,61 @@ function periksa({ catatan, waktuServer, perangkat, identitas, mulaiBaru = false
     sisaHari: st.sisaHari,
     berakhirPada: st.berakhirPada,
     sumberWaktu: sumber,
+    kiniMs: kini.getTime(),
     catatan: simpan
   }
 }
 
-module.exports = { DURASI_HARI, HARI_MS, tentukanKini, status, buatCatatan, catatanSah, periksa }
+/**
+ * Gabungkan hasil lapis 1 (lokal) dengan jawaban server (lapis 2/3,
+ * `data` dari /demo/perangkat), tanpa I/O.
+ *
+ * Aturan: server menentukan "sekarang" (waktu_server); `mulai` paling awal
+ * menang; siapa pun yang menyatakan berakhir/diblokir menang; server yang
+ * minta identitas mengubah kode menjadi BUTUH_IDENTITAS (aplikasi menjalankan
+ * OTP lalu memanggil ulang). `server` null/undefined → hasil lokal apa adanya.
+ */
+function gabungkan(lokal, server, { identitas } = {}) {
+  if (!server || typeof server !== 'object') return lokal
+  const waktu = keWaktu(server.waktu_server)
+  const st = String(server.status || '').toUpperCase()
+  if (st === 'DIBLOKIR') return { ...lokal, kode: 'DIBLOKIR', sisaHari: 0, sumberStatus: 'server' }
+  if (server.butuh_identitas === true || st === 'BELUM_VERIFIKASI') {
+    return { ...lokal, kode: 'BUTUH_IDENTITAS', sumberStatus: 'server' }
+  }
+  const mulaiServer = keWaktu(server.mulai)
+  const mulaiLokal = lokal.catatan ? keWaktu(lokal.catatan.mulai) : null
+  let mulai = mulaiServer
+  if (mulaiLokal && (!mulai || mulaiLokal.getTime() < mulai.getTime())) mulai = mulaiLokal
+  if (!mulai) return lokal // server belum punya mulai dan lokal belum mulai
+
+  const kini = waktu || new Date(lokal.kiniMs || Date.now())
+  const hasil = status(mulai, kini)
+  const berakhir = st === 'BERAKHIR' || hasil.berakhir || lokal.kode === 'BERAKHIR' || lokal.kode === 'RUSAK'
+  // Catatan lokal ikut diperbarui: mulai paling awal + waktu server terbaru.
+  const catatan = buatCatatan({
+    mulai,
+    serverTerakhir: waktu || (lokal.catatan && lokal.catatan.serverTerakhir) || mulai,
+    identitas
+  })
+  return {
+    ...lokal,
+    kode: berakhir ? 'BERAKHIR' : 'AKTIF',
+    sisaHari: berakhir ? 0 : hasil.sisaHari,
+    berakhirPada: hasil.berakhirPada,
+    sumberStatus: 'server',
+    catatan
+  }
+}
+
+/** Dari beberapa salinan catatan (registry, ProgramData, settings), pilih yang sah dengan `mulai` paling awal. */
+function pilihCatatan(salinan, identitas) {
+  let terbaik = null
+  for (const c of Array.isArray(salinan) ? salinan : []) {
+    if (!catatanSah(c, identitas)) continue
+    if (!terbaik || new Date(c.mulai).getTime() < new Date(terbaik.mulai).getTime()) terbaik = c
+  }
+  return terbaik
+}
+
+module.exports = { DURASI_HARI, HARI_MS, tentukanKini, status, buatCatatan, catatanSah, periksa, gabungkan, pilihCatatan }

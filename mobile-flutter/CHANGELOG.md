@@ -5,6 +5,10 @@ sebagai isi Release GitHub (workflow flutter-release.yml), dan empat baris
 pertamanya tampil di banner pembaruan dalam aplikasi. Tulis untuk kasir, bukan
 untuk programmer.
 
+## 2.6.0
+
+- Masa coba demo kini tercatat di server per perangkat dan, bila server memintanya, per nomor WhatsApp atau email lewat kode verifikasi. Menghapus aplikasi atau mereset ponsel tidak mengulang masa coba. Aktif otomatis setelah server MOVERA memasang endpointnya; sebelum itu perilaku sama dengan versi 2.5.0.
+
 ## 2.5.0
 
 - Mode Demo kini masa coba 7 hari sejak pertama dibuka di ponsel ini, dihitung dengan waktu server (mengubah jam ponsel tidak berpengaruh). Lencana DEMO menampilkan sisa hari. Setelah berakhir, aplikasi terkunci sampai masuk dengan akun berlangganan. Membuka demo pertama kali perlu koneksi internet.

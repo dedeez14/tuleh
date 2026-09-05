@@ -7,30 +7,48 @@ import '../../../core/constants/app_config.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/storage/secure_storage.dart';
 import '../domain/masa_coba.dart';
+import 'masa_coba_remote.dart';
 
 /// Membaca waktu server dan catatan tersimpan, lalu memutuskan lewat
-/// [MasaCoba.periksa]. Dio-nya TERPISAH dari klien aplikasi agar tidak
-/// dicegat Mode Demo (DemoInterceptor menjawab /app/versi sendiri).
+/// [MasaCoba.periksa]; hasilnya digabung dengan jawaban server
+/// `/demo/perangkat` (lapis 2/3) lewat [MasaCoba.gabungkan]. Dio-nya
+/// TERPISAH dari klien aplikasi agar tidak dicegat Mode Demo.
 class MasaCobaService {
-  MasaCobaService(this._storage, {Dio? dio, String? versi})
-    : _dio =
-          dio ??
-          Dio(
-            BaseOptions(
-              baseUrl: AppConfig.defaultBaseUrl + AppConfig.apiPrefix,
-              connectTimeout: const Duration(seconds: 6),
-              receiveTimeout: const Duration(seconds: 6),
-              validateStatus: (_) => true,
-            ),
-          ),
-      _versi = versi ?? '0.0.0';
+  MasaCobaService(
+    this._storage, {
+    Dio? dio,
+    String? versi,
+    IdentitasPerangkat? perangkat,
+  }) : _dio =
+           dio ??
+           Dio(
+             BaseOptions(
+               baseUrl: AppConfig.defaultBaseUrl + AppConfig.apiPrefix,
+               connectTimeout: const Duration(seconds: 6),
+               receiveTimeout: const Duration(seconds: 6),
+               validateStatus: (_) => true,
+             ),
+           ),
+       _versi = versi ?? '0.0.0' {
+    remote = MasaCobaRemote(
+      _dio,
+      perangkat ?? IdentitasPerangkat(),
+      versiApp: _versi,
+    );
+  }
 
   static const _kMulai = 'demo_mulai';
   static const _kServerTerakhir = 'demo_server_terakhir';
+  static const _kIdentitasToken = 'demo_identitas_token';
 
   final SecureStorage _storage;
   final Dio _dio;
   final String _versi;
+  late final MasaCobaRemote remote;
+
+  Future<String?> identitasToken() => _storage.bacaNilai(_kIdentitasToken);
+  Future<void> simpanIdentitasToken(String? t) =>
+      _storage.tulisNilai(_kIdentitasToken, t);
 
   /// Header `Date` dari endpoint publik /app/versi; null bila tak terjangkau.
   Future<DateTime?> waktuServer() async {
@@ -69,12 +87,21 @@ class MasaCobaService {
   Future<StatusMasaCoba> periksa({bool mulaiBaru = false}) async {
     final catatan = await _baca();
     final server = await waktuServer();
-    final status = MasaCoba.periksa(
+    final perangkat = DateTime.now();
+    final lokal = MasaCoba.periksa(
       catatan: catatan,
       waktuServer: server,
-      perangkat: DateTime.now(),
+      perangkat: perangkat,
       mulaiBaru: mulaiBaru,
     );
+    // Lapis 2/3 hanya bila lapis 1 tidak sedang menunggu koneksi.
+    final dariServer = lokal.kode == KodeMasaCoba.butuhKoneksi
+        ? null
+        : await remote.status(
+            mulaiBaru: mulaiBaru,
+            identitasToken: await identitasToken(),
+          );
+    final status = MasaCoba.gabungkan(lokal, dariServer, perangkat: perangkat);
     if (status.catatan != null) await _simpan(status.catatan!);
     return status;
   }

@@ -102,10 +102,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     ref.listen(authControllerProvider, (prev, next) {
       if (next is AsyncError) {
         final e = next.error;
-        if (e is MasaCobaException &&
-            e.status.kode != KodeMasaCoba.butuhKoneksi) {
-          context.go('/demo-berakhir');
-          return;
+        if (e is MasaCobaException) {
+          switch (e.status.kode) {
+            case KodeMasaCoba.butuhIdentitas:
+              context.go('/demo-identitas');
+              return;
+            case KodeMasaCoba.berakhir:
+            case KodeMasaCoba.diblokir:
+            case KodeMasaCoba.rusak:
+              context.go('/demo-berakhir');
+              return;
+            case KodeMasaCoba.butuhKoneksi:
+            case KodeMasaCoba.aktif:
+              break;
+          }
         }
         final msg = e is ApiException
             ? (e.firstError() ?? e.message)

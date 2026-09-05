@@ -13,7 +13,7 @@
 /// Murni (tanpa I/O) agar mudah diuji.
 library;
 
-enum KodeMasaCoba { aktif, berakhir, butuhKoneksi, rusak }
+enum KodeMasaCoba { aktif, berakhir, butuhKoneksi, butuhIdentitas, diblokir, rusak }
 
 class CatatanMasaCoba {
   const CatatanMasaCoba({required this.mulai, required this.serverTerakhir});
@@ -29,6 +29,7 @@ class StatusMasaCoba {
     this.catatan,
     this.belumMulai = false,
     this.sumberWaktu,
+    this.kini,
   });
 
   final KodeMasaCoba kode;
@@ -40,7 +41,58 @@ class StatusMasaCoba {
   final bool belumMulai;
   final String? sumberWaktu;
 
+  /// "Sekarang" yang dipakai saat memutuskan (UTC); null bila belum mulai.
+  final DateTime? kini;
+
   bool get aktif => kode == KodeMasaCoba.aktif;
+
+  StatusMasaCoba salin({
+    KodeMasaCoba? kode,
+    int? sisaHari,
+    DateTime? berakhirPada,
+    CatatanMasaCoba? catatan,
+    String? sumberWaktu,
+  }) => StatusMasaCoba(
+    kode: kode ?? this.kode,
+    sisaHari: sisaHari ?? this.sisaHari,
+    berakhirPada: berakhirPada ?? this.berakhirPada,
+    catatan: catatan ?? this.catatan,
+    belumMulai: belumMulai,
+    sumberWaktu: sumberWaktu ?? this.sumberWaktu,
+    kini: kini,
+  );
+}
+
+/// Jawaban server `/demo/perangkat` (lapis 2/3) — sudah diparse.
+class StatusServer {
+  const StatusServer({
+    required this.status,
+    this.butuhIdentitas = false,
+    this.mulai,
+    this.waktuServer,
+    this.sisaHari,
+  });
+
+  /// AKTIF | BELUM_VERIFIKASI | BERAKHIR | DIBLOKIR
+  final String status;
+  final bool butuhIdentitas;
+  final DateTime? mulai;
+  final DateTime? waktuServer;
+  final int? sisaHari;
+
+  static StatusServer? dariJson(dynamic d) {
+    if (d is! Map) return null;
+    final m = Map<String, dynamic>.from(d);
+    final status = (m['status'] ?? '').toString().toUpperCase();
+    if (status.isEmpty) return null;
+    return StatusServer(
+      status: status,
+      butuhIdentitas: m['butuh_identitas'] == true,
+      mulai: DateTime.tryParse('${m['mulai'] ?? ''}')?.toUtc(),
+      waktuServer: DateTime.tryParse('${m['waktu_server'] ?? ''}')?.toUtc(),
+      sisaHari: m['sisa_hari'] is num ? (m['sisa_hari'] as num).toInt() : null,
+    );
+  }
 }
 
 abstract final class MasaCoba {
@@ -94,6 +146,7 @@ abstract final class MasaCoba {
         berakhirPada: s.add(durasi),
         catatan: CatatanMasaCoba(mulai: s, serverTerakhir: s),
         sumberWaktu: 'server',
+        kini: s,
       );
     }
 
@@ -117,6 +170,52 @@ abstract final class MasaCoba {
             )
           : null,
       sumberWaktu: sumber,
+      kini: kini,
+    );
+  }
+
+  /// Gabungkan hasil lokal (lapis 1) dengan jawaban server (lapis 2/3).
+  /// Aturan sama dengan desktop `gabungkan()`: server menentukan "sekarang";
+  /// `mulai` paling awal menang; siapa pun yang menyatakan berakhir/diblokir
+  /// menang; server yang minta identitas → [KodeMasaCoba.butuhIdentitas].
+  /// [server] null → hasil lokal apa adanya (endpoint belum ada / offline).
+  static StatusMasaCoba gabungkan(
+    StatusMasaCoba lokal,
+    StatusServer? server, {
+    required DateTime perangkat,
+  }) {
+    if (server == null) return lokal;
+    if (server.status == 'DIBLOKIR') {
+      return lokal.salin(kode: KodeMasaCoba.diblokir, sisaHari: 0);
+    }
+    if (server.butuhIdentitas || server.status == 'BELUM_VERIFIKASI') {
+      return lokal.salin(kode: KodeMasaCoba.butuhIdentitas);
+    }
+    final mulaiLokal = lokal.catatan?.mulai;
+    var mulai = server.mulai;
+    if (mulaiLokal != null &&
+        (mulai == null || mulaiLokal.toUtc().isBefore(mulai))) {
+      mulai = mulaiLokal.toUtc();
+    }
+    if (mulai == null) return lokal;
+
+    final kini = server.waktuServer ?? lokal.kini ?? perangkat.toUtc();
+    final sisa = sisaHari(mulai, kini);
+    final berakhir =
+        server.status == 'BERAKHIR' ||
+        sisa <= 0 ||
+        lokal.kode == KodeMasaCoba.berakhir ||
+        lokal.kode == KodeMasaCoba.rusak;
+    return lokal.salin(
+      kode: berakhir ? KodeMasaCoba.berakhir : KodeMasaCoba.aktif,
+      sisaHari: berakhir ? 0 : sisa,
+      berakhirPada: mulai.add(durasi),
+      catatan: CatatanMasaCoba(
+        mulai: mulai,
+        serverTerakhir:
+            server.waktuServer ?? lokal.catatan?.serverTerakhir ?? mulai,
+      ),
+      sumberWaktu: 'server',
     );
   }
 }
@@ -135,6 +234,11 @@ class MasaCobaException implements Exception {
           'berlangganan untuk melanjutkan.',
     KodeMasaCoba.rusak =>
       'Catatan masa coba tidak sah. Masuk dengan akun berlangganan.',
+    KodeMasaCoba.butuhIdentitas =>
+      'Verifikasi nomor WhatsApp atau email dulu untuk memulai masa coba.',
+    KodeMasaCoba.diblokir =>
+      'Mode Demo di perangkat ini tidak tersedia. Hubungi Tuléh atau masuk '
+          'dengan akun berlangganan.',
     KodeMasaCoba.aktif => '',
   };
 

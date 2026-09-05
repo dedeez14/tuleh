@@ -59,7 +59,9 @@ contextBridge.exposeInMainWorld('iposAPI', {
   },
   demo: {
     start: invoke('demo:start'),
-    status: invoke('demo:status')
+    status: invoke('demo:status'),
+    otpKirim: invoke('demo:otpKirim'),
+    otpVerifikasi: invoke('demo:otpVerifikasi')
   },
   net: {
     ping: invoke('net:ping')

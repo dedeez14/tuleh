@@ -217,4 +217,11 @@ async function waktuServer() {
   }
 }
 
-module.exports = { request, get, post, upload, setBaseUrl, setGateway, setToken, hasToken, setActiveTokoId, getActiveTokoId, setUpgradeHandler, appVersion, waktuServer }
+// ---- Masa coba Mode Demo: pendaftaran perangkat & OTP (publik, tanpa Bearer).
+// 404 = server belum memasang endpoint → pemanggil jatuh ke lapis lokal.
+const demoPerangkatDaftar = (body) => request('POST', '/demo/perangkat', { body, auth: false })
+const demoPerangkatStatus = (perangkatId) => request('GET', `/demo/perangkat/${encodeURIComponent(perangkatId)}`, { auth: false })
+const demoOtpKirim = (body) => request('POST', '/demo/otp/kirim', { body, auth: false })
+const demoOtpVerifikasi = (body) => request('POST', '/demo/otp/verifikasi', { body, auth: false })
+
+module.exports = { request, get, post, upload, setBaseUrl, setGateway, setToken, hasToken, setActiveTokoId, getActiveTokoId, setUpgradeHandler, appVersion, waktuServer, demoPerangkatDaftar, demoPerangkatStatus, demoOtpKirim, demoOtpVerifikasi }

@@ -7,6 +7,7 @@ const authStore = require('./auth-store')
 const settingsStore = require('./settings-store')
 const demo = require('./demo')
 const masaCoba = require('./lib/masa-coba')
+const mesin = require('./identitas-mesin')
 const gateway = require('./gateway')
 const tracker = require('./tracker')
 const tunnel = require('./tunnel')
@@ -237,32 +238,78 @@ function registerIpcHandlers(getMainWindow) {
 
   // Mode Demo: seluruh data disimulasikan lokal, tidak ada permintaan jaringan.
   // Server pelacakan pelanggan (LAN) ikut dinyalakan agar QR struk berfungsi.
-  // Masa coba demo 7 hari (waktu server). Identitas mesin ikut dalam tanda
-  // HMAC catatan agar berkas settings tidak bisa disalin antar komputer.
-  const identitasMesin = () => {
-    try { return `${os.hostname()}|${os.userInfo().username}` } catch { return os.hostname() }
+  // Masa coba demo 7 hari — tiga lapis (lihat "Kontrak Masa Coba Tuléh"):
+  //  1. lokal: waktu server + catatan ber-HMAC, disimpan di 3 tempat;
+  //  2. perangkat: /demo/perangkat (server mencatat perangkatId);
+  //  3. identitas: OTP → identitas_token, ikut dikirim ke /demo/perangkat.
+  // Server yang belum memasang endpoint (404/tak terjangkau) → lapis 1 saja.
+  const identitasMesin = () => mesin.identitasHmac()
+
+  async function statusServer({ mulaiBaru }) {
+    const body = {
+      perangkat_id: mesin.perangkatId(),
+      platform: 'windows',
+      sidik_jari: mesin.sidikJari(),
+      versi_app: api.appVersion(),
+      identitas_token: settingsStore.getDemoIdentitasToken() || undefined
+    }
+    try {
+      const r = mulaiBaru
+        ? await api.demoPerangkatDaftar(body)
+        : await api.demoPerangkatStatus(body.perangkat_id)
+      if (r && r.ok && r.data && typeof r.data === 'object') return r.data
+      // 404 saat GET = perangkat belum terdaftar → coba daftarkan.
+      if (!mulaiBaru && r && r.status === 404) {
+        const d = await api.demoPerangkatDaftar(body)
+        if (d && d.ok && d.data && typeof d.data === 'object') return d.data
+      }
+    } catch { /* fail-open ke lapis lokal */ }
+    return null
   }
+
   async function periksaMasaCoba({ mulaiBaru }) {
+    const identitas = identitasMesin()
     const waktu = await api.waktuServer()
-    const hasil = masaCoba.periksa({
-      catatan: settingsStore.getDemoTrial(),
+    const lokal = masaCoba.periksa({
+      catatan: masaCoba.pilihCatatan(settingsStore.getDemoTrialSemua(), identitas),
       waktuServer: waktu,
       perangkat: new Date(),
-      identitas: identitasMesin(),
+      identitas,
       mulaiBaru
     })
-    if (hasil.catatan && hasil.catatan !== settingsStore.getDemoTrial()) settingsStore.setDemoTrial(hasil.catatan)
+    // Lapis 2/3 hanya bila lapis 1 tidak sedang menunggu koneksi.
+    const server = lokal.kode === 'BUTUH_KONEKSI' ? null : await statusServer({ mulaiBaru })
+    const hasil = masaCoba.gabungkan(lokal, server, { identitas })
+    if (hasil.catatan) settingsStore.setDemoTrial(hasil.catatan)
     return hasil
   }
   const pesanMasaCoba = {
     BUTUH_KONEKSI: 'Mode Demo perlu koneksi internet saat pertama kali dibuka (untuk mencatat waktu mulai masa coba).',
+    BUTUH_IDENTITAS: 'Verifikasi nomor WhatsApp atau email dulu untuk memulai masa coba.',
     BERAKHIR: 'Masa coba Mode Demo 7 hari sudah berakhir. Masuk dengan akun berlangganan untuk melanjutkan.',
+    DIBLOKIR: 'Mode Demo di perangkat ini tidak tersedia. Hubungi Tuléh atau masuk dengan akun berlangganan.',
     RUSAK: 'Catatan masa coba tidak sah. Masuk dengan akun berlangganan untuk melanjutkan.'
   }
 
   handle('demo:status', async () => {
     const h = await periksaMasaCoba({ mulaiBaru: false })
     return { ok: true, data: { kode: h.kode, sisaHari: h.sisaHari, berakhirPada: h.berakhirPada || null, belumMulai: !!h.belumMulai } }
+  })
+
+  // OTP identitas (lapis 3). Server yang mengirim kode; di sini hanya meneruskan.
+  handle('demo:otpKirim', ({ jenis, tujuan } = {}) =>
+    api.demoOtpKirim({ perangkat_id: mesin.perangkatId(), jenis: str(jenis, { max: 10, required: true }), tujuan: str(tujuan, { max: 190, required: true }).trim() }))
+  handle('demo:otpVerifikasi', async ({ jenis, tujuan, kode } = {}) => {
+    const r = await api.demoOtpVerifikasi({
+      perangkat_id: mesin.perangkatId(),
+      jenis: str(jenis, { max: 10, required: true }),
+      tujuan: str(tujuan, { max: 190, required: true }).trim(),
+      kode: str(kode, { max: 12, required: true }).trim()
+    })
+    if (r && r.ok && r.data && typeof r.data.identitas_token === 'string') {
+      settingsStore.setDemoIdentitasToken(r.data.identitas_token)
+    }
+    return r
   })
 
   handle('demo:start', async () => {

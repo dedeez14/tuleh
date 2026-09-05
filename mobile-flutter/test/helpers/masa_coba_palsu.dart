@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:tuleh_pos/core/storage/secure_storage.dart';
+import 'package:tuleh_pos/features/demo/data/masa_coba_remote.dart';
 import 'package:tuleh_pos/features/demo/data/masa_coba_service.dart';
 
 /// MasaCobaService tanpa jaringan untuk test: Dio-nya membalas /app/versi
@@ -13,6 +14,7 @@ class MasaCobaPalsu extends MasaCobaService {
         storage ?? _PenyimpananMemori(),
         dio: _dioTiruan(offline ? null : (waktuServer ?? DateTime.utc(2026, 9, 5, 3))),
         versi: '0.0.0-test',
+        perangkat: IdentitasPerangkat(bacaAndroidId: () async => 'android-id-uji'),
       );
 
   static Dio _dioTiruan(DateTime? waktu) {
@@ -21,6 +23,8 @@ class MasaCobaPalsu extends MasaCobaService {
       InterceptorsWrapper(
         onRequest: (o, h) => waktu == null
             ? h.reject(DioException(requestOptions: o, type: DioExceptionType.connectionError))
+            : o.path.contains('/demo/')
+            ? h.resolve(Response(requestOptions: o, statusCode: 404, data: const {'success': false}))
             : h.resolve(
                 Response(
                   requestOptions: o,

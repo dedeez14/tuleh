@@ -59,3 +59,55 @@ test('pemeriksaan tanpa mulaiBaru pada perangkat yang belum pernah demo → akti
   assert.equal(r.belumMulai, true)
   assert.equal(r.catatan, null)
 })
+
+// ---- Lapis 2/3: gabungan dengan jawaban server /demo/perangkat ----
+
+test('server tak ada (null) → hasil lokal apa adanya', () => {
+  const cat = mc.buatCatatan({ mulai: T0, identitas: ID })
+  const lokal = mc.periksa({ catatan: cat, waktuServer: hari(1), perangkat: hari(1), identitas: ID })
+  assert.deepEqual(mc.gabungkan(lokal, null, { identitas: ID }), lokal)
+})
+
+test('server mengenal perangkat dengan mulai lebih awal → masa coba mengikuti server (pasang ulang tidak mengulang)', () => {
+  // Aplikasi baru dipasang ulang: lokal belum punya catatan (mulaiBaru dengan waktu server hari ke-6).
+  const lokal = mc.periksa({ catatan: null, waktuServer: hari(6), perangkat: hari(6), identitas: ID, mulaiBaru: true })
+  assert.equal(lokal.sisaHari, 7, 'lokal mengira baru mulai')
+  const server = { status: 'AKTIF', butuh_identitas: false, mulai: T0.toISOString(), berakhir_pada: hari(7).toISOString(), sisa_hari: 1, waktu_server: hari(6).toISOString() }
+  const g = mc.gabungkan(lokal, server, { identitas: ID })
+  assert.equal(g.kode, 'AKTIF')
+  assert.equal(g.sisaHari, 1)
+  assert.equal(g.catatan.mulai, T0.toISOString(), 'catatan lokal ditulis ulang dengan mulai server')
+  assert.equal(mc.catatanSah(g.catatan, ID), true)
+})
+
+test('server menyatakan BERAKHIR / DIBLOKIR → menang atas lokal', () => {
+  const lokal = mc.periksa({ catatan: null, waktuServer: hari(1), perangkat: hari(1), identitas: ID, mulaiBaru: true })
+  const berakhir = mc.gabungkan(lokal, { status: 'BERAKHIR', mulai: hari(-10).toISOString(), waktu_server: hari(1).toISOString() }, { identitas: ID })
+  assert.equal(berakhir.kode, 'BERAKHIR')
+  assert.equal(berakhir.sisaHari, 0)
+  const blokir = mc.gabungkan(lokal, { status: 'DIBLOKIR', waktu_server: hari(1).toISOString() }, { identitas: ID })
+  assert.equal(blokir.kode, 'DIBLOKIR')
+})
+
+test('server minta identitas → BUTUH_IDENTITAS (aplikasi menjalankan OTP)', () => {
+  const lokal = mc.periksa({ catatan: null, waktuServer: hari(0), perangkat: hari(0), identitas: ID, mulaiBaru: true })
+  const g = mc.gabungkan(lokal, { status: 'BELUM_VERIFIKASI', butuh_identitas: true, mulai: null, waktu_server: hari(0).toISOString() }, { identitas: ID })
+  assert.equal(g.kode, 'BUTUH_IDENTITAS')
+})
+
+test('mulai lokal lebih awal dari server → lokal yang dipakai (tidak ada yang bisa "memundurkan" ke server)', () => {
+  const cat = mc.buatCatatan({ mulai: hari(-3), identitas: ID })
+  const lokal = mc.periksa({ catatan: cat, waktuServer: hari(0), perangkat: hari(0), identitas: ID })
+  const g = mc.gabungkan(lokal, { status: 'AKTIF', mulai: hari(0).toISOString(), waktu_server: hari(0).toISOString() }, { identitas: ID })
+  assert.equal(g.sisaHari, 4)
+  assert.equal(g.catatan.mulai, hari(-3).toISOString())
+})
+
+test('pilihCatatan: dari beberapa salinan, yang sah dengan mulai paling awal', () => {
+  const awal = mc.buatCatatan({ mulai: hari(-5), identitas: ID })
+  const baru = mc.buatCatatan({ mulai: hari(0), identitas: ID })
+  const palsu = { ...mc.buatCatatan({ mulai: hari(-30), identitas: ID }), tanda: 'x' }
+  assert.equal(mc.pilihCatatan([baru, palsu, awal], ID).mulai, awal.mulai)
+  assert.equal(mc.pilihCatatan([palsu], ID), null)
+  assert.equal(mc.pilihCatatan([], ID), null)
+})

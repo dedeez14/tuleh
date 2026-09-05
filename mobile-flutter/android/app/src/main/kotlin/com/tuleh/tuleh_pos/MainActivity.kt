@@ -69,6 +69,21 @@ class MainActivity : FlutterActivity() {
             }
         )
 
+        // Identitas perangkat untuk masa coba Mode Demo (lapis 2): ANDROID_ID
+        // bertahan saat aplikasi dihapus/dipasang ulang (kunci tanda tangan sama),
+        // berubah hanya saat factory reset. Hash dilakukan di Dart.
+        MethodChannel(messenger, "tuleh/perangkat").setMethodCallHandler { call, result ->
+            when (call.method) {
+                "androidId" -> {
+                    val id = try {
+                        Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+                    } catch (_: Exception) { null }
+                    result.success(id ?: "")
+                }
+                else -> result.notImplemented()
+            }
+        }
+
         MethodChannel(messenger, methodChannelName).setMethodCallHandler { call, result ->
             when (call.method) {
                 "canInstall" -> {

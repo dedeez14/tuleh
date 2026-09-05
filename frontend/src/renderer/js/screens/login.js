@@ -190,8 +190,12 @@ export function renderLogin(container, { onSuccess }) {
     }
     btn.disabled = false
     btn.textContent = 'Coba Mode Demo'
-    if (result.code === 'DEMO_BERAKHIR' || result.code === 'DEMO_RUSAK') {
-      tampilkanDemoBerakhir(container)
+    if (result.code === 'DEMO_BERAKHIR' || result.code === 'DEMO_RUSAK' || result.code === 'DEMO_DIBLOKIR') {
+      tampilkanDemoBerakhir(container, result.code === 'DEMO_DIBLOKIR' ? firstError(result) : null)
+      return
+    }
+    if (result.code === 'DEMO_BUTUH_IDENTITAS') {
+      tampilkanVerifikasiIdentitas({ onSelesai: () => btn.click() })
       return
     }
     toast(firstError(result), 'error')
@@ -267,7 +271,7 @@ export function renderLogin(container, { onSuccess }) {
  * Tidak ada jalan lain: tombol demo dinonaktifkan sampai aplikasi masuk dengan
  * akun berbayar.
  */
-export function tampilkanDemoBerakhir(container) {
+export function tampilkanDemoBerakhir(container, pesanKhusus = null) {
   const btn = container && container.querySelector('#btn-demo')
   if (btn) {
     btn.disabled = true
@@ -275,7 +279,7 @@ export function tampilkanDemoBerakhir(container) {
   }
   const body = document.createElement('div')
   body.innerHTML = `
-    <p>Masa coba Mode Demo <b>7 hari</b> di komputer ini sudah berakhir.</p>
+    <p>${pesanKhusus ? esc(pesanKhusus) : 'Masa coba Mode Demo <b>7 hari</b> di komputer ini sudah berakhir.'}</p>
     <p>Untuk terus memakai Tuléh, masuk dengan akun berlangganan. Belum punya akun?
        Daftar dan berlangganan di <b>tatreport.com</b>, lalu masuk dengan email &amp; kata sandi Anda di sini.</p>`
   showModal({
@@ -283,4 +287,88 @@ export function tampilkanDemoBerakhir(container) {
     body,
     footer: `<button type="button" class="btn btn--primary" data-close>Masuk dengan akun</button>`
   })
+}
+
+/**
+ * Verifikasi identitas (lapis 3 masa coba): nomor WhatsApp atau email → kode
+ * OTP dari server → masa coba terikat ke identitas itu. Server yang mengirim
+ * kode; modal ini hanya meneruskan. `onSelesai` dipanggil setelah kode benar.
+ */
+export function tampilkanVerifikasiIdentitas({ onSelesai } = {}) {
+  const body = document.createElement('div')
+  body.innerHTML = `
+    <p>Masa coba Mode Demo 7 hari terikat ke satu nomor WhatsApp atau email, supaya adil untuk semua pengguna.
+       Kami memakainya hanya untuk masa coba dan penawaran Tuléh.</p>
+    <div class="segmented" id="idn-jenis">
+      <button type="button" class="segmented__item is-active" data-jenis="wa">WhatsApp</button>
+      <button type="button" class="segmented__item" data-jenis="email">Email</button>
+    </div>
+    <div class="field" style="margin-top:12px">
+      <label class="field__label" for="idn-tujuan">Nomor WhatsApp</label>
+      <input class="input" id="idn-tujuan" type="text" inputmode="tel" placeholder="08xxxxxxxxxx" autocomplete="tel" />
+    </div>
+    <div class="field u-hidden" id="idn-kode-wrap">
+      <label class="field__label" for="idn-kode">Kode verifikasi (6 digit)</label>
+      <input class="input input--lg num" id="idn-kode" type="text" inputmode="numeric" maxlength="6" placeholder="••••••" autocomplete="one-time-code" />
+      <div class="field__hint" id="idn-hint"></div>
+    </div>
+    <div class="field__error u-hidden" id="idn-error"></div>`
+  const footer = document.createElement('div')
+  footer.innerHTML = `
+    <button type="button" class="btn btn--ghost" data-modal-close>Batal</button>
+    <button type="button" class="btn btn--primary" id="idn-aksi">Kirim kode</button>`
+  const { close } = showModal({ title: 'Verifikasi untuk masa coba', body, footer })
+
+  let jenis = 'wa'
+  let tahap = 'kirim' // kirim → verifikasi
+  const tujuanEl = body.querySelector('#idn-tujuan')
+  const kodeWrap = body.querySelector('#idn-kode-wrap')
+  const kodeEl = body.querySelector('#idn-kode')
+  const hintEl = body.querySelector('#idn-hint')
+  const errEl = body.querySelector('#idn-error')
+  const aksi = footer.querySelector('#idn-aksi')
+  const label = body.querySelector('label[for="idn-tujuan"]')
+
+  function galat(msg) { errEl.textContent = msg || ''; errEl.classList.toggle('u-hidden', !msg) }
+
+  body.querySelector('#idn-jenis').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-jenis]')
+    if (!b) return
+    jenis = b.dataset.jenis
+    body.querySelectorAll('#idn-jenis .segmented__item').forEach((x) => x.classList.toggle('is-active', x === b))
+    label.textContent = jenis === 'wa' ? 'Nomor WhatsApp' : 'Alamat email'
+    tujuanEl.placeholder = jenis === 'wa' ? '08xxxxxxxxxx' : 'nama@contoh.com'
+    tujuanEl.setAttribute('inputmode', jenis === 'wa' ? 'tel' : 'email')
+  })
+
+  async function kirim() {
+    const tujuan = tujuanEl.value.trim()
+    if (!tujuan) { galat(jenis === 'wa' ? 'Isi nomor WhatsApp.' : 'Isi alamat email.'); return }
+    aksi.disabled = true; aksi.textContent = 'Mengirim…'; galat('')
+    const r = await api.demo.otpKirim({ jenis, tujuan })
+    aksi.disabled = false
+    if (!r.ok) { aksi.textContent = 'Kirim kode'; galat(firstError(r)); return }
+    tahap = 'verifikasi'
+    kodeWrap.classList.remove('u-hidden')
+    tujuanEl.readOnly = true
+    hintEl.textContent = `Kode dikirim ke ${tujuan}. Berlaku ${Math.round(((r.data && r.data.kadaluarsa_detik) || 300) / 60)} menit.`
+    aksi.textContent = 'Verifikasi'
+    kodeEl.focus()
+  }
+
+  async function verifikasi() {
+    const kode = kodeEl.value.trim()
+    if (!/^\d{4,8}$/.test(kode)) { galat('Masukkan kode yang dikirim.'); return }
+    aksi.disabled = true; aksi.textContent = 'Memeriksa…'; galat('')
+    const r = await api.demo.otpVerifikasi({ jenis, tujuan: tujuanEl.value.trim(), kode })
+    aksi.disabled = false
+    if (!r.ok) { aksi.textContent = 'Verifikasi'; galat(firstError(r)); return }
+    toast('Identitas terverifikasi.', 'success')
+    close()
+    if (typeof onSelesai === 'function') onSelesai()
+  }
+
+  aksi.addEventListener('click', () => (tahap === 'kirim' ? kirim() : verifikasi()))
+  body.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); aksi.click() } })
+  tujuanEl.focus()
 }
