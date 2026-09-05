@@ -125,7 +125,9 @@ Mengetik huruf atau angka di mana pun pada layar kasir langsung mengisi kolom ca
 
 ## Mode Demo: masa coba 7 hari
 
-Mode Demo di desktop dan Android berlaku **7 hari** sejak pertama dibuka di perangkat itu, dihitung dengan **waktu server** (mengubah jam perangkat tidak berpengaruh; membuka demo pertama kali perlu koneksi). Setelah berakhir, aplikasi terkunci sampai masuk dengan akun berlangganan. Batas yang diketahui: menghapus aplikasi atau mereset perangkat mengulang masa coba; menutupnya butuh pendaftaran perangkat di server MOVERA.
+Mode Demo di desktop dan Android berlaku **7 hari** sejak pertama dibuka di perangkat itu, dihitung dengan **waktu server** (mengubah jam perangkat tidak berpengaruh; membuka demo pertama kali perlu koneksi). Setelah berakhir, aplikasi terkunci sampai masuk dengan akun berlangganan.
+
+Tiga lapis: catatan lokal bertanda (sudah aktif), pendaftaran perangkat di server, dan identitas lewat OTP WhatsApp/email. Lapis 2 dan 3 sudah ada di aplikasi (desktop ≥ 0.9.14, Android ≥ 2.6.0) dan aktif otomatis begitu server MOVERA memasang endpoint di [KONTRAK-MASA-COBA.md](KONTRAK-MASA-COBA.md); sebelum itu hanya lapis lokal yang berlaku, sehingga menghapus aplikasi masih mengulang masa coba.
 
 ## Arsitektur & keamanan
 
