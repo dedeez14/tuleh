@@ -66,6 +66,13 @@ class SesiRemoteDataSource {
         }));
   }
 
+  /// POST /sesi/buka dengan badan apa adanya (jalur antrean offline:
+  /// sudah berisi client_ref & waktu_klien; gudang_id boleh kosong bila
+  /// belum tersalin — pengurai mengisinya sebelum kirim).
+  Future<void> bukaBody(Map<String, dynamic> badan) async {
+    await _send(() => _dio.post<dynamic>('/sesi/buka', data: badan));
+  }
+
   /// POST /sesi/{id}/tutup {kas_akhir_fisik, catatan}.
   Future<void> tutup({
     required String id,

@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/utils/rupiah_input.dart';
 import '../../../../core/network/api_exception.dart';
+import '../../../../core/offline/pengurai.dart';
+import '../../../../core/offline/rujukan_lokal.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/format.dart';
 import '../../../products/domain/entities/product.dart';
@@ -59,6 +61,15 @@ class _Body extends ConsumerWidget {
                   if (bill.pax != null) Text('${bill.pax} org', style: TextStyle(color: cs.onSurface.withValues(alpha: 0.6))),
                 ],
               ),
+              if (adalahRujukanLokal(billId))
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    'Bon dibuka saat offline. Pesanan & pembayaran disimpan di ponsel dan '
+                    'dikirim berurutan begitu online.',
+                    style: TextStyle(fontSize: 12.5, color: AppColors.warn, height: 1.4),
+                  ),
+                ),
               const Divider(height: 24),
               if (bill.items.isEmpty)
                 const Padding(
@@ -162,13 +173,17 @@ class _Body extends ConsumerWidget {
     final r = await ref.read(mejaRepositoryProvider).bayar(billId, tipe: 'TUNAI', dibayar: dibayar);
     if (!context.mounted) return;
     r.when(
-      ok: (_) {
+      ok: (h) {
+        if (h.tertunda) ref.read(antreanVersiProvider.notifier).state++;
         ref.invalidate(mejaPetaProvider);
         Navigator.of(context).pop(); // kembali ke peta
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
-          ..showSnackBar(const SnackBar(
-              backgroundColor: AppColors.success, content: Text('Bon dibayar & ditutup.')));
+          ..showSnackBar(SnackBar(
+              backgroundColor: h.tertunda ? AppColors.warn : AppColors.success,
+              content: Text(h.tertunda
+                  ? 'Bon ditutup offline — pembayaran dikirim saat online.'
+                  : 'Bon dibayar & ditutup.')));
       },
       err: (e) => ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
@@ -201,17 +216,33 @@ class _AddPesananSheetState extends ConsumerState<_AddPesananSheet> {
       for (final e in _qty.entries)
         if (e.value > 0) {'id_produk': e.key, 'kuantitas': e.value},
     ];
-    final r = await ref.read(mejaRepositoryProvider).tambahRonde(widget.billId, items);
+    // Nama & harga hanya untuk tampilan selama belum terkirim (offline).
+    final tampilan = [
+      for (final e in _qty.entries)
+        if (e.value > 0)
+          {
+            'id_produk': e.key,
+            'nama': _prod[e.key]?.nama ?? '-',
+            'harga': _prod[e.key]?.harga ?? 0,
+            'kuantitas': e.value,
+          },
+    ];
+    final r = await ref
+        .read(mejaRepositoryProvider)
+        .tambahRonde(widget.billId, items, tampilan: tampilan);
     if (!mounted) return;
     r.when(
-      ok: (_) {
+      ok: (h) {
+        if (h.tertunda) ref.read(antreanVersiProvider.notifier).state++;
         ref.invalidate(billDetailProvider(widget.billId));
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
           ..showSnackBar(SnackBar(
-              backgroundColor: AppColors.success,
-              content: Text('$_count item dikirim ke dapur.')));
+              backgroundColor: h.tertunda ? AppColors.warn : AppColors.success,
+              content: Text(h.tertunda
+                  ? '$_count item disimpan offline — dikirim ke dapur saat online.'
+                  : '$_count item dikirim ke dapur.')));
       },
       err: (e) {
         setState(() => _loading = false);

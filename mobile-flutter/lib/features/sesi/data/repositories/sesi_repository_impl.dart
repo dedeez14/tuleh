@@ -61,6 +61,16 @@ class SesiRepositoryImpl implements SesiRepository {
   }
 
   @override
+  Future<Result<void>> bukaBody(Map<String, dynamic> badan) async {
+    try {
+      await remote.bukaBody(badan);
+      return const Ok(null);
+    } on ApiException catch (e) {
+      return Err(e);
+    }
+  }
+
+  @override
   Future<Result<void>> tutup({
     required String id,
     required double kasAkhirFisik,

@@ -1,5 +1,6 @@
 import '../../../../core/network/api_exception.dart';
 import '../../../../core/network/api_result.dart';
+import '../../../../core/offline/antrean_tulis.dart';
 import '../../domain/entities/bill_detail.dart';
 import '../../domain/entities/meja.dart';
 import '../../domain/repositories/meja_repository.dart';
@@ -20,10 +21,10 @@ class MejaRepositoryImpl implements MejaRepository {
   }
 
   @override
-  Future<Result<void>> bukaBon(String mejaId) async {
+  Future<Result<HasilTulis>> bukaBon(String mejaId, {int pax = 1}) async {
     try {
-      await remote.bukaBon(mejaId);
-      return const Ok(null);
+      await remote.bukaBon(mejaId, pax: pax);
+      return const Ok(HasilTulis.langsung);
     } on ApiException catch (e) {
       return Err(e);
     }
@@ -39,20 +40,24 @@ class MejaRepositoryImpl implements MejaRepository {
   }
 
   @override
-  Future<Result<void>> tambahRonde(String billId, List<Map<String, dynamic>> items) async {
+  Future<Result<HasilTulis>> tambahRonde(
+    String billId,
+    List<Map<String, dynamic>> items, {
+    List<Map<String, dynamic>> tampilan = const [],
+  }) async {
     try {
       await remote.tambahRonde(billId, items);
-      return const Ok(null);
+      return const Ok(HasilTulis.langsung);
     } on ApiException catch (e) {
       return Err(e);
     }
   }
 
   @override
-  Future<Result<void>> bayar(String billId, {required String tipe, required double dibayar}) async {
+  Future<Result<HasilTulis>> bayar(String billId, {required String tipe, required double dibayar}) async {
     try {
       await remote.bayar(billId, tipe: tipe, dibayar: dibayar);
-      return const Ok(null);
+      return const Ok(HasilTulis.langsung);
     } on ApiException catch (e) {
       return Err(e);
     }

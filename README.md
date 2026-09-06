@@ -140,6 +140,8 @@ Sejak Android 2.7.0 aplikasi menyimpan salinan setiap jawaban baca dari server d
 
 Sejak 2.8.0 (fase 2) transaksi, pengeluaran, dan stok masuk yang dibuat saat offline masuk **antrean kirim** di SQLite (`outbox`, dengan `client_ref` + `waktu_klien`) dan dikirim otomatis berurutan (FIFO ketat, mundur eksponensial 5s→10m) begitu server terjangkau. Struk offline memakai nomor sementara `L-yyMMdd-NNNN`, stok katalog langsung memperhitungkan penjualan tertunda, riwayat menandai transaksi "belum tersinkron". Baris yang server tolak, atau yang timeout **setelah** data terkirim, berstatus *perlu ditinjau* di Pengaturan → Sinkronisasi (Kirim ulang / Batalkan) agar tidak terjadi transaksi ganda sebelum server mengenali `client_ref`. Keluar akun ditahan bila antrean belum kosong.
 
+Sejak 2.9.0 (fase 3) **sesi kasir** dan **bon meja** ikut offline: buka sesi diantrekan (`SESI_BUKA`, `gudang_id` diisi tepat sebelum kirim bila belum tersalin) dan tampil sebagai "Sesi offline" sampai terkirim; tutup sesi ditahan selama antrean toko belum kosong. Buka bon, ronde, dan bayar bon diantrekan (`BILL_BUKA`/`BILL_RONDE`/`BILL_BAYAR`); bon yang lahir offline memakai id `lokal:<client_ref>` di path dan pengurai menggantinya dengan id server dari hasil baris induk (FIFO menjamin induk lebih dulu; induk yang belum terkirim membuat turunannya *perlu ditinjau*, Kirim ulang induk memulihkannya). Nama/harga item ronde disimpan di kunci `_tampilan` yang dibuang sebelum kirim. Belum offline: pengurai di layanan latar depan (hanya berjalan saat aplikasi terbuka/di latar belakang), pemulihan `client_ref` lewat server, stok untuk ronde bon.
+
 ## Arsitektur & keamanan
 
 ```

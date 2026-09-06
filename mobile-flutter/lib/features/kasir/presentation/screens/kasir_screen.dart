@@ -747,13 +747,15 @@ Future<void> bukaSesiDenganUmpanBalik(BuildContext context, WidgetRef ref) async
   final modal = await showBukaSesiDialog(context);
   if (modal == null) return;
   try {
-    await ref.read(activeSesiProvider.notifier).buka(modal);
+    final tertunda = await ref.read(activeSesiProvider.notifier).buka(modal);
     messenger
       ..hideCurrentSnackBar()
       ..showSnackBar(
-        const SnackBar(
-          backgroundColor: AppColors.success,
-          content: Text('Sesi kasir dibuka.'),
+        SnackBar(
+          backgroundColor: tertunda ? AppColors.warn : AppColors.success,
+          content: Text(tertunda
+              ? 'Sesi dibuka offline. Dikirim ke server saat online, sebelum transaksi.'
+              : 'Sesi kasir dibuka.'),
         ),
       );
   } on ApiException catch (e) {

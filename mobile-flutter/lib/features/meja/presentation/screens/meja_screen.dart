@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/network/api_exception.dart';
+import '../../../../core/offline/pengurai.dart';
+import '../../../../core/offline/rujukan_lokal.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/format.dart';
 import '../../domain/entities/meja.dart';
@@ -100,7 +102,7 @@ class _MejaCard extends ConsumerWidget {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Terisi${meja.pax != null ? ' · ${meja.pax} org' : ''}',
+                    Text('${adalahRujukanLokal(meja.billId) ? 'Offline' : 'Terisi'}${meja.pax != null ? ' · ${meja.pax} org' : ''}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(color: fg.withValues(alpha: 0.85), fontSize: 12)),
@@ -156,13 +158,16 @@ class _MejaCard extends ConsumerWidget {
     final r = await ref.read(mejaRepositoryProvider).bukaBon(meja.id);
     if (!context.mounted) return;
     r.when(
-      ok: (_) {
+      ok: (h) {
+        if (h.tertunda) ref.read(antreanVersiProvider.notifier).state++;
         ref.invalidate(mejaPetaProvider);
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
           ..showSnackBar(SnackBar(
-              backgroundColor: AppColors.success,
-              content: Text('Bon Meja ${meja.nomor} dibuka.')));
+              backgroundColor: h.tertunda ? AppColors.warn : AppColors.success,
+              content: Text(h.tertunda
+                  ? 'Bon Meja ${meja.nomor} dibuka offline — dikirim saat online.'
+                  : 'Bon Meja ${meja.nomor} dibuka.')));
       },
       err: (e) => ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()

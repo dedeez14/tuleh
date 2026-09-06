@@ -21,6 +21,9 @@ abstract interface class SesiRepository {
     String? catatan,
   });
 
+  /// Buka sesi dengan badan siap kirim (jalur antrean offline).
+  Future<Result<void>> bukaBody(Map<String, dynamic> badan);
+
   Future<Result<void>> tutup({
     required String id,
     required double kasAkhirFisik,

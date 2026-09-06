@@ -7,6 +7,7 @@ import '../widgets/states.dart';
 import 'antrean.dart';
 import 'koneksi.dart';
 import 'pengurai.dart';
+import 'rujukan_lokal.dart';
 
 /// Pengaturan → Sinkronisasi: antrean transaksi/pengeluaran/stok yang belum
 /// terkirim, status tiap baris, "Sinkron sekarang", dan keputusan untuk baris
@@ -59,7 +60,13 @@ class _SinkronisasiScreenState extends ConsumerState<SinkronisasiScreen> {
       ),
     );
     if (ya != true) return;
-    await ref.read(antreanStoreProvider).batalkan(p.clientRef);
+    final store = ref.read(antreanStoreProvider);
+    await store.batalkan(p.clientRef);
+    // Bon yang dibuka offline: ronde & bayar yang merujuknya ikut dibatalkan.
+    final rujukan = rujukanLokal(p.clientRef);
+    for (final t in await store.semua()) {
+      if (t.path.contains(rujukan)) await store.batalkan(t.clientRef);
+    }
     ref.read(antreanVersiProvider.notifier).state++;
   }
 
@@ -210,6 +217,10 @@ class _BarisAntrean extends ConsumerWidget {
       'CHECKOUT' => '${(p.body['items'] as List?)?.length ?? 0} item · ${p.body['tipe_pembayaran'] ?? ''}',
       'PENGELUARAN' => '${p.body['keterangan'] ?? ''}',
       'STOK_MASUK' => 'Jumlah ${fmtQty((p.body['jumlah'] as num?) ?? 0)}',
+      'SESI_BUKA' => 'Kas awal ${fmtIDR(((p.body['kas_awal'] as num?) ?? 0).toDouble())}',
+      'BILL_BUKA' => 'Meja ${p.body['meja_id'] ?? ''}${p.body['pax'] != null ? ' · ${p.body['pax']} org' : ''}',
+      'BILL_RONDE' => '${(p.body['items'] as List?)?.length ?? 0} item ke dapur',
+      'BILL_BAYAR' => '${p.body['tipe_pembayaran'] ?? ''}',
       _ => '',
     };
     return Card(

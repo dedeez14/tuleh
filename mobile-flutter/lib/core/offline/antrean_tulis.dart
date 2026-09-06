@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../features/toko/presentation/providers/toko_providers.dart';
 import '../network/api_exception.dart';
 import 'antrean.dart';
 import 'koneksi.dart';
@@ -9,11 +10,14 @@ import 'pengurai.dart';
 
 /// Hasil permintaan tulis lewat [AntreanTulis].
 class HasilTulis {
-  const HasilTulis({this.tertunda = false, this.perluTinjau = false});
+  const HasilTulis({this.tertunda = false, this.perluTinjau = false, this.clientRef});
 
   /// true = disimpan di antrean, dikirim saat online.
   final bool tertunda;
   final bool perluTinjau;
+
+  /// client_ref baris antrean (hanya bila [tertunda]).
+  final String? clientRef;
 
   static const langsung = HasilTulis();
 }
@@ -40,12 +44,16 @@ class AntreanTulis {
         '${h.substring(16, 20)}-${h.substring(20)}';
   }
 
+  /// [langsungAntre] = jangan coba ke server (mis. path merujuk bon lokal
+  /// yang id servernya belum ada). [tokoId] menimpa toko default.
   Future<HasilTulis> jalankan({
     required String jenis,
     required String path,
     required Map<String, dynamic> body,
     required Future<void> Function(Map<String, dynamic> body) kirim,
     Map<String, double> deltaStok = const {},
+    bool langsungAntre = false,
+    String? tokoId,
   }) async {
     final clientRef = _clientRef();
     final waktu = DateTime.now();
@@ -55,7 +63,7 @@ class AntreanTulis {
       'waktu_klien': waktu.toIso8601String(),
     };
     var tinjau = false;
-    if (!(koneksi?.offline ?? false)) {
+    if (!langsungAntre && !(koneksi?.offline ?? false)) {
       try {
         await kirim(badan);
         return HasilTulis.langsung;
@@ -69,7 +77,7 @@ class AntreanTulis {
         urut: 0,
         clientRef: clientRef,
         jenis: jenis,
-        tokoId: tokoId,
+        tokoId: tokoId ?? this.tokoId,
         path: path,
         body: badan,
         dibuat: waktu,
@@ -81,7 +89,7 @@ class AntreanTulis {
       ),
       deltaStok: deltaStok,
     );
-    return HasilTulis(tertunda: true, perluTinjau: tinjau);
+    return HasilTulis(tertunda: true, perluTinjau: tinjau, clientRef: clientRef);
   }
 }
 
@@ -89,5 +97,6 @@ final antreanTulisProvider = Provider<AntreanTulis>(
   (ref) => AntreanTulis(
     antrean: ref.watch(antreanStoreProvider),
     koneksi: ref.read(koneksiProvider.notifier),
+    tokoId: ref.watch(activeTokoIdProvider).valueOrNull,
   ),
 );

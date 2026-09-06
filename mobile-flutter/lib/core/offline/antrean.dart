@@ -56,6 +56,10 @@ class PesanAntrean {
     'CHECKOUT' => 'Transaksi',
     'PENGELUARAN' => 'Pengeluaran',
     'STOK_MASUK' => 'Stok masuk',
+    'SESI_BUKA' => 'Buka sesi',
+    'BILL_BUKA' => 'Buka bon',
+    'BILL_RONDE' => 'Pesanan bon',
+    'BILL_BAYAR' => 'Bayar bon',
     _ => jenis,
   };
 }

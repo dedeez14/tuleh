@@ -32,10 +32,56 @@ class SesiScreen extends ConsumerWidget {
             ),
           ]),
           data: (r) => (r == null || !r.isBuka)
-              ? _Kosong()
+              ? _KosongAtauOffline()
               : _RekapView(rekap: r),
         ),
       ),
+    );
+  }
+}
+
+/// Belum ada sesi di server: bila ada sesi yang dibuka offline dan belum
+/// terkirim, tampilkan keterangannya (rekap baru ada setelah tersinkron).
+class _KosongAtauOffline extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final lokal = ref.watch(sesiLokalTertundaProvider).valueOrNull;
+    if (lokal == null) return _Kosong();
+    final cs = Theme.of(context).colorScheme;
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.cloud_off_rounded, color: AppColors.warn),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text('Sesi dibuka offline',
+                          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text('Dibuka: ${fmtTanggal(lokal.dibuka.toIso8601String())}'),
+                Text('Kas awal: ${fmtIDR(lokal.kasAwal)}'),
+                const SizedBox(height: 10),
+                Text(
+                  'Sesi ini dikirim ke server begitu online, sebelum transaksi yang '
+                  'dibuat di dalamnya. Rekap kas & penjualan tampil setelah tersinkron. '
+                  'Sesi belum bisa ditutup sampai antrean kosong.',
+                  style: TextStyle(color: cs.onSurface.withValues(alpha: 0.7), height: 1.4),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -184,7 +230,15 @@ Future<void> _bukaDialog(BuildContext context, WidgetRef ref) async {
   final kas = await showBukaSesiDialog(context);
   if (kas == null) return;
   try {
-    await ref.read(activeSesiProvider.notifier).buka(kas);
+    final tertunda = await ref.read(activeSesiProvider.notifier).buka(kas);
+    if (tertunda) {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(
+            backgroundColor: AppColors.warn,
+            content: Text('Sesi dibuka offline. Dikirim ke server saat online, sebelum transaksi.')));
+      return;
+    }
     messenger
       ..hideCurrentSnackBar()
       ..showSnackBar(const SnackBar(

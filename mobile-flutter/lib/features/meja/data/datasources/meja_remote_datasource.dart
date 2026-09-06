@@ -63,6 +63,20 @@ class MejaRemoteDataSource {
         }));
   }
 
+  // ---- varian badan apa adanya (jalur antrean offline; badan sudah memuat
+  // client_ref & waktu_klien) ----
+  Future<void> bukaBonBody(Map<String, dynamic> badan) async {
+    await _send(() => _dio.post<dynamic>('/bills', data: badan));
+  }
+
+  Future<void> tambahRondeBody(String id, Map<String, dynamic> badan) async {
+    await _send(() => _dio.post<dynamic>('/bills/$id/rounds', data: badan));
+  }
+
+  Future<void> bayarBody(String id, Map<String, dynamic> badan) async {
+    await _send(() => _dio.post<dynamic>('/bills/$id/settle', data: badan));
+  }
+
   // ---- helper ----
   Future<Map<String, dynamic>> _send(Future<Response<dynamic>> Function() call) async {
     late final Response<dynamic> res;

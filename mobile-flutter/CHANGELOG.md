@@ -5,6 +5,12 @@ sebagai isi Release GitHub (workflow flutter-release.yml), dan empat baris
 pertamanya tampil di banner pembaruan dalam aplikasi. Tulis untuk kasir, bukan
 untuk programmer.
 
+## 2.9.0
+
+- Mode offline tahap ketiga: sesi kasir bisa dibuka saat internet mati. Sesi tercatat di ponsel, dikirim ke server lebih dulu sebelum transaksi yang dibuat di dalamnya, dan menutup sesi ditahan sampai semua data terkirim agar rekap kas benar.
+- Bon meja saat offline: buka bon, tambah pesanan ke dapur, dan bayar bon disimpan di ponsel lalu dikirim berurutan begitu online. Peta meja dan detail bon langsung menampilkan pesanan yang belum terkirim (tanda "Offline" di meja).
+- Sinkronisasi: baris yang bergantung pada bon lain dijelaskan sebabnya bila perlu ditinjau; Kirim ulang bon induk otomatis melanjutkan pesanan di bawahnya; Batalkan bon induk ikut membatalkan pesanannya.
+
 ## 2.8.0
 
 - Mode offline tahap kedua: transaksi, pengeluaran, dan stok masuk saat internet mati disimpan di ponsel lalu dikirim otomatis berurutan begitu server terjangkau. Struk offline memakai nomor sementara L-…, stok di katalog langsung berkurang, dan riwayat menampilkan transaksi yang belum terkirim dengan tanda.
