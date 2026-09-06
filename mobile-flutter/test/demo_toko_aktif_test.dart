@@ -30,6 +30,7 @@ void main() {
       overrides: [
         secureStorageProvider.overrideWithValue(_FakeStorage(toko)),
         masaCobaServiceProvider.overrideWithValue(MasaCobaPalsu()),
+        ...overrideOffline(),
       ],
     );
     addTearDown(c.dispose);
@@ -57,6 +58,7 @@ void main() {
       overrides: [
         secureStorageProvider.overrideWithValue(_FakeStorage('TOKO-6')),
         masaCobaServiceProvider.overrideWithValue(MasaCobaPalsu()),
+        ...overrideOffline(),
       ],
     );
     addTearDown(c.dispose);
@@ -77,6 +79,7 @@ void main() {
       overrides: [
         secureStorageProvider.overrideWithValue(_FakeStorage('TOKO-6')),
         masaCobaServiceProvider.overrideWithValue(MasaCobaPalsu()),
+        ...overrideOffline(),
       ],
     );
     addTearDown(c.dispose);

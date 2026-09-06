@@ -149,6 +149,7 @@ void main() {
           masaCobaServiceProvider.overrideWithValue(
             MasaCobaPalsu(waktuServer: t0, storage: storage),
           ),
+          ...overrideOffline(),
         ],
       );
       addTearDown(c.dispose);
@@ -170,6 +171,7 @@ void main() {
           masaCobaServiceProvider.overrideWithValue(
             MasaCobaPalsu(waktuServer: t0, storage: storage),
           ),
+          ...overrideOffline(),
         ],
       );
       addTearDown(c.dispose);

@@ -106,6 +106,7 @@ void main() {
         overrides: [
         secureStorageProvider.overrideWithValue(_FakeStorage()),
         masaCobaServiceProvider.overrideWithValue(MasaCobaPalsu()),
+        ...overrideOffline(),
       ],
       );
       // Aktifkan listener (Notifier dibangun saat pertama dibaca).
@@ -152,6 +153,7 @@ void main() {
         overrides: [
           secureStorageProvider.overrideWithValue(_FakeStorage()),
           masaCobaServiceProvider.overrideWithValue(MasaCobaPalsu()),
+        ...overrideOffline(),
           pengaturanPembayaranProvider.overrideWith((_) async => pembayaran),
         ],
       );

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/kasir/presentation/controllers/cart_controller.dart';
+import '../offline/pita_koneksi.dart';
 import '../../features/toko/presentation/providers/toko_providers.dart';
 import 'destinasi.dart';
 
@@ -51,13 +52,13 @@ class MainShell extends ConsumerWidget {
                   onPilih: _pindah,
                   onLainnya: () => _bukaLainnya(context, ref),
                 ),
-                Expanded(child: navigationShell),
+                Expanded(child: PitaKoneksi(child: navigationShell)),
               ],
             ),
           );
         }
         return Scaffold(
-          body: navigationShell,
+          body: PitaKoneksi(child: navigationShell),
           bottomNavigationBar: _BilahBawah(
             tujuan: tujuan,
             terpilih: navigationShell.currentIndex,

@@ -21,6 +21,7 @@ void main() {
       ProviderScope(
         overrides: [
           masaCobaServiceProvider.overrideWithValue(MasaCobaPalsu()),
+        ...overrideOffline(),
         ],
         child: MaterialApp(
           theme: AppTheme.light(),

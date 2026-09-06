@@ -5,6 +5,10 @@ sebagai isi Release GitHub (workflow flutter-release.yml), dan empat baris
 pertamanya tampil di banner pembaruan dalam aplikasi. Tulis untuk kasir, bukan
 untuk programmer.
 
+## 2.7.0
+
+- Mode offline tahap pertama: data yang pernah dimuat (produk, pelanggan, riwayat, laporan, pengaturan, sesi, meja) tetap bisa dilihat saat internet mati. Pita "Offline · menampilkan data terakhir HH:MM" tampil dengan tombol Coba lagi, dan data dimuat ulang otomatis begitu server terjangkau. Transaksi baru masih membutuhkan koneksi (tahap berikutnya: antrean kirim).
+
 ## 2.6.1
 
 - Daftar toko selalu diambil ulang dari server saat berganti akun. Sejak 5 September server hanya memberi toko yang ditugaskan ke pengguna; daftar dari akun sebelumnya tidak lagi tersisa di pemilih toko.

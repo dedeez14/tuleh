@@ -1,5 +1,9 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tuleh_pos/core/network/api_client.dart';
+import 'package:tuleh_pos/core/offline/koneksi.dart';
+import 'package:tuleh_pos/core/offline/salinan_store.dart';
 import 'package:tuleh_pos/core/storage/secure_storage.dart';
 import 'package:tuleh_pos/features/demo/data/masa_coba_remote.dart';
 import 'package:tuleh_pos/features/demo/data/masa_coba_service.dart';
@@ -59,3 +63,11 @@ class _PenyimpananMemori extends SecureStorage {
   Future<void> tulisNilai(String k, String? v) async =>
       v == null ? _m.remove(k) : _m[k] = v;
 }
+
+/// Override mode offline untuk test: salinan di memori, tanpa plugin jaringan.
+List<Override> overrideOffline({SalinanStore? store}) => [
+  salinanStoreProvider.overrideWithValue(store ?? SalinanMemori()),
+  koneksiProvider.overrideWith(
+    () => KoneksiNotifier(jaringan: const Stream.empty()),
+  ),
+];

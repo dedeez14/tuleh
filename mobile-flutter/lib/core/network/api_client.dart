@@ -3,11 +3,23 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../features/demo/demo_session.dart';
 import '../constants/app_config.dart';
+import '../offline/koneksi.dart';
+import '../offline/salinan_db.dart';
+import '../offline/salinan_interceptor.dart';
+import '../offline/salinan_store.dart';
 import '../storage/secure_storage.dart';
 
 /// Versi aplikasi untuk header `X-Tuleh-Version` (Auto-Update).
 /// Di-override di `main()` setelah membaca PackageInfo.
 final appVersionProvider = Provider<String>((ref) => '0.0.0');
+
+/// Penyimpanan salinan baca (mode offline). Di perangkat: SQLite; test
+/// meng-override dengan [SalinanMemori].
+final salinanStoreProvider = Provider<SalinanStore>((ref) {
+  final db = SalinanDb.buka();
+  ref.onDispose(db.close);
+  return SalinanDriftStore(db);
+});
 
 /// true saat server membalas HTTP 426 → wajib perbarui aplikasi.
 final updateRequiredProvider = StateProvider<bool>((ref) => false);
@@ -65,6 +77,15 @@ final dioProvider = Provider<Dio>((ref) {
   // ditambahkan dan semua data demo jatuh ke toko pertama apa pun toko yang
   // dipilih pengguna. Saat demo aktif, permintaan tetap tidak keluar ke jaringan.
   dio.interceptors.add(DemoInterceptor(ref.watch(demoSessionProvider)));
+
+  // Mode offline (fase 1): salinan jawaban GET, disajikan saat jaringan gagal.
+  // PALING AKHIR agar kunci memuat toko_id dan jawaban demo tak disalin.
+  dio.interceptors.add(
+    SalinanInterceptor(
+      store: ref.watch(salinanStoreProvider),
+      koneksi: ref.read(koneksiProvider.notifier),
+    ),
+  );
 
   return dio;
 });

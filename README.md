@@ -129,6 +129,10 @@ Mode Demo di desktop dan Android berlaku **7 hari** sejak pertama dibuka di pera
 
 Tiga lapis: catatan lokal bertanda (sudah aktif), pendaftaran perangkat di server, dan identitas lewat OTP WhatsApp/email. Lapis 2 dan 3 sudah ada di aplikasi (desktop ≥ 0.9.14, Android ≥ 2.6.0) dan aktif otomatis begitu server MOVERA memasang endpoint di [KONTRAK-MASA-COBA.md](KONTRAK-MASA-COBA.md); sebelum itu hanya lapis lokal yang berlaku, sehingga menghapus aplikasi masih mengulang masa coba.
 
+## Mode offline (Android)
+
+Sejak Android 2.7.0 aplikasi menyimpan salinan setiap jawaban baca dari server di SQLite (`drift`). Saat internet mati, layar tetap menampilkan data terakhir dengan pita "Offline · menampilkan data terakhir HH:MM"; begitu server terjangkau lagi, data dimuat ulang. Ini fase 1 dari rancangan offline-first; transaksi saat offline (antrean kirim dengan `client_ref`) menunggu dukungan server.
+
 ## Arsitektur & keamanan
 
 ```

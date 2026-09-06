@@ -80,6 +80,7 @@ void main() {
       overrides: [
         secureStorageProvider.overrideWithValue(_FakeStorage()),
         masaCobaServiceProvider.overrideWithValue(MasaCobaPalsu()),
+        ...overrideOffline(),
       ],
     );
     addTearDown(c.dispose);

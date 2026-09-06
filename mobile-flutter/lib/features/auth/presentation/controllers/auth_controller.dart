@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/network/api_client.dart';
 import '../../../../core/storage/secure_storage.dart';
 import '../../../demo/data/masa_coba_service.dart';
 import '../../../demo/demo_session.dart';
@@ -64,6 +65,12 @@ class AuthController extends AsyncNotifier<User?> {
   Future<void> logout() async {
     ref.read(demoSessionProvider).stop();
     await ref.read(authRepositoryProvider).logout();
+    // Salinan offline milik akun ini — jangan tersisa untuk akun berikutnya.
+    try {
+      await ref.read(salinanStoreProvider).hapusSemua();
+    } catch (_) {
+      // Penyimpanan salinan bermasalah tidak boleh menghalangi keluar.
+    }
     state = const AsyncData(null);
   }
 }
