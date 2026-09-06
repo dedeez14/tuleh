@@ -40,10 +40,14 @@ class ApkInstaller {
     return path;
   }
 
-  /// Buka pemasang sistem untuk APK yang sudah diunduh.
-  Future<void> install(String path) async {
-    if (!isSupported) return;
-    await _method.invokeMethod<void>('install', {'path': path});
+  /// Buka pemasang sistem untuk APK yang sudah diunduh. Mengembalikan true
+  /// bila pemasang langsung terbuka; false bila app sedang di latar belakang —
+  /// native menunda dan membuka pemasang otomatis saat app kembali ke depan.
+  Future<bool> install(String path) async {
+    if (!isSupported) return false;
+    final r = await _method.invokeMethod<dynamic>('install', {'path': path});
+    if (r is Map) return r['launched'] != false;
+    return true;
   }
 
   /// Batalkan unduhan yang sedang berjalan.

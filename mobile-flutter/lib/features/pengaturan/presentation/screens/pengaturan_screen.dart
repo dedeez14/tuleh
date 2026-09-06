@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/network/api_client.dart';
+import '../../../../core/offline/antrean.dart';
+import '../../../../core/offline/pengurai.dart';
+import '../../../../core/offline/sinkronisasi_screen.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../../../cetak/presentation/screens/printer_screen.dart';
@@ -103,6 +106,7 @@ class PengaturanScreen extends ConsumerWidget {
             ),
           ),
           const _SaklarPemantau(),
+          const _EntriSinkronisasi(),
           Card(
             margin: const EdgeInsets.only(bottom: 8),
             child: ListTile(
@@ -166,8 +170,77 @@ class PengaturanScreen extends ConsumerWidget {
       ),
     );
     if (ya == true) {
-      ref.read(authControllerProvider.notifier).logout();
+      if (!context.mounted) return;
+      await keluarDenganPenjagaAntrean(context, ref);
     }
+  }
+}
+
+/// Keluar akun ditahan bila masih ada transaksi yang belum terkirim: antrean
+/// milik akun ini tidak boleh dikirim dengan token akun lain, dan
+/// menghapusnya berarti menghapus penjualan yang sudah terjadi.
+Future<void> keluarDenganPenjagaAntrean(BuildContext context, WidgetRef ref) async {
+  RingkasAntrean ringkas;
+  try {
+    ringkas = await ref.read(antreanStoreProvider).ringkas();
+  } catch (_) {
+    ringkas = const RingkasAntrean();
+  }
+  if (!context.mounted) return;
+  if (ringkas.total == 0) {
+    await ref.read(authControllerProvider.notifier).logout();
+    return;
+  }
+  final keSinkron = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Masih ada yang belum terkirim'),
+      content: Text(
+        '${ringkas.menunggu} transaksi menunggu dikirim'
+        '${ringkas.tinjau > 0 ? ' dan ${ringkas.tinjau} perlu ditinjau' : ''}. '
+        'Sambungkan internet lalu sinkronkan dulu sebelum keluar, agar '
+        'penjualan tidak hilang.',
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Nanti')),
+        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Buka Sinkronisasi')),
+      ],
+    ),
+  );
+  if (keSinkron == true && context.mounted) {
+    await Navigator.of(context, rootNavigator: true).push(
+      MaterialPageRoute<void>(builder: (_) => const SinkronisasiScreen()),
+    );
+  }
+}
+
+/// Entri Pengaturan → Sinkronisasi dengan jumlah antrean.
+class _EntriSinkronisasi extends ConsumerWidget {
+  const _EntriSinkronisasi();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cs = Theme.of(context).colorScheme;
+    final r = ref.watch(ringkasAntreanProvider).valueOrNull ?? const RingkasAntrean();
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: Icon(
+          r.tinjau > 0 ? Icons.sync_problem_rounded : Icons.sync_rounded,
+          color: r.tinjau > 0 ? AppColors.danger : cs.primary,
+        ),
+        title: const Text('Sinkronisasi'),
+        subtitle: Text(
+          r.total == 0
+              ? 'Semua transaksi sudah terkirim'
+              : '${r.menunggu} menunggu dikirim · ${r.tinjau} perlu ditinjau',
+        ),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => Navigator.of(context, rootNavigator: true).push(
+          MaterialPageRoute<void>(builder: (_) => const SinkronisasiScreen()),
+        ),
+      ),
+    );
   }
 }
 

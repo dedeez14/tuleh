@@ -13,13 +13,19 @@ import '../storage/secure_storage.dart';
 /// Di-override di `main()` setelah membaca PackageInfo.
 final appVersionProvider = Provider<String>((ref) => '0.0.0');
 
-/// Penyimpanan salinan baca (mode offline). Di perangkat: SQLite; test
-/// meng-override dengan [SalinanMemori].
-final salinanStoreProvider = Provider<SalinanStore>((ref) {
+/// Basis data offline (salinan baca + antrean kirim). Satu untuk seluruh
+/// aplikasi; test meng-override store-nya, bukan basis datanya.
+final salinanDbProvider = Provider<SalinanDb>((ref) {
   final db = SalinanDb.buka();
   ref.onDispose(db.close);
-  return SalinanDriftStore(db);
+  return db;
 });
+
+/// Penyimpanan salinan baca (mode offline). Di perangkat: SQLite; test
+/// meng-override dengan [SalinanMemori].
+final salinanStoreProvider = Provider<SalinanStore>(
+  (ref) => SalinanDriftStore(ref.watch(salinanDbProvider)),
+);
 
 /// true saat server membalas HTTP 426 → wajib perbarui aplikasi.
 final updateRequiredProvider = StateProvider<bool>((ref) => false);

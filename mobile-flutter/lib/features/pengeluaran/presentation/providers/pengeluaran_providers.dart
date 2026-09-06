@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/network/api_client.dart';
+import '../../../../core/offline/antrean_tulis.dart';
 import '../../../toko/presentation/providers/toko_providers.dart';
 import '../../data/datasources/pengeluaran_remote_datasource.dart';
 import '../../data/repositories/pengeluaran_repository_impl.dart';
@@ -8,8 +9,10 @@ import '../../domain/entities/pengeluaran.dart';
 import '../../domain/repositories/pengeluaran_repository.dart';
 
 final pengeluaranRepositoryProvider = Provider<PengeluaranRepository>(
-  (ref) =>
-      PengeluaranRepositoryImpl(PengeluaranRemoteDataSource(ref.watch(dioProvider))),
+  (ref) => PengeluaranRepositoryImpl(
+    PengeluaranRemoteDataSource(ref.watch(dioProvider)),
+    antrean: ref.watch(antreanTulisProvider),
+  ),
 );
 
 /// Bulan aktif (YYYY-MM). Default bulan berjalan.

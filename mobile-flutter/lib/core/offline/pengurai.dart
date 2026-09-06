@@ -1,0 +1,213 @@
+import 'dart:async';
+
+import 'package:dio/dio.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../network/api_client.dart';
+import 'antrean.dart';
+import 'koneksi.dart';
+
+/// Pengurai antrean kirim (fase 2): mengirim pesan `outbox` satu per satu
+/// sesuai urutan, dengan mundur eksponensial saat jaringan gagal.
+///
+/// Keputusan per jawaban (lihat rancangan "Tuléh Offline-First"):
+/// - 2xx + success:true → TERKIRIM; transaksi lokal & delta stok dihapus.
+/// - 409/422 (ditolak server) → TINJAU dengan pesan server.
+/// - gagal jaringan sebelum sampai → coba lagi setelah 5s, 15s, 45s, 2m,
+///   maks 10m (status tetap MENUNGGU).
+/// - timeout SETELAH terkirim (mungkin sudah diterima) → TINJAU: mengulang
+///   bisa menggandakan transaksi sampai server mengenali `client_ref`.
+/// - 401 → berhenti (sesi berakhir; antrean dijaga sampai masuk lagi).
+class PenguraiAntrean {
+  PenguraiAntrean({
+    required this.store,
+    required this.dio,
+    required this.koneksi,
+    this.setelahBerubah,
+    DateTime Function()? sekarang,
+  }) : _sekarang = sekarang ?? DateTime.now;
+
+  final AntreanStore store;
+  final Dio dio;
+  final PenandaKoneksi? koneksi;
+
+  /// Dipanggil setiap ada perubahan status (UI menyegarkan diri).
+  final void Function()? setelahBerubah;
+  final DateTime Function() _sekarang;
+
+  bool _berjalan = false;
+  Timer? _jadwal;
+
+  static const jedaMundur = [
+    Duration(seconds: 5),
+    Duration(seconds: 15),
+    Duration(seconds: 45),
+    Duration(minutes: 2),
+    Duration(minutes: 10),
+  ];
+
+  static Duration mundur(int percobaan) =>
+      jedaMundur[percobaan.clamp(1, jedaMundur.length) - 1];
+
+  /// Kirim semua pesan yang siap. Aman dipanggil berulang (dikunci).
+  /// Mengembalikan jumlah pesan yang berhasil terkirim.
+  Future<int> jalankan() async {
+    if (_berjalan) return 0;
+    _berjalan = true;
+    var sukses = 0;
+    try {
+      // FIFO ketat: pesan MENUNGGU diproses sesuai urutan; bila yang paling
+      // depan masih menunggu jadwal coba-lagi, yang di belakangnya ikut
+      // menunggu (transaksi tidak boleh saling mendahului). TINJAU dilewati.
+      final kini = _sekarang();
+      final menunggu = (await store.semua())
+          .where((p) => p.status == StatusAntrean.menunggu)
+          .toList();
+      for (final p in menunggu) {
+        if (p.cobaLagiSetelah != null && p.cobaLagiSetelah!.isAfter(kini)) break;
+        final lanjut = await _kirim(p);
+        if (lanjut == _Hasil.terkirim) sukses++;
+        if (lanjut == _Hasil.berhenti) break;
+      }
+      await _jadwalkanUlang();
+    } finally {
+      _berjalan = false;
+    }
+    return sukses;
+  }
+
+  Future<_Hasil> _kirim(PesanAntrean p) async {
+    await store.perbarui(p.clientRef, status: StatusAntrean.mengirim);
+    Response<dynamic> res;
+    try {
+      res = await dio.post<dynamic>(p.path, data: p.body);
+    } on DioException catch (e) {
+      final mungkinSampai =
+          e.type == DioExceptionType.receiveTimeout ||
+          e.type == DioExceptionType.sendTimeout;
+      if (mungkinSampai) {
+        await store.perbarui(
+          p.clientRef,
+          status: StatusAntrean.tinjau,
+          galatTerakhir:
+              'Server tidak menjawab setelah data dikirim. Periksa di Riwayat '
+              'apakah sudah tercatat sebelum mengirim ulang.',
+        );
+        setelahBerubah?.call();
+        return _Hasil.lanjut;
+      }
+      // Belum sampai → mundur lalu coba lagi; hentikan putaran ini.
+      final percobaan = p.percobaan + 1;
+      await store.perbarui(
+        p.clientRef,
+        status: StatusAntrean.menunggu,
+        percobaan: percobaan,
+        cobaLagiSetelah: _sekarang().add(mundur(percobaan)),
+        galatTerakhir: 'Tidak dapat terhubung ke server.',
+      );
+      koneksi?.tandaiOffline();
+      setelahBerubah?.call();
+      return _Hasil.berhenti;
+    }
+
+    final code = res.statusCode ?? 0;
+    final body = res.data is Map ? Map<String, dynamic>.from(res.data as Map) : const <String, dynamic>{};
+    if (code >= 200 && code < 300 && body['success'] == true) {
+      final data = body['data'] is Map ? Map<String, dynamic>.from(body['data'] as Map) : <String, dynamic>{};
+      await store.selesai(p.clientRef, hasil: data);
+      koneksi?.tandaiOnline();
+      setelahBerubah?.call();
+      return _Hasil.terkirim;
+    }
+    if (code == 401) {
+      await store.perbarui(p.clientRef, status: StatusAntrean.menunggu);
+      setelahBerubah?.call();
+      return _Hasil.berhenti;
+    }
+    // Ditolak server (409 sesi/cakupan, 422 validasi, 5xx) → tinjau manusia.
+    await store.perbarui(
+      p.clientRef,
+      status: StatusAntrean.tinjau,
+      galatTerakhir: _pesanServer(body, code),
+    );
+    setelahBerubah?.call();
+    return _Hasil.lanjut;
+  }
+
+  static String _pesanServer(Map<String, dynamic> body, int code) {
+    final errors = body['errors'];
+    if (errors is Map && errors.isNotEmpty) {
+      final first = errors.values.first;
+      if (first is List && first.isNotEmpty) return first.first.toString();
+    }
+    final msg = body['message']?.toString();
+    if (msg != null && msg.isNotEmpty) return msg;
+    return 'Ditolak server (HTTP $code).';
+  }
+
+  /// Bila masih ada yang menunggu, jadwalkan putaran berikutnya pada waktu
+  /// coba-lagi terdekat.
+  Future<void> _jadwalkanUlang() async {
+    _jadwal?.cancel();
+    final semua = await store.semua();
+    DateTime? terdekat;
+    for (final p in semua) {
+      if (p.status != StatusAntrean.menunggu) continue;
+      final t = p.cobaLagiSetelah ?? _sekarang();
+      if (terdekat == null || t.isBefore(terdekat)) terdekat = t;
+    }
+    if (terdekat == null) return;
+    var jeda = terdekat.difference(_sekarang());
+    if (jeda < const Duration(seconds: 1)) jeda = const Duration(seconds: 1);
+    _jadwal = Timer(jeda, jalankan);
+  }
+
+  /// Pengguna menekan "Kirim ulang" pada pesan TINJAU.
+  Future<void> kirimUlang(String clientRef) async {
+    await store.perbarui(
+      clientRef,
+      status: StatusAntrean.menunggu,
+      percobaan: 0,
+      hapusCobaLagi: true,
+    );
+    setelahBerubah?.call();
+    await jalankan();
+  }
+
+  void hentikan() {
+    _jadwal?.cancel();
+    _jadwal = null;
+  }
+}
+
+enum _Hasil { terkirim, lanjut, berhenti }
+
+/// Penyimpanan antrean (SQLite di perangkat; test meng-override).
+final antreanStoreProvider = Provider<AntreanStore>(
+  (ref) => AntreanDriftStore(ref.watch(salinanDbProvider)),
+);
+
+/// Naik setiap antrean berubah; provider ringkasan/daftar mengawasinya.
+final antreanVersiProvider = StateProvider<int>((_) => 0);
+
+final penguraiProvider = Provider<PenguraiAntrean>((ref) {
+  final p = PenguraiAntrean(
+    store: ref.watch(antreanStoreProvider),
+    dio: ref.watch(dioProvider),
+    koneksi: ref.read(koneksiProvider.notifier),
+    setelahBerubah: () => ref.read(antreanVersiProvider.notifier).state++,
+  );
+  ref.onDispose(p.hentikan);
+  return p;
+});
+
+/// Ringkasan antrean untuk pita status & layar Sinkronisasi.
+final ringkasAntreanProvider = FutureProvider<RingkasAntrean>((ref) {
+  ref.watch(antreanVersiProvider);
+  return ref.watch(antreanStoreProvider).ringkas();
+});
+
+final daftarAntreanProvider = FutureProvider<List<PesanAntrean>>((ref) {
+  ref.watch(antreanVersiProvider);
+  return ref.watch(antreanStoreProvider).semua();
+});

@@ -18,10 +18,18 @@ class HasilTransaksiSheet extends ConsumerStatefulWidget {
     super.key,
     required this.struk,
     required this.kembalian,
+    this.tertunda = false,
+    this.perluTinjau = false,
   });
 
   final Struk struk;
   final double kembalian;
+
+  /// Transaksi disimpan di perangkat (offline) dan menunggu dikirim.
+  final bool tertunda;
+
+  /// Server mungkin sudah menerima; pengguna perlu memeriksa sebelum kirim ulang.
+  final bool perluTinjau;
 
   @override
   ConsumerState<HasilTransaksiSheet> createState() =>
@@ -121,11 +129,37 @@ class _HasilTransaksiSheetState extends ConsumerState<HasilTransaksiSheet> {
               ),
             ),
             const SizedBox(height: 14),
-            const Text(
-              'Transaksi berhasil',
+            Text(
+              widget.tertunda ? 'Transaksi disimpan' : 'Transaksi berhasil',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
+              style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
             ),
+            if (widget.tertunda) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.warn.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.cloud_upload_outlined, size: 18, color: AppColors.warn),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        widget.perluTinjau
+                            ? 'Server tidak menjawab setelah data dikirim. Periksa '
+                                  'Riwayat lalu putuskan di Pengaturan → Sinkronisasi.'
+                            : 'Offline — nomor sementara. Dikirim otomatis saat '
+                                  'internet kembali; nomor resmi menyusul.',
+                        style: const TextStyle(fontSize: 12.5, height: 1.4),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 4),
             Text(
               '${s.nomor} · ${s.jumlahItem} item',

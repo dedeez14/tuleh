@@ -11,6 +11,7 @@ import '../../../auth/domain/entities/user.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../../../demo/data/masa_coba_service.dart';
 import '../../../demo/demo_session.dart';
+import '../../../pengaturan/presentation/screens/pengaturan_screen.dart' show keluarDenganPenjagaAntrean;
 import '../../../laporan/presentation/providers/laporan_providers.dart';
 import '../../../riwayat/domain/entities/transaksi.dart';
 import '../../../riwayat/presentation/providers/riwayat_providers.dart';
@@ -83,8 +84,7 @@ class HomeScreen extends ConsumerWidget {
                         onGantiToko: tokos.length > 1
                             ? () => _pilihToko(context, ref, tokos, activeId)
                             : null,
-                        onLogout: () =>
-                            ref.read(authControllerProvider.notifier).logout(),
+                        onLogout: () => keluarDenganPenjagaAntrean(context, ref),
                       ),
                     ),
                     const SizedBox(height: 20),

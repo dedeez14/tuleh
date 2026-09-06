@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/offline/pengurai.dart';
 import '../../../../core/utils/rupiah_input.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -211,13 +212,17 @@ class _TambahSheetState extends ConsumerState<_TambahSheet> {
         );
     if (!mounted) return;
     r.when(
-      ok: (_) {
+      ok: (hasil) {
         ref.invalidate(pengeluaranListProvider);
+        if (hasil.tertunda) ref.read(antreanVersiProvider.notifier).state++;
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
-          ..showSnackBar(const SnackBar(
-              backgroundColor: AppColors.success, content: Text('Pengeluaran ditambahkan.')));
+          ..showSnackBar(SnackBar(
+              backgroundColor: hasil.tertunda ? AppColors.warn : AppColors.success,
+              content: Text(hasil.tertunda
+                  ? 'Offline — pengeluaran disimpan, dikirim saat internet kembali.'
+                  : 'Pengeluaran ditambahkan.')));
       },
       err: (e) {
         setState(() => _saving = false);

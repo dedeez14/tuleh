@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/network/api_exception.dart';
+import '../../../../core/offline/antrean_tulis.dart';
+import '../../../../core/offline/pengurai.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/format.dart';
 import '../../../inventory/presentation/providers/inventory_providers.dart';
@@ -218,16 +220,25 @@ class _Detail extends ConsumerWidget {
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
     try {
-      await ref
-          .read(inventoryDataSourceProvider)
-          .stokMasuk(idProduk: product.id, jumlah: jumlah);
+      // Offline → diantrekan; stok tampil langsung naik lewat delta tertunda.
+      final hasil = await ref.read(antreanTulisProvider).jalankan(
+        jenis: 'STOK_MASUK',
+        path: '/inventory/stok-masuk',
+        body: {'id_produk': product.id, 'jumlah': jumlah},
+        kirim: ref.read(inventoryDataSourceProvider).stokMasukBody,
+        deltaStok: {product.id: jumlah},
+      );
+      if (hasil.tertunda) ref.read(antreanVersiProvider.notifier).state++;
       ref.invalidate(produkKelolaProvider);
+      ref.invalidate(productsProvider);
       navigator.pop();
       messenger
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(
-            backgroundColor: AppColors.success,
-            content: Text('Stok +${jumlah.toInt()} ditambahkan.')));
+            backgroundColor: hasil.tertunda ? AppColors.warn : AppColors.success,
+            content: Text(hasil.tertunda
+                ? 'Offline — stok +${jumlah.toInt()} disimpan, dikirim saat internet kembali.'
+                : 'Stok +${jumlah.toInt()} ditambahkan.')));
     } on ApiException catch (e) {
       messenger
         ..hideCurrentSnackBar()

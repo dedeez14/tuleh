@@ -5,10 +5,19 @@ class ApiException implements Exception {
     required this.message,
     this.statusCode = 0,
     this.errors,
+    this.mungkinSampai = false,
   });
 
   final String message;
   final int statusCode;
+
+  /// Galat jaringan (statusCode 0) yang terjadi SETELAH permintaan mungkin
+  /// sampai ke server (timeout menunggu jawaban). Mengulang permintaan tulis
+  /// seperti ini bisa menggandakan data → antrean menaruhnya di TINJAU.
+  final bool mungkinSampai;
+
+  /// Gagal jaringan murni (tidak pernah sampai): aman diulang / diantrekan.
+  bool get isJaringan => statusCode == 0;
 
   /// Peta error validasi per-field (mengikuti envelope MOVERA `errors`).
   final Map<String, List<String>>? errors;

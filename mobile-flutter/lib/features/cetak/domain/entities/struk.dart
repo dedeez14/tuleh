@@ -53,4 +53,71 @@ class Struk {
 
   int get jumlahItem =>
       baris.fold<int>(0, (s, b) => s + b.kuantitas.round());
+
+  /// Transaksi offline menyimpan struk apa adanya untuk cetak ulang.
+  Map<String, dynamic> toJson() => {
+    'nama_toko': namaToko,
+    'alamat': alamat,
+    'telepon': telepon,
+    'nomor': nomor,
+    'waktu': waktu.toIso8601String(),
+    'kasir': kasir,
+    'baris': [
+      for (final b in baris)
+        {'nama': b.nama, 'kuantitas': b.kuantitas, 'harga': b.harga},
+    ],
+    'total': total,
+    'metode': metode,
+    'dibayar': dibayar,
+    'kembalian': kembalian,
+    'catatan_kaki': catatanKaki,
+    'barcode': barcode,
+    'logo_url': logoUrl,
+  };
+
+  factory Struk.fromJson(Map<String, dynamic> j) {
+    double? d(dynamic v) => v == null ? null : (v as num).toDouble();
+    return Struk(
+      namaToko: (j['nama_toko'] ?? '').toString(),
+      alamat: j['alamat']?.toString(),
+      telepon: j['telepon']?.toString(),
+      nomor: (j['nomor'] ?? '-').toString(),
+      waktu: DateTime.tryParse('${j['waktu'] ?? ''}') ?? DateTime.now(),
+      kasir: j['kasir']?.toString(),
+      baris: [
+        if (j['baris'] is List)
+          for (final b in j['baris'] as List)
+            if (b is Map)
+              StrukBaris(
+                nama: (b['nama'] ?? '-').toString(),
+                kuantitas: (b['kuantitas'] as num?) ?? 0,
+                harga: d(b['harga']) ?? 0,
+              ),
+      ],
+      total: d(j['total']) ?? 0,
+      metode: j['metode']?.toString(),
+      dibayar: d(j['dibayar']),
+      kembalian: d(j['kembalian']),
+      catatanKaki: j['catatan_kaki']?.toString(),
+      barcode: j['barcode']?.toString(),
+      logoUrl: j['logo_url']?.toString(),
+    );
+  }
+
+  Struk salinDengan({String? nomor, String? barcode, String? catatanKaki}) => Struk(
+    namaToko: namaToko,
+    alamat: alamat,
+    telepon: telepon,
+    nomor: nomor ?? this.nomor,
+    waktu: waktu,
+    kasir: kasir,
+    baris: baris,
+    total: total,
+    metode: metode,
+    dibayar: dibayar,
+    kembalian: kembalian,
+    catatanKaki: catatanKaki ?? this.catatanKaki,
+    barcode: barcode ?? this.barcode,
+    logoUrl: logoUrl,
+  );
 }

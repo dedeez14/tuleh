@@ -10,13 +10,14 @@ class InventoryRemoteDataSource {
 
   /// POST /inventory/stok-masuk — tambah stok produk.
   /// Kontrak MOVERA (terverifikasi): { id_produk, jumlah }.
-  Future<void> stokMasuk({required String idProduk, required double jumlah}) async {
+  Future<void> stokMasuk({required String idProduk, required double jumlah}) =>
+      stokMasukBody({'id_produk': idProduk, 'jumlah': jumlah});
+
+  /// Kirim badan apa adanya (jalur antrean offline menambah client_ref).
+  Future<void> stokMasukBody(Map<String, dynamic> badan) async {
     late final Response<dynamic> res;
     try {
-      res = await _dio.post<dynamic>('/inventory/stok-masuk', data: {
-        'id_produk': idProduk,
-        'jumlah': jumlah,
-      });
+      res = await _dio.post<dynamic>('/inventory/stok-masuk', data: badan);
     } on DioException catch (e) {
       throw ApiErrorMapper.fromDio(e);
     }

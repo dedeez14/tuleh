@@ -5,6 +5,13 @@ sebagai isi Release GitHub (workflow flutter-release.yml), dan empat baris
 pertamanya tampil di banner pembaruan dalam aplikasi. Tulis untuk kasir, bukan
 untuk programmer.
 
+## 2.8.0
+
+- Mode offline tahap kedua: transaksi, pengeluaran, dan stok masuk saat internet mati disimpan di ponsel lalu dikirim otomatis berurutan begitu server terjangkau. Struk offline memakai nomor sementara L-…, stok di katalog langsung berkurang, dan riwayat menampilkan transaksi yang belum terkirim dengan tanda.
+- Baru: Pengaturan → Sinkronisasi menampilkan antrean, tombol Sinkron sekarang, dan pilihan Kirim ulang / Batalkan untuk transaksi yang perlu ditinjau (server tidak menjawab setelah data dikirim, atau server menolak).
+- Keluar akun ditahan bila masih ada transaksi yang belum terkirim, agar penjualan tidak hilang.
+- Pembaruan aplikasi: pemasang terbuka otomatis begitu unduhan selesai. Bila unduhan selesai saat aplikasi di latar belakang, pemasang dibuka otomatis saat aplikasi dibuka kembali dan ada notifikasi "siap dipasang" yang bisa diketuk. Tidak perlu lagi mencari berkas unduhan.
+
 ## 2.7.0
 
 - Mode offline tahap pertama: data yang pernah dimuat (produk, pelanggan, riwayat, laporan, pengaturan, sesi, meja) tetap bisa dilihat saat internet mati. Pita "Offline · menampilkan data terakhir HH:MM" tampil dengan tombol Coba lagi, dan data dimuat ulang otomatis begitu server terjangkau. Transaksi baru masih membutuhkan koneksi (tahap berikutnya: antrean kirim).

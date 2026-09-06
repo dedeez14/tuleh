@@ -1,13 +1,15 @@
 import '../../../../core/network/api_exception.dart';
 import '../../../../core/network/api_result.dart';
+import '../../../../core/offline/antrean_tulis.dart';
 import '../../domain/entities/pengeluaran.dart';
 import '../../domain/repositories/pengeluaran_repository.dart';
 import '../datasources/pengeluaran_remote_datasource.dart';
 
 class PengeluaranRepositoryImpl implements PengeluaranRepository {
-  PengeluaranRepositoryImpl(this.remote);
+  PengeluaranRepositoryImpl(this.remote, {required this.antrean});
 
   final PengeluaranRemoteDataSource remote;
+  final AntreanTulis antrean;
 
   @override
   Future<Result<List<Pengeluaran>>> list(String bulan) async {
@@ -19,14 +21,23 @@ class PengeluaranRepositoryImpl implements PengeluaranRepository {
   }
 
   @override
-  Future<Result<void>> tambah({
+  Future<Result<HasilTulis>> tambah({
     required String keterangan,
     required double nominal,
     String? tanggal,
   }) async {
     try {
-      await remote.tambah(keterangan: keterangan, nominal: nominal, tanggal: tanggal);
-      return const Ok(null);
+      final hasil = await antrean.jalankan(
+        jenis: 'PENGELUARAN',
+        path: '/pengeluaran',
+        body: {
+          'keterangan': keterangan,
+          'nominal': nominal,
+          if (tanggal != null && tanggal.isNotEmpty) 'tanggal': tanggal,
+        },
+        kirim: remote.tambahBody,
+      );
+      return Ok(hasil);
     } on ApiException catch (e) {
       return Err(e);
     }

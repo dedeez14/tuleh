@@ -38,10 +38,15 @@ class ApiErrorMapper {
     final timedOut = e.type == DioExceptionType.connectionTimeout ||
         e.type == DioExceptionType.receiveTimeout ||
         e.type == DioExceptionType.sendTimeout;
+    // connectionTimeout = belum tersambung (aman diulang). receive/send
+    // timeout = permintaan mungkin sudah diterima server.
+    final mungkinSampai = e.type == DioExceptionType.receiveTimeout ||
+        e.type == DioExceptionType.sendTimeout;
     return ApiException(
       message: timedOut
           ? 'Server tidak merespons (timeout).'
           : statusMessage(0),
+      mungkinSampai: mungkinSampai,
     );
   }
 }

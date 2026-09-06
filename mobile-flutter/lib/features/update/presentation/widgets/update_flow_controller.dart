@@ -32,6 +32,10 @@ class UpdateFlowController extends ChangeNotifier {
   String? error;
   String? _downloadedPath;
 
+  /// true = unduhan selesai saat app di latar belakang; pemasang akan dibuka
+  /// otomatis begitu app kembali ke depan (native), UI cukup memberi tahu.
+  bool pemasangTertunda = false;
+
   StreamSubscription<int>? _sub;
   bool _disposed = false;
 
@@ -81,7 +85,7 @@ class UpdateFlowController extends ChangeNotifier {
       await _sub?.cancel();
       _downloadedPath = path;
       _set(UpdatePhase.installing);
-      await _installer.install(path);
+      pemasangTertunda = !await _installer.install(path);
       _set(UpdatePhase.launched);
     } on PlatformException catch (e) {
       await _sub?.cancel();
@@ -103,7 +107,7 @@ class UpdateFlowController extends ChangeNotifier {
     }
     try {
       _set(UpdatePhase.installing);
-      await _installer.install(p);
+      pemasangTertunda = !await _installer.install(p);
       _set(UpdatePhase.launched);
     } on PlatformException catch (e) {
       _set(UpdatePhase.error, err: e.message ?? 'Gagal membuka pemasang.');

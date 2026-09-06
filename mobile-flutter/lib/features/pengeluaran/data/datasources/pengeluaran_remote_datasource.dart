@@ -29,12 +29,15 @@ class PengeluaranRemoteDataSource {
     required String keterangan,
     required double nominal,
     String? tanggal,
-  }) async {
-    await _send(() => _dio.post<dynamic>('/pengeluaran', data: {
-          'keterangan': keterangan,
-          'nominal': nominal,
-          if (tanggal != null && tanggal.isNotEmpty) 'tanggal': tanggal,
-        }));
+  }) => tambahBody({
+    'keterangan': keterangan,
+    'nominal': nominal,
+    if (tanggal != null && tanggal.isNotEmpty) 'tanggal': tanggal,
+  });
+
+  /// Kirim badan apa adanya (jalur antrean offline menambah client_ref).
+  Future<void> tambahBody(Map<String, dynamic> badan) async {
+    await _send(() => _dio.post<dynamic>('/pengeluaran', data: badan));
   }
 
   /// DELETE /pengeluaran/{id}. Id terenkripsi → di-encode utuh untuk path.

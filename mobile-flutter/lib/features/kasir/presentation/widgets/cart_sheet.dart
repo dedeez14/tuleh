@@ -14,6 +14,8 @@ import '../../../pengaturan/domain/entities/pengaturan_pembayaran.dart';
 import '../../../pengaturan/presentation/providers/pengaturan_providers.dart';
 import '../../../sesi/presentation/providers/sesi_providers.dart';
 import '../controllers/cart_controller.dart';
+import '../../../../core/offline/pengurai.dart';
+import '../../../products/presentation/providers/products_provider.dart';
 import '../providers/checkout_providers.dart';
 import '../screens/kasir_screen.dart' show bukaSesiDenganUmpanBalik;
 
@@ -78,27 +80,16 @@ class _CartSheetState extends ConsumerState<CartSheet> {
 
     setState(() => _loading = true);
     try {
-      final payload = [
-        for (final e in items)
-          {
-            'id_produk': e.product.id,
-            'kuantitas': e.qty,
-            'harga': e.product.harga,
-          },
-      ];
-      final res = await ref
-          .read(transactionDataSourceProvider)
-          .checkout(items: payload, metode: _metodeTerpilih, dibayar: dibayar);
-
       // Struk disusun dari keranjang SEBELUM dikosongkan, agar bisa dicetak
-      // ulang dari lembar hasil tanpa memanggil server lagi.
+      // ulang dari lembar hasil (dan disimpan bila transaksi diantrekan offline).
       final usaha = ref.read(profilUsahaProvider).valueOrNull;
-      final struk = Struk(
+      final waktu = DateTime.now();
+      Struk buatStruk(String nomor, double kembalian) => Struk(
         namaToko: usaha?.nama ?? 'Tuléh POS',
         alamat: usaha?.alamat,
         telepon: usaha?.telepon,
-        nomor: res.nomor.isEmpty ? '-' : res.nomor,
-        waktu: DateTime.now(),
+        nomor: nomor.isEmpty ? '-' : nomor,
+        waktu: waktu,
         baris: [
           for (final e in items)
             StrukBaris(
@@ -110,18 +101,36 @@ class _CartSheetState extends ConsumerState<CartSheet> {
         total: total,
         metode: _metodeTerpilih,
         dibayar: tunai ? dibayar : null,
-        kembalian: tunai ? res.kembalian : null,
+        kembalian: tunai ? kembalian : null,
         catatanKaki: usaha?.strukFooter,
-        barcode: res.nomor.isEmpty ? null : res.nomor,
+        barcode: nomor.isEmpty ? null : nomor,
         logoUrl: (usaha?.strukTampilLogo ?? false) ? usaha?.logo : null,
       );
 
+      final res = await ref.read(checkoutRepositoryProvider).bayar(
+        items: items,
+        metode: _metodeTerpilih,
+        dibayar: dibayar,
+        total: total,
+        buatStruk: buatStruk,
+      );
+      final struk = buatStruk(res.nomor, res.kembalian);
+
       ref.read(cartControllerProvider.notifier).clear();
       ref.invalidate(activeSesiProvider); // rekap kas ikut segar
+      if (res.tertunda) {
+        ref.read(antreanVersiProvider.notifier).state++;
+        ref.invalidate(productsProvider); // stok tampil ikut delta tertunda
+      }
       if (!mounted) return;
       Navigator.of(context).pop();
       HapticFeedback.mediumImpact();
-      await _tampilkanHasil(struk, res.kembalian);
+      await _tampilkanHasil(
+        struk,
+        res.kembalian,
+        tertunda: res.tertunda,
+        perluTinjau: res.perluTinjau,
+      );
     } on ApiException catch (e) {
       if (!mounted) return;
       // 409 = sesi kasir belum dibuka; tawarkan jalan keluarnya langsung.
@@ -140,7 +149,12 @@ class _CartSheetState extends ConsumerState<CartSheet> {
   /// Lembar hasil transaksi: kembalian besar (yang paling dicari kasir) plus
   /// tombol cetak struk. Dipisah dari snackbar agar tidak hilang sendiri saat
   /// kasir sedang menghitung uang.
-  Future<void> _tampilkanHasil(Struk struk, double kembalian) async {
+  Future<void> _tampilkanHasil(
+    Struk struk,
+    double kembalian, {
+    bool tertunda = false,
+    bool perluTinjau = false,
+  }) async {
     if (!mounted) return;
     await showModalBottomSheet<void>(
       context: context,
@@ -148,7 +162,12 @@ class _CartSheetState extends ConsumerState<CartSheet> {
       isScrollControlled: true,
       useSafeArea: true,
       showDragHandle: true,
-      builder: (_) => HasilTransaksiSheet(struk: struk, kembalian: kembalian),
+      builder: (_) => HasilTransaksiSheet(
+        struk: struk,
+        kembalian: kembalian,
+        tertunda: tertunda,
+        perluTinjau: perluTinjau,
+      ),
     );
   }
 

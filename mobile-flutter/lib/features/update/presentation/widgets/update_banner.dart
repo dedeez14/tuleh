@@ -180,7 +180,9 @@ class _UpdateBannerState extends ConsumerState<UpdateBanner> {
       case UpdatePhase.launched:
         return Row(
           children: [
-            Expanded(child: _text('Pemasang dibuka. Selesaikan pemasangan.')),
+            Expanded(child: _text(f.pemasangTertunda
+                ? 'Unduhan selesai. Pemasang terbuka saat app kembali ke depan.'
+                : 'Pemasang dibuka. Selesaikan pemasangan.')),
             TextButton(
               onPressed: f.reinstall,
               style: TextButton.styleFrom(foregroundColor: AppColors.mint400),

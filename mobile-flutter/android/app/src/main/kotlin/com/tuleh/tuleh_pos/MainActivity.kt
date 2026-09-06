@@ -1,6 +1,10 @@
 package com.tuleh.tuleh_pos
 
 import android.app.DownloadManager
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -23,6 +27,9 @@ import java.io.File
 ///  - Unduh: DownloadManager (progres via polling + watchdog stall + notifikasi).
 ///  - Pasang: FileProvider + Intent ACTION_VIEW (izin REQUEST_INSTALL_PACKAGES),
 ///    hanya bila nama paket APK == paket app ini (cegah pasang APK asing).
+///    Bila unduhan selesai saat app di latar belakang (Android 10+ melarang
+///    membuka Activity dari latar), pemasang dibuka OTOMATIS saat app kembali
+///    ke depan + notifikasi "siap dipasang" yang bisa diketuk.
 ///  - Izin "Instal aplikasi tak dikenal": canInstall / openInstallPermission.
 /// Diekspos ke Dart lewat MethodChannel "tuleh/updater" + EventChannel progres.
 class MainActivity : FlutterActivity() {
@@ -53,6 +60,12 @@ class MainActivity : FlutterActivity() {
     private var resolved = false
     private var lastBytes = -1L
     private var stallTicks = 0
+
+    // Pemasangan tertunda: APK yang siap tetapi app sedang di latar belakang.
+    private var pendingInstall: File? = null
+    private var diDepan = false
+    private val kanalPembaruan = "tuleh_pembaruan"
+    private val idNotifPembaruan = 7301
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -126,7 +139,8 @@ class MainActivity : FlutterActivity() {
                                 "Berkas pembaruan tidak cocok dengan aplikasi ini.", null)
                         } else {
                             try {
-                                installApk(file); result.success(null)
+                                val launched = pasangAtauTunda(file)
+                                result.success(mapOf("launched" to launched))
                             } catch (e: Exception) {
                                 result.error("INSTALL", "Gagal membuka pemasang: ${e.message}", null)
                             }
@@ -174,7 +188,7 @@ class MainActivity : FlutterActivity() {
         val req = DownloadManager.Request(Uri.parse(url))
             .setTitle("Tuléh — Pembaruan")
             .setDescription("Mengunduh versi terbaru…")
-            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
             .setDestinationInExternalFilesDir(this, Environment.DIRECTORY_DOWNLOADS, filename)
             .setMimeType("application/vnd.android.package-archive")
         downloadId = dm.enqueue(req)
@@ -207,12 +221,81 @@ class MainActivity : FlutterActivity() {
         startPolling(dm)
     }
 
-    private fun installApk(file: File) {
+    private fun intentPasang(file: File): Intent {
         val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
-        val intent = Intent(Intent.ACTION_VIEW)
+        return Intent(Intent.ACTION_VIEW)
             .setDataAndType(uri, "application/vnd.android.package-archive")
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-        startActivity(intent)
+    }
+
+    private fun installApk(file: File) {
+        startActivity(intentPasang(file))
+    }
+
+    /// Buka pemasang bila app di depan; bila di latar belakang, simpan sebagai
+    /// tertunda (dibuka otomatis di onResume) dan tampilkan notifikasi yang
+    /// langsung membuka pemasang saat diketuk. Mengembalikan true bila pemasang
+    /// langsung dibuka.
+    private fun pasangAtauTunda(file: File): Boolean {
+        if (diDepan) {
+            pendingInstall = null
+            hapusNotifPembaruan()
+            installApk(file)
+            return true
+        }
+        pendingInstall = file
+        tampilkanNotifSiapDipasang(file)
+        return false
+    }
+
+    private fun tampilkanNotifSiapDipasang(file: File) {
+        try {
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                nm.createNotificationChannel(
+                    NotificationChannel(kanalPembaruan, "Pembaruan aplikasi",
+                        NotificationManager.IMPORTANCE_HIGH).apply {
+                        description = "Pemberitahuan saat pembaruan Tuléh siap dipasang."
+                    }
+                )
+            }
+            val flags = PendingIntent.FLAG_UPDATE_CURRENT or
+                (if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0)
+            val pi = PendingIntent.getActivity(this, idNotifPembaruan, intentPasang(file), flags)
+            val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                Notification.Builder(this, kanalPembaruan) else @Suppress("DEPRECATION") Notification.Builder(this)
+            val notif = builder
+                .setSmallIcon(android.R.drawable.stat_sys_download_done)
+                .setContentTitle("Pembaruan Tuléh siap dipasang")
+                .setContentText("Ketuk untuk memasang versi terbaru.")
+                .setContentIntent(pi)
+                .setAutoCancel(true)
+                .build()
+            nm.notify(idNotifPembaruan, notif)
+        } catch (_: Exception) {
+            // Notifikasi hanya pelengkap; onResume tetap membuka pemasang.
+        }
+    }
+
+    private fun hapusNotifPembaruan() {
+        try {
+            (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel(idNotifPembaruan)
+        } catch (_: Exception) {}
+    }
+
+    override fun onResume() {
+        super.onResume()
+        diDepan = true
+        val tertunda = pendingInstall ?: return
+        pendingInstall = null
+        hapusNotifPembaruan()
+        // Beri jeda singkat agar Activity benar-benar di depan sebelum membuka pemasang.
+        handler.postDelayed({ try { installApk(tertunda) } catch (_: Exception) {} }, 250)
+    }
+
+    override fun onPause() {
+        diDepan = false
+        super.onPause()
     }
 
     /// Batalkan unduhan berjalan (dan resolve error bila diminta pengguna).

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../core/widgets/app_background.dart';
 import '../../../../core/widgets/motion.dart';
@@ -217,6 +218,7 @@ class _BarisTrx extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final batal = (trx.status ?? '').toUpperCase().contains('BATAL');
+    final tertunda = trx.status == statusBelumSinkron;
     final jam = _jam(trx.tanggal);
 
     return ListTile(
@@ -235,9 +237,17 @@ class _BarisTrx extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
         ),
         child: Icon(
-          batal ? Icons.cancel_outlined : _ikonMetode(trx.metode),
+          batal
+              ? Icons.cancel_outlined
+              : tertunda
+              ? Icons.cloud_upload_outlined
+              : _ikonMetode(trx.metode),
           size: 20,
-          color: batal ? cs.error : cs.primary,
+          color: batal
+              ? cs.error
+              : tertunda
+              ? AppColors.warn
+              : cs.primary,
         ),
       ),
       title: Text(
@@ -252,10 +262,15 @@ class _BarisTrx extends StatelessWidget {
           if (jam.isNotEmpty) jam,
           if (trx.metode != null && trx.metode!.isNotEmpty) trx.metode!,
           if (batal) 'Dibatalkan',
+          if (tertunda) 'Belum tersinkron',
         ].join(' · '),
         style: TextStyle(
           fontSize: 12.5,
-          color: batal ? cs.error : cs.onSurface.withValues(alpha: 0.6),
+          color: batal
+              ? cs.error
+              : tertunda
+              ? AppColors.warn
+              : cs.onSurface.withValues(alpha: 0.6),
         ),
       ),
       trailing: Text(

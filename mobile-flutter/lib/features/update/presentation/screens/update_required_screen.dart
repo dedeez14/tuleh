@@ -210,8 +210,11 @@ class _UpdateRequiredScreenState extends ConsumerState<UpdateRequiredScreen> {
       case UpdatePhase.launched:
         return Column(
           children: [
-            _hint('Pemasang sistem telah dibuka. Selesaikan pemasangan. '
-                'Jika batal/gagal, tekan Pasang Ulang.'),
+            _hint(f.pemasangTertunda
+                ? 'Unduhan selesai. Pemasang akan terbuka otomatis saat aplikasi '
+                    'kembali ke depan. Jika tidak, tekan Pasang Ulang.'
+                : 'Pemasang sistem telah dibuka. Selesaikan pemasangan. '
+                    'Jika batal/gagal, tekan Pasang Ulang.'),
             const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,

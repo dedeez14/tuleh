@@ -17,14 +17,18 @@ class TransactionRemoteDataSource {
     required List<Map<String, dynamic>> items,
     required String metode,
     required double dibayar,
-  }) async {
+  }) => checkoutBody({
+    'items': items,
+    'tipe_pembayaran': metode,
+    'dibayar': dibayar,
+  });
+
+  /// Kirim badan checkout apa adanya (dipakai jalur offline yang sudah
+  /// menyertakan `client_ref` & `waktu_klien`).
+  Future<CheckoutResult> checkoutBody(Map<String, dynamic> badan) async {
     late final Response<dynamic> res;
     try {
-      res = await _dio.post<dynamic>('/transaksi/checkout', data: {
-        'items': items,
-        'tipe_pembayaran': metode,
-        'dibayar': dibayar,
-      });
+      res = await _dio.post<dynamic>('/transaksi/checkout', data: badan);
     } on DioException catch (e) {
       throw ApiErrorMapper.fromDio(e);
     }
