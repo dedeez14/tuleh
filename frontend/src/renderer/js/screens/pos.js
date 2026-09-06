@@ -907,6 +907,8 @@ function renderPos(container) {
         extraEl.innerHTML = qrisAutoIntroHTML(grandTotal)
         submitBtn.textContent = 'Tampilkan QRIS'
         submitBtn.disabled = false
+        cdPayment = null // QR dinamis baru dikirim ke Display Pelanggan setelah dibuat
+        pushCustomerDisplay()
       } else {
         // Lapis DASAR non-tunai (QRIS statis / Transfer): tampilkan QR / rekening;
         // pembayaran pas → sembunyikan input uang & kembalian. Tombol "Sudah Bayar".
@@ -916,6 +918,13 @@ function renderPos(container) {
         if (metode === 'TRANSFER') bindSalinRekening(extraEl)
         submitBtn.textContent = 'Sudah Bayar'
         submitBtn.disabled = false
+        // Display Pelanggan ikut menampilkan QR statis / daftar rekening agar
+        // pelanggan bisa memindai atau menyalin nomor tanpa melihat layar kasir.
+        const pb = getState().pembayaran || {}
+        cdPayment = metode === 'QRIS'
+          ? { metode: 'QRIS', dibayar: grandTotal, kembalian: 0, qris: pb.qr_statis || '' }
+          : { metode: 'TRANSFER', dibayar: grandTotal, kembalian: 0, bank: Array.isArray(pb.bank) ? pb.bank : [] }
+        pushCustomerDisplay()
       }
     }
 
@@ -1077,10 +1086,15 @@ function renderPos(container) {
       frameEl.innerHTML = qrUri
         ? `<img class="pos-pay__qris-img" src="${esc(qrUri)}" alt="QRIS ${esc(tagihanId)}" />`
         : `<div class="pos-pay__note pos-pay__note--warn">QR gagal ditampilkan. Batalkan lalu coba lagi.</div>`
+      // QR dinamis juga tampil di Display Pelanggan (dicabut saat kedaluwarsa/gagal).
+      cdPayment = qrUri ? { metode: 'QRIS_AUTO', dibayar: grandTotal, kembalian: 0, qris: qrUri } : null
+      pushCustomerDisplay()
 
       function endWithClose(pesan) {
         terminal = true
         stopQris()
+        cdPayment = null
+        pushCustomerDisplay()
         qStatusEl.className = 'pos-pay__note pos-pay__note--warn'
         qStatusEl.textContent = pesan
         footer.innerHTML = `<button type="button" class="btn btn--primary btn--block" id="qris-close">Tutup</button>`

@@ -179,6 +179,17 @@ async function startInAppUpdate() {
 function markReady() {
   phase = 'ready'
   setProgress(100)
+  if (platform === 'android') {
+    // Android: pemasang sistem dibuka OTOMATIS begitu unduhan selesai — pengguna
+    // tak perlu mencari berkas APK. Tombol tetap ada bila pemasang ditutup.
+    setBtn('Pasang Ulang', false)
+    setHint('Unduhan selesai — membuka pemasang…')
+    Promise.resolve().then(() => api.app.installUpdate()).then((r) => {
+      if (r && r.ok === false) setHint(r.message || 'Gagal membuka pemasang. Tekan Pasang Ulang.')
+      else setHint('Pemasang sistem dibuka. Selesaikan pemasangan; bila tertutup, tekan Pasang Ulang.')
+    }).catch(() => setHint('Gagal membuka pemasang. Tekan Pasang Ulang.'))
+    return
+  }
   setBtn('Pasang & Mulai Ulang', false)
   setHint('Pembaruan siap dipasang.')
 }

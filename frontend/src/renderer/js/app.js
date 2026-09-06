@@ -897,7 +897,10 @@ async function boot() {
     }
   }
 
-  const has = await api.auth.hasToken()
+  // Uji tampilan layar masuk: abaikan token tersimpan (env smoke saja)
+  const has = info.ok && info.data && info.data.smokeLogin
+    ? { ok: true, data: { hasToken: false } }
+    : await api.auth.hasToken()
   if (has.ok && has.data && has.data.hasToken) {
     const me = await api.auth.me()
     if (me.ok && me.data && me.data.user) {

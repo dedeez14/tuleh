@@ -10,7 +10,9 @@ import { esc, fmtIDR, fmtNumber } from '../utils/format.js'
  *   store   : { nama, logo }
  *   items   : [{ nama, qty, satuan, harga, subtotal }]
  *   totals  : { subtotal, totalDiskon, totalPajak, grandTotal, qtyCount }
- *   payment : { metode, dibayar, kembalian } | null
+ *   payment : { metode, dibayar, kembalian, qris?, bank? } | null
+ *             qris : URL/data-URI gambar QR (QRIS statis atau QRIS otomatis)
+ *             bank : [{ bank, rekening, atas_nama }] untuk metode TRANSFER
  *   done    : boolean  (transaksi selesai → layar terima kasih)
  */
 export function customerViewHTML(state) {
@@ -75,26 +77,68 @@ export function customerViewHTML(state) {
   const pajak = Number(t.totalPajak) > 0
     ? `<div class="cd__line"><span>Pajak</span><span class="num">${fmtIDR(t.totalPajak)}</span></div>` : ''
 
-  const bayarBlok = pay ? `
+  // Panel instruksi non-tunai: QR untuk dipindai / rekening tujuan transfer.
+  // Tampil di kolom kanan agar pelanggan bisa membayar sambil melihat pesanan.
+  const instruksi = pay ? instruksiHTML(pay, grand) : ''
+
+  const bayarBlok = pay && !instruksi ? `
     <div class="cd__pay">
       <div class="cd__line cd__line--pay"><span>Dibayar${pay.metode ? ` · ${esc(pay.metode)}` : ''}</span><span class="num">${fmtIDR(pay.dibayar)}</span></div>
       <div class="cd__line cd__line--change"><span>Kembalian</span><span class="num">${fmtIDR(pay.kembalian)}</span></div>
     </div>` : ''
 
   return `
-    <div class="cd cd--order">
-      <div class="cd__top">
-        ${brand}
-        <div class="cd__count">${fmtNumber(t.qtyCount || items.reduce((a, i) => a + (Number(i.qty) || 0), 0))} item</div>
-      </div>
-      <div class="cd__items">${rows}</div>
-      <div class="cd__foot">
-        ${potongan}${pajak}
-        <div class="cd__total">
-          <span class="cd__total-k">Total</span>
-          <span class="cd__total-v num">${fmtIDR(grand)}</span>
+    <div class="cd cd--order${instruksi ? ' cd--bayar' : ''}">
+      <div class="cd__main">
+        <div class="cd__top">
+          ${brand}
+          <div class="cd__count">${fmtNumber(t.qtyCount || items.reduce((a, i) => a + (Number(i.qty) || 0), 0))} item</div>
         </div>
-        ${bayarBlok}
+        <div class="cd__items">${rows}</div>
+        <div class="cd__foot">
+          ${potongan}${pajak}
+          <div class="cd__total">
+            <span class="cd__total-k">Total</span>
+            <span class="cd__total-v num">${fmtIDR(grand)}</span>
+          </div>
+          ${bayarBlok}
+        </div>
       </div>
+      ${instruksi}
     </div>`
+}
+
+/** Panel QRIS / Transfer untuk pelanggan; '' bila metode tidak butuh instruksi. */
+export function instruksiHTML(pay, grand) {
+  const p = pay || {}
+  const banks = Array.isArray(p.bank) ? p.bank : []
+  if (p.qris) {
+    return `
+      <aside class="cd__side cd__side--qris">
+        <div class="cd__side-title">Pindai QRIS untuk membayar</div>
+        <div class="cd__qr-frame"><img class="cd__qr" src="${esc(p.qris)}" alt="QRIS" /></div>
+        <div class="cd__side-total num">${fmtIDR(grand)}</div>
+        <div class="cd__side-sub">${p.metode === 'QRIS_AUTO'
+          ? 'Pembayaran dicek otomatis setelah Anda memindai.'
+          : 'Setelah pembayaran berhasil, tunjukkan bukti ke kasir.'}</div>
+      </aside>`
+  }
+  if (p.metode === 'TRANSFER') {
+    const daftar = banks.length
+      ? banks.map((b) => `
+          <div class="cd__bank">
+            <div class="cd__bank-name">${esc(b.bank)}</div>
+            <div class="cd__bank-rek num">${esc(b.rekening)}</div>
+            <div class="cd__bank-an">a.n. ${esc(b.atas_nama)}</div>
+          </div>`).join('')
+      : `<div class="cd__side-sub">Silakan tanyakan nomor rekening ke kasir.</div>`
+    return `
+      <aside class="cd__side cd__side--transfer">
+        <div class="cd__side-title">Transfer ke rekening</div>
+        <div class="cd__banks">${daftar}</div>
+        <div class="cd__side-total num">${fmtIDR(grand)}</div>
+        <div class="cd__side-sub">Transfer sesuai nominal, lalu tunjukkan bukti ke kasir.</div>
+      </aside>`
+  }
+  return ''
 }

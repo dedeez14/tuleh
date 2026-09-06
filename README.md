@@ -101,6 +101,11 @@ perlu menyetel apa pun. Ikon diambil dari `frontend/build/icon.png`.
 - **QR pelanggan** — pesan mandiri dari meja (`/o/{kode}`), lacak status
   (`/t/{token}`), papan antrian TV (`/antrian`) — via WiFi lokal atau **Akses
   Internet Publik** (Cloudflare Tunnel, gratis).
+- **Display Pelanggan** (monitor kedua desktop, halaman LAN `/display`, atau
+  overlay Android) — keranjang & total live; saat kasir memilih **QRIS** tampil
+  gambar QR (statis atau QRIS otomatis) dan saat **TRANSFER** tampil daftar
+  rekening dari Pengaturan → Pembayaran, sehingga pelanggan bisa membayar tanpa
+  melihat layar kasir.
 - **Stasiun, Produk, Pelanggan, Sesi kasir (rekap X/Z), Riwayat, Laporan (+CSV)**.
 - **Tema terang & gelap** dengan tombol ganti tema + lonceng notifikasi.
 - **Langganan & Kontak CS** — banner masa langganan + tombol Hubungi CS
@@ -131,7 +136,9 @@ Tiga lapis: catatan lokal bertanda (sudah aktif), pendaftaran perangkat di serve
 
 ## Mode offline (Android)
 
-Sejak Android 2.7.0 aplikasi menyimpan salinan setiap jawaban baca dari server di SQLite (`drift`). Saat internet mati, layar tetap menampilkan data terakhir dengan pita "Offline · menampilkan data terakhir HH:MM"; begitu server terjangkau lagi, data dimuat ulang. Ini fase 1 dari rancangan offline-first; transaksi saat offline (antrean kirim dengan `client_ref`) menunggu dukungan server.
+Sejak Android 2.7.0 aplikasi menyimpan salinan setiap jawaban baca dari server di SQLite (`drift`). Saat internet mati, layar tetap menampilkan data terakhir dengan pita "Offline · menampilkan data terakhir HH:MM"; begitu server terjangkau lagi, data dimuat ulang (fase 1).
+
+Sejak 2.8.0 (fase 2) transaksi, pengeluaran, dan stok masuk yang dibuat saat offline masuk **antrean kirim** di SQLite (`outbox`, dengan `client_ref` + `waktu_klien`) dan dikirim otomatis berurutan (FIFO ketat, mundur eksponensial 5s→10m) begitu server terjangkau. Struk offline memakai nomor sementara `L-yyMMdd-NNNN`, stok katalog langsung memperhitungkan penjualan tertunda, riwayat menandai transaksi "belum tersinkron". Baris yang server tolak, atau yang timeout **setelah** data terkirim, berstatus *perlu ditinjau* di Pengaturan → Sinkronisasi (Kirim ulang / Batalkan) agar tidak terjadi transaksi ganda sebelum server mengenali `client_ref`. Keluar akun ditahan bila antrean belum kosong.
 
 ## Arsitektur & keamanan
 

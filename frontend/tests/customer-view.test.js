@@ -104,3 +104,68 @@ test('meng-escape nama produk (anti-XSS)', () => {
   assert.doesNotMatch(html, /<img src=x/)
   assert.match(html, /&lt;img/)
 })
+
+test('metode QRIS: panel QR tampil di kolom kanan, tanpa blok kembalian', () => {
+  const html = V.customerViewHTML({
+    store: { nama: 'X' },
+    items: [{ nama: 'A', qty: 1, harga: 25000, subtotal: 25000 }],
+    totals: { grandTotal: 25000 },
+    payment: { metode: 'QRIS', dibayar: 25000, kembalian: 0, qris: 'https://cdn.x/qris.png' }
+  })
+  assert.match(html, /cd--bayar/)
+  assert.match(html, /cd__side--qris/)
+  assert.match(html, /Pindai QRIS/)
+  assert.match(html, /<img class="cd__qr" src="https:\/\/cdn\.x\/qris\.png"/)
+  assert.match(html, /Rp\s?25\.000/)
+  assert.doesNotMatch(html, /Kembalian/)
+})
+
+test('metode TRANSFER: daftar rekening tampil untuk pelanggan (ter-escape)', () => {
+  const html = V.customerViewHTML({
+    store: { nama: 'X' },
+    items: [{ nama: 'A', qty: 1, harga: 25000, subtotal: 25000 }],
+    totals: { grandTotal: 25000 },
+    payment: {
+      metode: 'TRANSFER', dibayar: 25000, kembalian: 0,
+      bank: [{ bank: 'BCA', rekening: '1234567890', atas_nama: 'Toko <X>' }]
+    }
+  })
+  assert.match(html, /cd__side--transfer/)
+  assert.match(html, /Transfer ke rekening/)
+  assert.match(html, /BCA/)
+  assert.match(html, /1234567890/)
+  assert.match(html, /a\.n\. Toko &lt;X&gt;/)
+  assert.doesNotMatch(html, /Kembalian/)
+})
+
+test('TRANSFER tanpa rekening tetap aman: minta tanya kasir', () => {
+  const html = V.customerViewHTML({
+    store: { nama: 'X' },
+    items: [{ nama: 'A', qty: 1, harga: 1000, subtotal: 1000 }],
+    totals: { grandTotal: 1000 },
+    payment: { metode: 'TRANSFER', dibayar: 1000, kembalian: 0, bank: [] }
+  })
+  assert.match(html, /tanyakan nomor rekening/)
+})
+
+test('QRIS_AUTO memakai QR dinamis dan keterangan cek otomatis', () => {
+  const html = V.customerViewHTML({
+    store: { nama: 'X' },
+    items: [{ nama: 'A', qty: 1, harga: 1000, subtotal: 1000 }],
+    totals: { grandTotal: 1000 },
+    payment: { metode: 'QRIS_AUTO', dibayar: 1000, kembalian: 0, qris: 'data:image/svg+xml;base64,AAA' }
+  })
+  assert.match(html, /data:image\/svg\+xml;base64,AAA/)
+  assert.match(html, /dicek otomatis/)
+})
+
+test('TUNAI tetap tampil dibayar & kembalian, tanpa panel samping', () => {
+  const html = V.customerViewHTML({
+    store: { nama: 'X' },
+    items: [{ nama: 'A', qty: 1, harga: 1000, subtotal: 1000 }],
+    totals: { grandTotal: 1000 },
+    payment: { metode: 'TUNAI', dibayar: 5000, kembalian: 4000 }
+  })
+  assert.doesNotMatch(html, /cd--bayar/)
+  assert.match(html, /Kembalian/)
+})

@@ -182,8 +182,17 @@ function displayPage() {
     var rows=items.map(function(it){return '<div class="row"><div class="r-name">'+esc(it.nama)+'</div><div class="r-meta"><span class="r-qty">'+(Number(it.qty)||0)+'\\u00d7</span><span>'+rp(it.harga)+'</span></div><div class="r-sub">'+rp(it.subtotal)+'</div></div>'}).join('');
     var disc=Number(t.totalDiskon)>0?'<div class="line"><span>Diskon</span><span>\\u2212'+rp(t.totalDiskon)+'</span></div>':'';
     var tax=Number(t.totalPajak)>0?'<div class="line"><span>Pajak</span><span>'+rp(t.totalPajak)+'</span></div>':'';
-    var paybox=pay?'<div class="pay"><div class="line"><span>Dibayar'+(pay.metode?' \\u00b7 '+esc(pay.metode):'')+'</span><span>'+rp(pay.dibayar)+'</span></div><div class="line"><span>Kembalian</span><span class="change">'+rp(pay.kembalian)+'</span></div></div>':'';
-    root.innerHTML='<div class="top">'+brand+'<div class="count">'+(items.reduce(function(a,i){return a+(Number(i.qty)||0)},0))+' item</div></div><div class="items">'+rows+'</div><div class="foot">'+disc+tax+'<div class="total"><b>Total</b><span class="v">'+rp(grand)+'</span></div>'+paybox+'</div>';
+    var side='';
+    if(pay&&pay.qris){
+      side='<aside class="side"><div class="s-title">Pindai QRIS untuk membayar</div><div class="qrf"><img src="'+esc(pay.qris)+'" alt="QRIS"></div><div class="s-total">'+rp(grand)+'</div><div class="s-sub">'+(pay.metode==='QRIS_AUTO'?'Pembayaran dicek otomatis setelah Anda memindai.':'Setelah pembayaran berhasil, tunjukkan bukti ke kasir.')+'</div></aside>';
+    }else if(pay&&pay.metode==='TRANSFER'){
+      var banks=Array.isArray(pay.bank)?pay.bank:[];
+      var daftar=banks.length?banks.map(function(b){return '<div class="bank"><div class="b-name">'+esc(b.bank)+'</div><div class="b-rek">'+esc(b.rekening)+'</div><div class="b-an">a.n. '+esc(b.atas_nama)+'</div></div>'}).join(''):'<div class="s-sub">Silakan tanyakan nomor rekening ke kasir.</div>';
+      side='<aside class="side"><div class="s-title">Transfer ke rekening</div><div class="banks">'+daftar+'</div><div class="s-total">'+rp(grand)+'</div><div class="s-sub">Transfer sesuai nominal, lalu tunjukkan bukti ke kasir.</div></aside>';
+    }
+    var paybox=pay&&!side?'<div class="pay"><div class="line"><span>Dibayar'+(pay.metode?' \\u00b7 '+esc(pay.metode):'')+'</span><span>'+rp(pay.dibayar)+'</span></div><div class="line"><span>Kembalian</span><span class="change">'+rp(pay.kembalian)+'</span></div></div>':'';
+    root.className=side?'order bayar':'order';
+    root.innerHTML='<div class="main"><div class="top">'+brand+'<div class="count">'+(items.reduce(function(a,i){return a+(Number(i.qty)||0)},0))+' item</div></div><div class="items">'+rows+'</div><div class="foot">'+disc+tax+'<div class="total"><b>Total</b><span class="v">'+rp(grand)+'</span></div>'+paybox+'</div></div>'+side;
   }
   function poll(){ fetch('/display/data',{cache:'no-store'}).then(function(r){return r.json()}).then(function(s){off.style.display='none';render(s)}).catch(function(){off.style.display='block'}); }
   poll(); setInterval(poll, 1400);

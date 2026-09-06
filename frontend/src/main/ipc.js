@@ -185,7 +185,8 @@ function registerIpcHandlers(getMainWindow) {
       smokeScreen: process.env.IPOS_SMOKE_SCREEN || null,
       smokeTheme: process.env.IPOS_SMOKE_THEME || null,
       smokeOpenBill: process.env.IPOS_SMOKE_OPENBILL === '1',
-      smokeFlow: process.env.IPOS_SMOKE_FLOW || null
+      smokeFlow: process.env.IPOS_SMOKE_FLOW || null,
+      smokeLogin: process.env.IPOS_SMOKE_LOGIN === '1'
     }
   }))
 

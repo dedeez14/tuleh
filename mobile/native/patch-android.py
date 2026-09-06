@@ -14,6 +14,8 @@ MANIFEST = os.path.join(APP, "AndroidManifest.xml")
 FILE_PATHS = os.path.join(APP, "res", "xml", "file_paths.xml")
 
 PERM = '<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />'
+# Android 13+: notifikasi "pembaruan siap dipasang" (unduhan selesai saat app di latar).
+PERM_NOTIF = '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />'
 EXT_FILES = '<external-files-path name="tuleh_apk" path="." />'
 
 
@@ -32,18 +34,19 @@ def patch_manifest():
         print("!! AndroidManifest.xml tidak ditemukan:", MANIFEST)
         sys.exit(1)
     s = read(MANIFEST)
-    if "REQUEST_INSTALL_PACKAGES" in s:
-        print("== izin REQUEST_INSTALL_PACKAGES sudah ada")
-        return
-    # Sisipkan tepat sebelum <application ...>
-    m = re.search(r"\n(\s*)<application", s)
-    if not m:
-        print("!! tag <application> tak ditemukan di manifest")
-        sys.exit(1)
-    indent = m.group(1)
-    s = s[:m.start()] + "\n" + indent + PERM + s[m.start():]
+    for nama, perm in (("REQUEST_INSTALL_PACKAGES", PERM), ("POST_NOTIFICATIONS", PERM_NOTIF)):
+        if nama in s:
+            print("== izin %s sudah ada" % nama)
+            continue
+        # Sisipkan tepat sebelum <application ...>
+        m = re.search(r"\n(\s*)<application", s)
+        if not m:
+            print("!! tag <application> tak ditemukan di manifest")
+            sys.exit(1)
+        indent = m.group(1)
+        s = s[:m.start()] + "\n" + indent + perm + s[m.start():]
+        print("++ izin %s ditambahkan" % nama)
     write(MANIFEST, s)
-    print("++ izin REQUEST_INSTALL_PACKAGES ditambahkan")
 
 
 def patch_file_paths():

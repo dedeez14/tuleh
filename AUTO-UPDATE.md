@@ -97,7 +97,8 @@ base64 -w0 tuleh-release.keystore   # → nilai ANDROID_KEYSTORE_BASE64
 | Update wajib (426) | `426` di request apa pun | Layar penuh memblokir muncul segera |
 | Cek gagal (offline) | timeout/5xx | **Fail-open** — app tetap jalan, cek diam-diam diulang |
 | Desktop terpasang → tombol | — | electron-updater: progress → pasang → mulai ulang |
-| Android → tombol | — | minta izin bila perlu → unduh (progress) → pemasang sistem |
+| Android → tombol | — | minta izin bila perlu → unduh (progress) → pemasang sistem terbuka **otomatis** begitu unduhan selesai |
+| Android, unduhan selesai saat app di latar belakang | — | notifikasi "Pembaruan Tuléh siap dipasang" (ketuk → pemasang); pemasang juga dibuka otomatis saat app kembali ke depan. Tombol "Pasang Ulang" tetap tersedia |
 | Android tanpa izin | — | buka Setelan "Instal aplikasi tak dikenal", lalu "Coba Lagi" |
 | Uji versi minimum | naikkan minimum di server | klien lama kena 426 → layar wajib |
 | Downgrade | `versi_terbaru` < versi klien | tak ada update (klien lebih baru) |

@@ -137,10 +137,11 @@
 .login__hero      { animation: loginRise var(--dur) var(--ease) 90ms both; }
 .login__features  { animation: loginRise var(--dur) var(--ease) 180ms both; }
 
-/* --- Header brand --- */
+/* --- Header brand (rata tengah, permintaan pemilik 5 Sep 2026) --- */
 .login__brand-top {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 14px;
 }
 
@@ -162,8 +163,12 @@
 
 .login__brand-name b { color: var(--mint-400); }
 
-/* --- Hero display: SANGAT besar & ekspresif --- */
-.login__hero { max-width: 15em; }
+/* --- Hero display: SANGAT besar & ekspresif, rata tengah --- */
+.login__hero {
+  width: 100%;
+  align-self: center;
+  text-align: center;
+}
 
 .login__hero-title {
   font-family: var(--font-display);
@@ -173,6 +178,11 @@
   letter-spacing: -0.03em;
   color: #ffffff;
   text-shadow: 0 2px 20px rgba(0, 0, 0, 0.35);
+  /* Lebar diukur dari ukuran huruf judul agar pecah menjadi ±3 baris seimbang,
+     bukan satu kata per baris. */
+  max-width: 15ch;
+  margin-inline: auto;
+  text-wrap: balance;
 }
 
 .login__hero-title em {
@@ -183,11 +193,12 @@
 }
 
 .login__hero-desc {
-  margin-top: var(--sp-5);
+  margin: var(--sp-5) auto 0;
   max-width: 34ch;
   font-size: var(--text-md);
   line-height: 1.65;
   color: rgba(233, 250, 245, 0.82);
+  text-wrap: pretty;
 }
 
 /* --- Daftar fitur bernomor (angka indeks besar via counter) --- */
@@ -196,6 +207,9 @@
   display: flex;
   flex-direction: column;
   gap: 0;
+  width: 100%;
+  max-width: 26em;
+  align-self: center;
   border-top: 1px solid rgba(255, 255, 255, 0.14);
 }
 
@@ -317,6 +331,7 @@
 .login__box-brand {
   display: none;
   align-items: center;
+  justify-content: center;
   gap: 10px;
   margin-bottom: var(--sp-6);
 }
@@ -343,13 +358,17 @@
   letter-spacing: -0.02em;
   line-height: 1.1;
   color: var(--lp-text);
+  text-align: center;
+  text-wrap: balance;
 }
 
 .login__subtitle {
-  margin: var(--sp-2) 0 var(--sp-8);
+  margin: var(--sp-2) auto var(--sp-8);
+  max-width: 34ch;
   font-size: var(--text-sm);
   color: var(--lp-text-2);
   line-height: 1.55;
+  text-align: center;
 }
 
 /* --- Form --- */
