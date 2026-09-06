@@ -3,6 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/network/api_exception.dart';
 import '../../../../core/utils/format.dart';
+import '../../../cetak/domain/entities/struk.dart';
+import '../../../cetak/presentation/aksi_struk.dart';
+import '../../../demo/demo_session.dart';
+import '../../../pengaturan/presentation/providers/pengaturan_providers.dart';
 import '../../domain/entities/transaksi_detail.dart';
 import '../providers/riwayat_providers.dart';
 
@@ -15,9 +19,26 @@ class DetailTransaksiScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final detail = ref.watch(transaksiDetailProvider(id));
+    final d = detail.valueOrNull;
+    final bisaAksi = d != null && (d.status?.toUpperCase() != 'DIBATALKAN');
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Detail Transaksi')),
+      appBar: AppBar(
+        title: const Text('Detail Transaksi'),
+        actions: [
+          IconButton(
+            tooltip: 'Bagikan struk',
+            onPressed: bisaAksi ? () => bagikanStruk(context, _struk(ref, d)) : null,
+            icon: const Icon(Icons.share_outlined),
+          ),
+          IconButton(
+            tooltip: 'Cetak ulang',
+            onPressed: bisaAksi ? () => cetakStrukDenganUmpanBalik(context, ref, _struk(ref, d)) : null,
+            icon: const Icon(Icons.print_outlined),
+          ),
+          const SizedBox(width: 4),
+        ],
+      ),
       body: detail.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(
@@ -36,6 +57,33 @@ class DetailTransaksiScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// Struk untuk cetak ulang/bagikan, dibangun dari detail server + profil
+/// usaha saat ini (logo & catatan kaki mengikuti pengaturan terbaru).
+Struk _struk(WidgetRef ref, TransaksiDetail d) {
+  final usaha = ref.read(profilUsahaProvider).valueOrNull;
+  final tunai = (d.tipePembayaran ?? '').toUpperCase() == 'TUNAI';
+  return Struk(
+    namaToko: usaha?.nama ?? 'Tuléh POS',
+    alamat: usaha?.alamat,
+    telepon: usaha?.telepon,
+    nomor: d.nomor,
+    waktu: DateTime.tryParse(d.tanggal ?? '') ?? DateTime.now(),
+    kasir: d.kasir,
+    baris: [
+      for (final it in d.items)
+        StrukBaris(nama: it.nama, kuantitas: it.kuantitas, harga: it.harga),
+    ],
+    total: d.grandTotal,
+    metode: d.tipePembayaran,
+    dibayar: tunai ? d.dibayar : null,
+    kembalian: tunai ? d.kembalian : null,
+    catatanKaki: usaha?.strukFooter,
+    barcode: d.nomor,
+    logoUrl: (usaha?.strukTampilLogo ?? false) ? usaha?.logo : null,
+    demo: ref.read(demoSessionProvider).active,
+  );
 }
 
 class _Receipt extends StatelessWidget {

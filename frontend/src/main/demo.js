@@ -45,6 +45,24 @@ let stations = []      // stasiun kerja (kasir/dapur/mesin), semua toko
 let stokRiwayat = []   // riwayat perubahan stok (+toko_id): PENJUALAN/MASUK/OPNAME, terbaru dulu
 let pengeluaranDemo = [] // pengeluaran/kas keluar (+toko_id): {id, tanggal, keterangan, nominal}
 let counter = { trx: 0, sesi: 0, cust: 0, order: 0, station: 0, bill: 0, inv: 0, exp: 0 }
+
+// Batas Mode Demo: transaksi yang DIBUAT pengguna per hari (data contoh tidak
+// dihitung). Cukup untuk mencoba alur kasir, tidak cukup untuk berjualan.
+const BATAS_TRANSAKSI_DEMO_PER_HARI = 20
+const PESAN_BATAS_TRANSAKSI_DEMO =
+  `Batas Mode Demo tercapai: ${BATAS_TRANSAKSI_DEMO_PER_HARI} transaksi per hari. ` +
+  'Masuk dengan akun berlangganan untuk transaksi tanpa batas.'
+let trxDibuatHariIni = 0
+let hariTrxDibuat = ''
+
+/** true bila batas harian sudah tercapai; bila belum, hitungannya naik. */
+function lewatBatasTransaksiDemo(now = new Date()) {
+  const hari = now.toISOString().slice(0, 10)
+  if (hari !== hariTrxDibuat) { hariTrxDibuat = hari; trxDibuatHariIni = 0 }
+  if (trxDibuatHariIni >= BATAS_TRANSAKSI_DEMO_PER_HARI) return true
+  trxDibuatHariIni += 1
+  return false
+}
 let antrianCounter = {}          // per toko: nomor antrian berjalan
 let activeTokoId = 'TOKO-1'      // toko terpilih (di-set renderer via toko:select)
 let demoUsaha = null             // profil usaha demo (mutable) — lazy init dari COMPANY
@@ -921,6 +939,7 @@ const handlers = {
     if (!sesi) return err(409, 'Belum ada sesi kasir terbuka.')
     const agregat = bonItems(bill)
     if (agregat.length === 0) return err(422, 'Bon masih kosong.')
+    if (lewatBatasTransaksiDemo()) return err(422, PESAN_BATAS_TRANSAKSI_DEMO)
 
     const strukItems = agregat.map((it) => {
       const p = produkToko(bill.toko_id).find((x) => x.id === it.idProduk)
@@ -1508,6 +1527,7 @@ const handlers = {
       rincian.push({ p, qty, diskon: Number(item.diskonPersen) || 0 })
     }
 
+    if (lewatBatasTransaksiDemo()) return err(422, PESAN_BATAS_TRANSAKSI_DEMO)
     const strukItems = rincian.map(({ p, qty, diskon }) => hitungItem(p, qty, diskon))
     const grand = round2(strukItems.reduce((s, i) => s + i.subtotal, 0))
 

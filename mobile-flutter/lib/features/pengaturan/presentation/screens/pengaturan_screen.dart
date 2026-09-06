@@ -6,6 +6,7 @@ import '../../../../core/offline/antrean.dart';
 import '../../../../core/offline/pengurai.dart';
 import '../../../../core/offline/sinkronisasi_screen.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/tema_provider.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../../../cetak/presentation/screens/printer_screen.dart';
 import '../../../pemantau/presentation/pemantau_providers.dart';
@@ -119,6 +120,7 @@ class PengaturanScreen extends ConsumerWidget {
               ),
             ),
           ),
+          const _EntriTema(),
           _tile(context, Icons.storefront_outlined, 'Toko aktif',
               activeToko?.nama ?? '—'),
           _tile(context, Icons.info_outline_rounded, 'Versi aplikasi', version),
@@ -215,6 +217,59 @@ Future<void> keluarDenganPenjagaAntrean(BuildContext context, WidgetRef ref) asy
 }
 
 /// Entri Pengaturan → Sinkronisasi dengan jumlah antrean.
+/// Pilihan tampilan: ikuti sistem, terang, gelap.
+class _EntriTema extends ConsumerWidget {
+  const _EntriTema();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cs = Theme.of(context).colorScheme;
+    final tema = ref.watch(temaProvider);
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: Icon(Icons.brightness_6_outlined, color: cs.primary),
+        title: const Text('Tampilan'),
+        subtitle: Text(labelTema(tema)),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => showModalBottomSheet<void>(
+          context: context,
+          showDragHandle: true,
+          builder: (ctx) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('Tampilan', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+                  ),
+                ),
+                RadioGroup<ThemeMode>(
+                  groupValue: tema,
+                  onChanged: (v) {
+                    if (v != null) ref.read(temaProvider.notifier).pilih(v);
+                    Navigator.of(ctx).pop();
+                  },
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (final m in ThemeMode.values)
+                        RadioListTile<ThemeMode>(value: m, title: Text(labelTema(m))),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _EntriSinkronisasi extends ConsumerWidget {
   const _EntriSinkronisasi();
 

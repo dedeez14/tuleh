@@ -4,10 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/format.dart';
-import '../../../cetak/data/printer_service.dart';
+import '../../../cetak/data/struk_teks.dart';
 import '../../../cetak/domain/entities/struk.dart';
-import '../../../cetak/presentation/providers/printer_providers.dart';
-import '../../../cetak/presentation/screens/printer_screen.dart';
+import '../../../cetak/presentation/aksi_struk.dart';
 
 /// Lembar hasil transaksi — kembalian besar, ringkasan, dan cetak struk.
 ///
@@ -40,63 +39,12 @@ class _HasilTransaksiSheetState extends ConsumerState<HasilTransaksiSheet> {
   bool _mencetak = false;
 
   Future<void> _cetak() async {
-    final terpilih = ref.read(printerTerpilihProvider).valueOrNull;
-    final printer = terpilih?.printer;
-
-    if (printer == null) {
-      final keSetelan = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Printer belum dipilih'),
-          content: const Text(
-            'Pilih printer thermal Bluetooth lebih dulu di Pengaturan → '
-            'Printer Struk.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Nanti'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Atur printer'),
-            ),
-          ],
-        ),
-      );
-      if (keSetelan == true && mounted) {
-        await Navigator.of(context).push(
-          MaterialPageRoute<void>(builder: (_) => const PrinterScreen()),
-        );
-      }
-      return;
-    }
-
     setState(() => _mencetak = true);
     try {
-      await ref
-          .read(printerServiceProvider)
-          .cetak(widget.struk, printer: printer, lebar: terpilih!.lebar);
-      _pesan('Struk terkirim ke ${printer.nama}.');
-    } on PrinterException catch (e) {
-      _pesan(e.saran == null ? e.pesan : '${e.pesan} ${e.saran}', gagal: true);
-    } catch (e) {
-      _pesan('Gagal mencetak: $e', gagal: true);
+      await cetakStrukDenganUmpanBalik(context, ref, widget.struk);
     } finally {
       if (mounted) setState(() => _mencetak = false);
     }
-  }
-
-  void _pesan(String teks, {bool gagal = false}) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          backgroundColor: gagal ? AppColors.danger : AppColors.success,
-          content: Text(teks),
-        ),
-      );
   }
 
   @override
@@ -157,6 +105,22 @@ class _HasilTransaksiSheetState extends ConsumerState<HasilTransaksiSheet> {
                       ),
                     ),
                   ],
+                ),
+              ),
+            ],
+            if (s.demo) ...[
+              const SizedBox(height: 8),
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.warn.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: const Text(
+                    StrukTeks.tandaDemo,
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.warn, letterSpacing: 0.4),
+                  ),
                 ),
               ),
             ],
@@ -279,6 +243,12 @@ class _HasilTransaksiSheetState extends ConsumerState<HasilTransaksiSheet> {
               label: Text(_mencetak ? 'Mengirim ke printer…' : 'Cetak struk'),
             ),
             const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: _mencetak ? null : () => bagikanStruk(context, s),
+              icon: const Icon(Icons.share_outlined, size: 19),
+              label: const Text('Bagikan struk'),
+            ),
+            const SizedBox(height: 4),
             TextButton(
               onPressed: _mencetak ? null : () => Navigator.of(context).pop(),
               child: const Text('Selesai'),

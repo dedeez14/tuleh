@@ -123,14 +123,19 @@ Tekan **F1** di dalam aplikasi untuk daftar lengkap. Yang paling sering dipakai 
 | `+` / `−` / `Delete` | Ubah jumlah / hapus baris (produk terpilih, atau baris terakhir) |
 | `Esc` | Kosongkan pencarian → kembali ke Beranda; di layar lain: Beranda |
 | `F4` atau `Ctrl+Enter` | Bayar · `F8` kosongkan keranjang |
+| `F9` / `F10` | Parkir keranjang (simpan, lanjutkan nanti) / buka daftar keranjang terparkir |
 | `F5` / `F6` / `F7` | Metode bayar ke-1/2/3 di jendela pembayaran |
 | `Ctrl+0…9` | Beranda / pindah layar · `Ctrl+Shift+Q` keluar akun |
 
 Mengetik huruf atau angka di mana pun pada layar kasir langsung mengisi kolom cari, jadi scanner barcode bekerja tanpa harus mengklik kolom itu dulu.
 
+**Parkir keranjang** (desktop ≥ 0.9.17): keranjang yang belum dibayar bisa diparkir (tombol Parkir / `F9`), lalu dilanjutkan dari tombol **Tersimpan** (`F10`); disimpan per toko di komputer kasir, paling banyak 20. **Bagikan struk**: setelah bayar dan dari Riwayat, struk bisa dikirim lewat WhatsApp (teks 32 kolom seperti struk thermal) atau disalin. Di Android (≥ 2.10.0) tersedia **Cetak ulang** dan **Bagikan** dari detail Riwayat, tombol Bagikan di lembar hasil transaksi, pilihan **Tampilan** (ikuti sistem / terang / gelap) di Pengaturan, dan aksi cepat Pengeluaran di Beranda.
+
 ## Mode Demo: masa coba 7 hari
 
 Mode Demo di desktop dan Android berlaku **7 hari** sejak pertama dibuka di perangkat itu, dihitung dengan **waktu server** (mengubah jam perangkat tidak berpengaruh; membuka demo pertama kali perlu koneksi). Setelah berakhir, aplikasi terkunci sampai masuk dengan akun berlangganan.
+
+Selama demo, beberapa hal sengaja dibatasi (desktop ≥ 0.9.17, Android ≥ 2.10.0) agar demo tetap untuk mencoba, bukan berjualan: struk cetak/pratinjau/teks bertanda **MODE DEMO — bukan bukti pembayaran**; paling banyak **20 transaksi per hari** (checkout kasir & bayar bon meja) yang dibuat pengguna; di desktop, ekspor CSV laporan, PDF & bagikan WhatsApp laporan keuangan, dan akses internet publik (tunnel) tidak tersedia. Data contoh tetap bisa dijelajahi seluruhnya.
 
 Tiga lapis: catatan lokal bertanda (sudah aktif), pendaftaran perangkat di server, dan identitas lewat OTP WhatsApp/email. Lapis 2 dan 3 sudah ada di aplikasi (desktop ≥ 0.9.14, Android ≥ 2.6.0) dan aktif otomatis begitu server MOVERA memasang endpoint di [KONTRAK-MASA-COBA.md](KONTRAK-MASA-COBA.md); sebelum itu hanya lapis lokal yang berlaku, sehingga menghapus aplikasi masih mengulang masa coba.
 

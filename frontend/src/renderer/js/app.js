@@ -891,6 +891,22 @@ async function boot() {
         } else if (info.data.smokeFlow === 'prabill') {
           kartuTerisi()?.click(); await jeda(450)
           document.querySelector('#bill-cetak')?.click(); await jeda(400)
+        } else if (info.data.smokeFlow === 'kasir-parkir' || info.data.smokeFlow === 'kasir-bayar') {
+          // Kasir: isi keranjang dari dua produk pertama, lalu parkir (F9 → F10
+          // buka daftar) atau bayar tunai pas (F4 → Uang Pas → selesaikan).
+          await jeda(600)
+          const kartu = [...document.querySelectorAll('.pos-card:not([disabled])')]
+          kartu[0]?.click(); await jeda(120); kartu[1]?.click(); await jeda(200)
+          const tekan = (key) => document.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
+          if (info.data.smokeFlow === 'kasir-parkir') {
+            tekan('F9'); await jeda(300)
+            kartu[2]?.click(); await jeda(200)
+            tekan('F10'); await jeda(400)
+          } else {
+            tekan('F4'); await jeda(500)
+            document.querySelector('.pos-pay__cash')?.click(); await jeda(250)
+            document.querySelector('#pay-submit')?.click(); await jeda(900)
+          }
         }
       }
       return

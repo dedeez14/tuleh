@@ -9,10 +9,11 @@ import { bukaBantuanPintasan } from '../components/pintasan.js'
 import { getState, subscribe } from '../state.js'
 import { esc, fmtIDR, fmtNumber, parseAmount, debounce } from '../utils/format.js'
 import { toast, showModal, confirmDialog, emptyStateHTML, loadingHTML, icons } from '../components/ui.js'
-import { buildReceiptHTML, printReceipt } from '../components/receipt.js'
+import { buildReceiptHTML, printReceipt, tombolBagikanStruk } from '../components/receipt.js'
 import { lineTotals, cartTotals, kembalian, shortfall, quickCashOptions, clampQty } from '../lib/cart.js'
 import { midtransBoleh, qrisAksi, sisaDetik, formatSisa, harusFallbackStatis } from '../lib/qris-flow.js'
 import { customerViewHTML } from '../components/customer-view.js'
+import { bacaParkir, simpanParkir, tambahParkir, hapusParkir, pulihkanBaris, ringkasParkir } from '../lib/parkir.js'
 
 const QRIS_POLL_MS = 4000 // interval cek status tagihan QRIS (kontrak: 3–5s)
 
@@ -161,6 +162,8 @@ function renderPos(container) {
           <div class="pos-cart__head-act">
             <button type="button" class="btn btn--ghost btn--sm" id="pos-cust-display" aria-pressed="false" title="Tampilkan pesanan ke pelanggan">Display</button>
             <button type="button" class="btn btn--ghost btn--icon btn--sm" id="pos-cust-cfg" title="Pengaturan Display Pelanggan (video promosi & URL LAN)">${icons.settings}</button>
+            <button type="button" class="btn btn--ghost btn--sm" id="pos-park" title="Parkir keranjang — lanjutkan nanti (F9)">Parkir</button>
+            <button type="button" class="btn btn--ghost btn--sm pos-park__list" id="pos-park-list" title="Keranjang terparkir (F10)" hidden>Tersimpan <span class="badge badge--mint" id="pos-park-count">0</span></button>
             <button type="button" class="btn btn--ghost btn--sm" id="pos-clear" title="F8">Kosongkan</button>
             <button type="button" class="btn btn--ghost btn--icon btn--sm" id="pos-help" title="Pintasan keyboard (F1)" aria-label="Pintasan keyboard"><span class="kbd">F1</span></button>
           </div>
@@ -186,6 +189,9 @@ function renderPos(container) {
   const countEl = container.querySelector('#pos-count')
   const payBtn = container.querySelector('#pos-pay')
   const clearBtn = container.querySelector('#pos-clear')
+  const parkBtn = container.querySelector('#pos-park')
+  const parkListBtn = container.querySelector('#pos-park-list')
+  const parkCountEl = container.querySelector('#pos-park-count')
 
   // ---------- Display Pelanggan (monitor kedua desktop / overlay Android) ----------
   const custDisplayBtn = container.querySelector('#pos-cust-display')
@@ -609,8 +615,98 @@ function renderPos(container) {
     renderSummary(totals)
     payBtn.disabled = cart.length === 0
     clearBtn.disabled = cart.length === 0
+    parkBtn.disabled = cart.length === 0
+    renderParkirBadge()
     pushCustomerDisplay() // cerminkan keranjang live ke Display Pelanggan (bila aktif)
   }
+
+  // ---------- Parkir keranjang (simpan & lanjutkan nanti) ----------
+
+  const tokoParkir = () => getState().toko?.id || 'default'
+  const daftarParkir = () => bacaParkir(localStorage, tokoParkir())
+
+  function renderParkirBadge() {
+    const n = daftarParkir().length
+    parkListBtn.hidden = n === 0
+    parkCountEl.textContent = String(n)
+  }
+
+  function parkirKeranjang() {
+    if (!cart.length) { toast('Keranjang masih kosong.', 'info'); return false }
+    const { daftar, entri, alasan } = tambahParkir(daftarParkir(), { items: cart, pelanggan })
+    if (!entri) { toast(alasan, 'error'); return false }
+    simpanParkir(localStorage, tokoParkir(), daftar)
+    cart = []
+    pelanggan = null
+    renderCart()
+    toast(`Keranjang diparkir sebagai #${entri.nomor}. Buka "Tersimpan" (F10) untuk melanjutkan.`, 'success')
+    fokusCari()
+    return true
+  }
+
+  function bukaDaftarParkir() {
+    const daftar = daftarParkir()
+    if (!daftar.length) { toast('Belum ada keranjang terparkir.', 'info'); return }
+    const body = document.createElement('div')
+    body.className = 'parkir'
+    body.innerHTML = daftar.map((p) => {
+      const r = ringkasParkir(p)
+      const waktu = new Date(p.waktu)
+      const jam = `${String(waktu.getHours()).padStart(2, '0')}:${String(waktu.getMinutes()).padStart(2, '0')}`
+      const nama = p.items.slice(0, 3).map((l) => esc(l.produk.nama)).join(', ') + (p.items.length > 3 ? ', …' : '')
+      return `
+        <div class="parkir__row" data-id="${esc(p.id)}">
+          <div class="parkir__no">#${p.nomor}</div>
+          <div class="parkir__main">
+            <div class="parkir__title">${p.pelanggan ? esc(p.pelanggan.nama) : 'Tanpa pelanggan'} <span class="parkir__time">· ${jam}</span></div>
+            <div class="parkir__desc">${r.baris} item · ${fmtNumber(r.qty)} qty — ${nama}</div>
+          </div>
+          <div class="parkir__total num">${fmtIDR(r.total)}</div>
+          <div class="parkir__act">
+            <button type="button" class="btn btn--outline btn--sm" data-act="hapus">Hapus</button>
+            <button type="button" class="btn btn--primary btn--sm" data-act="lanjut">Lanjutkan</button>
+          </div>
+        </div>`
+    }).join('')
+    const modal = showModal({ title: 'Keranjang terparkir', body, size: 'md' })
+    body.addEventListener('click', async (e) => {
+      const btn = e.target.closest('button[data-act]')
+      if (!btn) return
+      const row = btn.closest('.parkir__row')
+      const id = row.dataset.id
+      const entri = daftarParkir().find((p) => p.id === id)
+      if (!entri) return
+      if (btn.dataset.act === 'hapus') {
+        const yes = await confirmDialog({ title: `Hapus keranjang #${entri.nomor}?`, message: 'Isi keranjang terparkir ini akan dibuang.', confirmText: 'Hapus', danger: true })
+        if (!yes) return
+        simpanParkir(localStorage, tokoParkir(), hapusParkir(daftarParkir(), id))
+        row.remove()
+        renderParkirBadge()
+        if (!body.querySelector('.parkir__row')) modal.close()
+        return
+      }
+      if (cart.length) {
+        const yes = await confirmDialog({
+          title: 'Keranjang saat ini masih terisi',
+          message: 'Keranjang yang sedang dibuka akan diparkir dulu, lalu keranjang terpilih dilanjutkan.',
+          confirmText: 'Parkir & lanjutkan'
+        })
+        if (!yes) return
+        const { daftar, entri: baru, alasan } = tambahParkir(daftarParkir(), { items: cart, pelanggan })
+        if (!baru) { toast(alasan, 'error'); return }
+        simpanParkir(localStorage, tokoParkir(), daftar)
+      }
+      cart = pulihkanBaris(entri, produkList)
+      pelanggan = entri.pelanggan
+      simpanParkir(localStorage, tokoParkir(), hapusParkir(daftarParkir(), id))
+      modal.close()
+      renderCart()
+      toast(`Keranjang #${entri.nomor} dilanjutkan.`, 'success')
+    })
+  }
+
+  parkBtn.addEventListener('click', parkirKeranjang)
+  parkListBtn.addEventListener('click', bukaDaftarParkir)
 
   // ---------- Modal pelanggan ----------
 
@@ -984,6 +1080,7 @@ function renderPos(container) {
         <button type="button" class="btn btn--outline" id="pay-print">${icons.print}<span>Cetak Struk</span></button>
         <button type="button" class="btn btn--primary" id="pay-new">Transaksi Baru</button>`
       footer.querySelector('#pay-print').addEventListener('click', () => printReceipt(struk))
+      footer.insertBefore(tombolBagikanStruk(struk), footer.querySelector('#pay-new'))
       footer.querySelector('#pay-new').addEventListener('click', () => modal.close())
     }
 
@@ -1411,6 +1508,8 @@ function renderPos(container) {
 
     if (e.key === 'F2') { e.preventDefault(); fokusCari(); return }
     if (e.key === 'F8') { e.preventDefault(); clearBtn.click(); return }
+    if (e.key === 'F9') { e.preventDefault(); parkirKeranjang(); return }
+    if (e.key === 'F10') { e.preventDefault(); bukaDaftarParkir(); return }
     if (e.key === '/' && !editable) { e.preventDefault(); fokusCari(); return }
 
     // Esc bertingkat: kosongkan pencarian → kembali ke Beranda.

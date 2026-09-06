@@ -6,6 +6,7 @@
 import { api, firstError } from '../api.js'
 import { getState } from '../state.js'
 import { toast, icons, loadingHTML } from '../components/ui.js'
+import { terkunciDemo } from '../lib/batas-demo.js'
 import { esc, fmtIDR, fmtNumber, fmtDate, toISODate, daysAgo, parseAmount } from '../utils/format.js'
 import {
   ringkasPengeluaran, getHppMap, setHpp, seedDemoKeuangan,
@@ -452,12 +453,12 @@ function ringkasTeks(ctx) {
 }
 
 function bagikanWA(ctx) {
-  if (!ctx.vm) return
+  if (!ctx.vm || terkunciDemo()) return
   window.open(`https://wa.me/?text=${encodeURIComponent(ringkasTeks(ctx))}`, '_blank')
 }
 
 async function exportPDF(ctx) {
-  if (!ctx.vm) return
+  if (!ctx.vm || terkunciDemo()) return
   const vm = ctx.vm; const nama = getState().toko?.nama || getState().company?.nama || 'Tuléh'
   const root = document.getElementById('print-root')
   if (!root) return

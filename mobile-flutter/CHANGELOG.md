@@ -5,6 +5,13 @@ sebagai isi Release GitHub (workflow flutter-release.yml), dan empat baris
 pertamanya tampil di banner pembaruan dalam aplikasi. Tulis untuk kasir, bukan
 untuk programmer.
 
+## 2.10.0
+
+- Cetak ulang dan Bagikan struk dari detail Riwayat; tombol Bagikan struk (WhatsApp/pesan/salin, teks 32 kolom seperti struk thermal) di lembar hasil transaksi.
+- Pengaturan → Tampilan: ikuti sistem, terang, atau gelap (tersimpan di perangkat).
+- Beranda: aksi cepat Pengeluaran; layar Meja menampilkan keadaan kosong yang lebih jelas.
+- Mode Demo dibatasi: struk bertanda "MODE DEMO — bukan bukti pembayaran" (cetak, pratinjau, teks) dan paling banyak 20 transaksi per hari yang dibuat pengguna.
+
 ## 2.9.0
 
 - Mode offline tahap ketiga: sesi kasir bisa dibuka saat internet mati. Sesi tercatat di ponsel, dikirim ke server lebih dulu sebelum transaksi yang dibuat di dalamnya, dan menutup sesi ditahan sampai semua data terkirim agar rekap kas benar.

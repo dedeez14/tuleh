@@ -23,6 +23,13 @@ class StrukEscPos {
     final g = Generator(lebar, profil);
     final b = <int>[];
 
+    // --- tanda demo (kepala) ---
+    if (s.demo) {
+      b.addAll(g.text('*** MODE DEMO ***', styles: const PosStyles(align: PosAlign.center, bold: true)));
+      b.addAll(g.text('Bukan bukti pembayaran', styles: const PosStyles(align: PosAlign.center)));
+      b.addAll(g.hr());
+    }
+
     // --- kepala ---
     if (logo != null) {
       b.addAll(g.image(logo, align: PosAlign.center));
@@ -113,6 +120,10 @@ class StrukEscPos {
         styles: const PosStyles(align: PosAlign.center),
       ),
     );
+    if (s.demo) {
+      b.addAll(g.hr());
+      b.addAll(g.text('*** MODE DEMO - BUKAN BUKTI PEMBAYARAN ***', styles: const PosStyles(align: PosAlign.center, bold: true)));
+    }
     b.addAll(g.feed(2));
     b.addAll(g.cut());
     return b;

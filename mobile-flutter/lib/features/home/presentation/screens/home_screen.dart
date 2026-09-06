@@ -600,6 +600,7 @@ class _AksiCepat extends StatelessWidget {
       if (bertahap) ('Pesanan', Icons.view_kanban_outlined, '/aktivitas'),
       ('Produk', Icons.inventory_2_outlined, '/produk'),
       ('Stok', Icons.warehouse_outlined, '/stok'),
+      ('Pengeluaran', Icons.receipt_long_outlined, '/pengeluaran'),
     ];
 
     return Column(

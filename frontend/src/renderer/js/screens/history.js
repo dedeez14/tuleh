@@ -4,7 +4,7 @@
 import { api, firstError } from '../api.js'
 import { esc, fmtIDR, fmtNumber, fmtDateTime, toISODate, daysAgo } from '../utils/format.js'
 import { toast, showModal, confirmDialog, emptyStateHTML, loadingHTML, icons } from '../components/ui.js'
-import { buildReceiptHTML, printReceipt } from '../components/receipt.js'
+import { buildReceiptHTML, printReceipt, tombolBagikanStruk } from '../components/receipt.js'
 
 const DEFAULT_RANGE_DAYS = 6
 
@@ -215,6 +215,7 @@ export const HistoryScreen = {
         footer.appendChild(btnPrint)
 
         if (isVoided(struk.status)) return
+        footer.appendChild(tombolBagikanStruk(struk))
 
         const btnCancel = document.createElement('button')
         btnCancel.className = 'btn btn--danger-outline'

@@ -5,6 +5,7 @@
 import { api, firstError } from '../api.js'
 import { getState } from '../state.js'
 import { toast, icons, emptyStateHTML, loadingHTML } from '../components/ui.js'
+import { terkunciDemo } from '../lib/batas-demo.js'
 import { esc, fmtIDR, fmtNumber, fmtDate, toISODate, daysAgo, debounce } from '../utils/format.js'
 
 const TABS = [
@@ -595,6 +596,7 @@ const CSV_BUILDERS = {
 }
 
 function exportActiveTab(ctx) {
+  if (terkunciDemo()) return
   const data = ctx.cache.get(cacheKey(ctx))
   const spec = CSV_BUILDERS[ctx.activeTab](ctx, data)
   if (!spec) {

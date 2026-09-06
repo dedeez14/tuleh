@@ -243,6 +243,8 @@ export const SettingsScreen = {
     }
 
     btnTunnel.addEventListener('click', async () => {
+      // Mode Demo: tunnel publik memakai layanan luar & kuota — tidak untuk demo.
+      if (getState().demo) { toast('Akses internet publik tidak tersedia di Mode Demo.', 'info'); return }
       const was = tunnelAktif
       btnTunnel.disabled = true
       btnTunnel.textContent = was ? 'Mematikan…' : 'Menyalakan… (±10 dtk)'

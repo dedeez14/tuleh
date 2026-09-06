@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'core/theme/tema_provider.dart';
 import 'features/demo/presentation/masa_coba_gate.dart';
 import 'features/pemantau/presentation/pemantau_gate.dart';
 import 'features/update/presentation/widgets/update_gate.dart';
@@ -20,7 +21,7 @@ class TulehApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
-      themeMode: ThemeMode.system,
+      themeMode: ref.watch(temaProvider),
       routerConfig: router,
       builder: (context, child) => MasaCobaGate(
         child: PemantauGate(

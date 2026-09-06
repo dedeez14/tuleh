@@ -22,6 +22,27 @@ class DemoEngine {
   late Map<String, Map<String, List<Map<String, dynamic>>>> _katalog;
   late List<Map<String, dynamic>> _pelanggan;
   final List<Map<String, dynamic>> _transaksi = []; // + toko_id, terbaru dulu
+
+  /// Batas Mode Demo: transaksi yang DIBUAT pengguna per hari (data contoh
+  /// tidak dihitung). Cukup untuk mencoba, tidak cukup untuk berjualan.
+  static const batasTransaksiPerHari = 20;
+  static const pesanBatasTransaksi =
+      'Batas Mode Demo tercapai: $batasTransaksiPerHari transaksi per hari. '
+      'Masuk dengan akun berlangganan untuk transaksi tanpa batas.';
+  int _trxDibuatHariIni = 0;
+  String _hariTrxDibuat = '';
+
+  /// true bila batas harian sudah tercapai; bila belum, hitungannya naik.
+  bool _lewatBatasHarian() {
+    final hari = _tgl(DateTime.now());
+    if (hari != _hariTrxDibuat) {
+      _hariTrxDibuat = hari;
+      _trxDibuatHariIni = 0;
+    }
+    if (_trxDibuatHariIni >= batasTransaksiPerHari) return true;
+    _trxDibuatHariIni += 1;
+    return false;
+  }
   final List<Map<String, dynamic>> _sesi = []; // + toko_id, terbaru dulu
   final List<Map<String, dynamic>> _orders = []; // + toko_id
   final List<Map<String, dynamic>> _bills = []; // + toko_id
@@ -579,6 +600,7 @@ class DemoEngine {
     if (tipe == 'TUNAI' && dibayar < grand) {
       return _err(422, 'Uang dibayar kurang dari total.');
     }
+    if (_lewatBatasHarian()) return _err(422, pesanBatasTransaksi);
 
     _nTrx += 1;
     final now = DateTime.now();
@@ -828,6 +850,7 @@ class DemoEngine {
     final grand = (bon['total'] as num).toDouble();
     final tipe = '${data['tipe_pembayaran'] ?? 'TUNAI'}';
     final dibayar = (data['dibayar'] as num?)?.toDouble() ?? grand;
+    if (_lewatBatasHarian()) return _err(422, pesanBatasTransaksi);
     _nTrx += 1;
     _transaksi.insert(0, {
       'id': 'TRX-$_nTrx',

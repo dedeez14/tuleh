@@ -4,8 +4,9 @@
 import { esc, fmtIDR, fmtDateTime, fmtNumber } from '../utils/format.js'
 import { api } from '../api.js'
 import { getState } from '../state.js'
-import { toast } from './ui.js'
+import { toast, icons } from './ui.js'
 import { labelPembayaranStruk } from '../lib/qris-flow.js'
+import { buildReceiptText as teksStruk, TANDA_DEMO } from '../lib/struk-teks.js'
 
 /** Bangun HTML struk dari objek Struk API (+ data perusahaan dari state). */
 export function buildReceiptHTML(struk) {
@@ -18,6 +19,8 @@ export function buildReceiptHTML(struk) {
   const isVoid = struk.status === 'DIBATALKAN'
   // Pra-bon (bill hitungan bon meja) — belum dibayar; sembunyikan baris bayar/kembalian
   const isPrabon = struk.status === 'BELUM DIBAYAR'
+  // Mode Demo: struk bertanda agar tidak dipakai sebagai bukti pembayaran sungguhan.
+  const tandaDemo = getState().demo ? `<div class="receipt__demo">${TANDA_DEMO}</div>` : ''
 
   const itemRows = (struk.items || [])
     .map((item) => {
@@ -43,6 +46,7 @@ export function buildReceiptHTML(struk) {
   return `
     <div class="receipt${isVoid ? ' receipt--void' : ''}">
       ${isVoid ? '<div class="receipt__void-stamp">DIBATALKAN</div>' : ''}
+      ${tandaDemo}
       <div class="receipt__head">
         ${logoStruk ? `<img class="receipt__logo" src="${esc(logoStruk)}" alt="" />` : ''}
         <div class="receipt__company">${esc(company?.nama || 'Tuléh')}</div>
@@ -78,7 +82,47 @@ export function buildReceiptHTML(struk) {
       <div class="receipt__foot">${isPrabon
         ? 'Ini bukan bukti bayar — silakan bayar di kasir'
         : esc(footerCfg || 'Terima kasih atas kunjungan Anda')}</div>
+      ${tandaDemo}
     </div>`
+}
+
+/** Teks struk memakai profil usaha & catatan kaki dari state (lihat lib/struk-teks.js). */
+export function buildReceiptText(struk) {
+  const { company, struk: strukCfg, demo } = getState()
+  return teksStruk(struk, { company, footer: strukCfg?.footer || '', demo: !!demo })
+}
+
+/** Tautan WhatsApp berisi struk (nomor kosong = pilih kontak di WhatsApp). */
+export function tautanWhatsAppStruk(struk, telepon = '') {
+  const teks = buildReceiptText(struk)
+  const nomor = String(telepon || '').replace(/\D/g, '').replace(/^0/, '62')
+  return `https://wa.me/${nomor}?text=${encodeURIComponent(teks)}`
+}
+
+/**
+ * Tombol "Bagikan" dengan menu kecil: WhatsApp (ke nomor pelanggan bila ada)
+ * dan Salin teks. Dipakai footer modal struk (setelah bayar & riwayat).
+ */
+export function tombolBagikanStruk(struk) {
+  const wrap = document.createElement('div')
+  wrap.className = 'bagikan'
+  wrap.innerHTML = `
+    <button type="button" class="btn btn--outline" data-bagikan="wa" title="Kirim struk lewat WhatsApp">${icons.share || ''}<span>WhatsApp</span></button>
+    <button type="button" class="btn btn--ghost" data-bagikan="salin" title="Salin struk sebagai teks">Salin</button>`
+  wrap.querySelector('[data-bagikan="wa"]').addEventListener('click', () => {
+    const url = tautanWhatsAppStruk(struk, struk.pelanggan_telepon || '')
+    if (api.app && typeof api.app.openExternal === 'function') api.app.openExternal({ url })
+    else window.open(url, '_blank')
+  })
+  wrap.querySelector('[data-bagikan="salin"]').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(buildReceiptText(struk))
+      toast('Struk disalin sebagai teks.', 'success')
+    } catch {
+      toast('Gagal menyalin. Coba lagi.', 'error')
+    }
+  })
+  return wrap
 }
 
 /** Cetak struk lewat dialog printer OS. */

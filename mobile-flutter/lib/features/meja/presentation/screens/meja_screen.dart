@@ -6,6 +6,7 @@ import '../../../../core/offline/pengurai.dart';
 import '../../../../core/offline/rujukan_lokal.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/format.dart';
+import '../../../../core/widgets/states.dart';
 import '../../domain/entities/meja.dart';
 import '../providers/meja_providers.dart';
 import 'bill_detail_screen.dart';
@@ -34,9 +35,12 @@ class MejaScreen extends ConsumerWidget {
           ]),
           data: (list) => list.isEmpty
               ? ListView(children: const [
-                  Padding(
-                    padding: EdgeInsets.all(48),
-                    child: Center(child: Text('Toko ini tidak menggunakan meja.')),
+                  SizedBox(height: 80),
+                  KeadaanKosong(
+                    ikon: Icons.table_restaurant_outlined,
+                    judul: 'Toko ini tidak menggunakan meja',
+                    detail: 'Meja & bon dine-in diatur dari desktop atau server '
+                        'MOVERA untuk toko bertipe kafe/resto.',
                   ),
                 ])
               // Kolom mengikuti lebar layar (bukan tetap 2) dan tinggi kartu

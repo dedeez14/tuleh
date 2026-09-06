@@ -15,6 +15,22 @@
 }
 
 /* Di dalam modal pratinjau, beri kesan kertas */
+/* Tombol bagikan struk (WhatsApp / Salin) di footer modal */
+.bagikan { display: inline-flex; gap: var(--sp-2); margin-right: auto; }
+
+/* Tanda Mode Demo di kepala & kaki struk */
+.receipt__demo {
+  margin: 0 0 var(--sp-3);
+  padding: 4px 6px;
+  border: 2px dashed #b45309;
+  color: #b45309;
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-align: center;
+}
+.receipt__demo:last-child { margin: var(--sp-3) 0 0; }
+
 .modal .receipt {
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);

@@ -25,6 +25,8 @@ export const PINTASAN = Object.freeze({
     ['Esc', 'Kosongkan pencarian → lalu kembali ke Beranda'],
     ['F4  /  Ctrl + Enter', 'Bayar'],
     ['F8', 'Kosongkan keranjang'],
+    ['F9', 'Parkir keranjang (simpan, lanjutkan nanti)'],
+    ['F10', 'Buka daftar keranjang terparkir'],
     ['Shift + Tab', 'Dari katalog kembali ke kolom cari']
   ],
   bayar: [

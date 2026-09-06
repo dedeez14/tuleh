@@ -9,6 +9,7 @@ import '../../../../core/utils/rupiah_input.dart';
 import '../../../../core/widgets/motion.dart';
 import '../../../../core/widgets/states.dart';
 import '../../../cetak/domain/entities/struk.dart';
+import '../../../demo/demo_session.dart';
 import 'hasil_transaksi_sheet.dart';
 import '../../../pengaturan/domain/entities/pengaturan_pembayaran.dart';
 import '../../../pengaturan/presentation/providers/pengaturan_providers.dart';
@@ -105,6 +106,7 @@ class _CartSheetState extends ConsumerState<CartSheet> {
         catatanKaki: usaha?.strukFooter,
         barcode: nomor.isEmpty ? null : nomor,
         logoUrl: (usaha?.strukTampilLogo ?? false) ? usaha?.logo : null,
+        demo: ref.read(demoSessionProvider).active,
       );
 
       final res = await ref.read(checkoutRepositoryProvider).bayar(

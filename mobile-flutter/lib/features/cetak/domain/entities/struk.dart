@@ -30,6 +30,7 @@ class Struk {
     this.catatanKaki,
     this.barcode,
     this.logoUrl,
+    this.demo = false,
   });
 
   final String namaToko;
@@ -50,6 +51,9 @@ class Struk {
 
   /// URL logo toko untuk kepala struk (null = tanpa logo).
   final String? logoUrl;
+
+  /// Dibuat di Mode Demo: struk bertanda "MODE DEMO — bukan bukti pembayaran".
+  final bool demo;
 
   int get jumlahItem =>
       baris.fold<int>(0, (s, b) => s + b.kuantitas.round());
@@ -73,6 +77,7 @@ class Struk {
     'catatan_kaki': catatanKaki,
     'barcode': barcode,
     'logo_url': logoUrl,
+    'demo': demo,
   };
 
   factory Struk.fromJson(Map<String, dynamic> j) {
@@ -101,6 +106,7 @@ class Struk {
       catatanKaki: j['catatan_kaki']?.toString(),
       barcode: j['barcode']?.toString(),
       logoUrl: j['logo_url']?.toString(),
+      demo: j['demo'] == true,
     );
   }
 
@@ -119,5 +125,6 @@ class Struk {
     catatanKaki: catatanKaki ?? this.catatanKaki,
     barcode: barcode ?? this.barcode,
     logoUrl: logoUrl,
+    demo: demo,
   );
 }

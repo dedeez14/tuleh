@@ -275,6 +275,27 @@
   padding: var(--sp-5) var(--sp-5) var(--sp-3);
 }
 .pos-cart__head-act { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.pos-park__list .badge { margin-left: 4px; padding: 1px 7px; font-size: 11px; }
+
+/* Daftar keranjang terparkir (modal) */
+.parkir { display: flex; flex-direction: column; gap: var(--sp-2); }
+.parkir__row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: var(--sp-3) var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.parkir__no { font-family: var(--font-display); font-weight: 800; color: var(--mint-700); font-size: var(--text-lg); }
+.parkir__main { min-width: 0; }
+.parkir__title { font-weight: 700; }
+.parkir__time { color: var(--ink-3); font-weight: 500; }
+.parkir__desc { color: var(--ink-2); font-size: var(--text-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.parkir__total { font-weight: 800; white-space: nowrap; }
+.parkir__act { display: flex; gap: var(--sp-2); }
 .cd-cfg__url { display: flex; align-items: center; gap: 8px; }
 .cd-cfg__url .mono { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: var(--text-sm); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r, 6px); padding: 8px 10px; }
 #pos-cust-display.is-active {
