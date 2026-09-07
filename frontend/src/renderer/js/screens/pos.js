@@ -966,11 +966,15 @@ function renderPos(container) {
         statusEl.innerHTML = `<span>Kembalian</span><span class="num">${fmtIDR(kembalian(dibayar, grandTotal))}</span>`
       }
       submitBtn.disabled = kurang > 0
-      // Cerminkan uang diterima & kembalian ke Display Pelanggan (live, saat TUNAI).
+      // Cerminkan ke Display Pelanggan (live, saat TUNAI): metode tampil sejak
+      // dipilih; uang diterima & kembalian menyusul begitu diketik.
       if (metode === 'TUNAI') {
-        cdPayment = payInput.value.trim() && kurang <= 0
-          ? { metode: 'TUNAI', dibayar, kembalian: kembalian(dibayar, grandTotal) }
-          : null
+        const adaUang = !!payInput.value.trim()
+        cdPayment = {
+          metode: 'TUNAI',
+          dibayar: adaUang ? dibayar : null,
+          kembalian: adaUang && kurang <= 0 ? kembalian(dibayar, grandTotal) : 0
+        }
         pushCustomerDisplay()
       }
     }
@@ -1003,7 +1007,8 @@ function renderPos(container) {
         extraEl.innerHTML = qrisAutoIntroHTML(grandTotal)
         submitBtn.textContent = 'Tampilkan QRIS'
         submitBtn.disabled = false
-        cdPayment = null // QR dinamis baru dikirim ke Display Pelanggan setelah dibuat
+        // Metode tampil dulu; kode QR dinamis menyusul setelah tagihan dibuat.
+        cdPayment = { metode: 'QRIS_AUTO', dibayar: null, kembalian: 0 }
         pushCustomerDisplay()
       } else {
         // Lapis DASAR non-tunai (QRIS statis / Transfer): tampilkan QR / rekening;

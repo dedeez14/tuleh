@@ -36,17 +36,51 @@ test('pesanan berjalan menampilkan item, subtotal & total', () => {
   assert.doesNotMatch(html, /Kembalian/)   // belum bayar
 })
 
-test('menampilkan dibayar & kembalian saat ada payment', () => {
+test('menampilkan dibayar & kembalian saat ada payment tunai', () => {
   const html = V.customerViewHTML({
     store: { nama: 'X' },
     items: [{ nama: 'A', qty: 1, harga: 50000, subtotal: 50000 }],
     totals: { grandTotal: 50000 },
     payment: { metode: 'TUNAI', dibayar: 100000, kembalian: 50000 }
   })
+  assert.match(html, /cd--bayar/)
+  assert.match(html, /Pembayaran tunai/)
   assert.match(html, /Dibayar/)
-  assert.match(html, /TUNAI/)
   assert.match(html, /Kembalian/)
   assert.match(html, /Rp\s?50\.000/)
+  assert.doesNotMatch(html, /Kurang/)
+})
+
+test('metode tampil sejak dipilih walau uang belum dimasukkan; kurang bila tak cukup', () => {
+  const dasar = {
+    store: { nama: 'X' },
+    items: [{ nama: 'A', qty: 1, harga: 50000, subtotal: 50000 }],
+    totals: { grandTotal: 50000 }
+  }
+  const belum = V.customerViewHTML({ ...dasar, payment: { metode: 'TUNAI', dibayar: null, kembalian: 0 } })
+  assert.match(belum, /Pembayaran tunai/)
+  assert.match(belum, /serahkan uang ke kasir/)
+  assert.doesNotMatch(belum, /Dibayar/)
+
+  const kurang = V.customerViewHTML({ ...dasar, payment: { metode: 'TUNAI', dibayar: 20000, kembalian: 0 } })
+  assert.match(kurang, /Kurang/)
+  assert.match(kurang, /Rp\s?30\.000/)
+
+  const qrisTanpaGambar = V.customerViewHTML({ ...dasar, payment: { metode: 'QRIS', dibayar: 50000, kembalian: 0, qris: '' } })
+  assert.match(qrisTanpaGambar, /Pembayaran QRIS/)
+  assert.match(qrisTanpaGambar, /ditunjukkan kasir/)
+
+  const qrisAuto = V.customerViewHTML({ ...dasar, payment: { metode: 'QRIS_AUTO', dibayar: null, kembalian: 0 } })
+  assert.match(qrisAuto, /menyiapkan kode QR/)
+
+  const qrisGambar = V.customerViewHTML({ ...dasar, payment: { metode: 'QRIS', dibayar: 50000, kembalian: 0, qris: 'data:image/png;base64,AAA' } })
+  assert.match(qrisGambar, /Pindai QRIS untuk membayar/)
+  assert.match(qrisGambar, /<img class="cd__qr"/)
+
+  const transfer = V.customerViewHTML({ ...dasar, payment: { metode: 'TRANSFER', dibayar: 50000, kembalian: 0, bank: [{ bank: 'BCA', rekening: '123', atas_nama: 'Toko' }] } })
+  assert.match(transfer, /Transfer ke rekening/)
+  assert.match(transfer, /BCA/)
+  assert.match(transfer, /123/)
 })
 
 test('layar terima kasih saat done=true', () => {
@@ -159,13 +193,21 @@ test('QRIS_AUTO memakai QR dinamis dan keterangan cek otomatis', () => {
   assert.match(html, /dicek otomatis/)
 })
 
-test('TUNAI tetap tampil dibayar & kembalian, tanpa panel samping', () => {
+test('TUNAI: panel tunai memuat dibayar & kembalian; tanpa payment tidak ada panel', () => {
   const html = V.customerViewHTML({
     store: { nama: 'X' },
     items: [{ nama: 'A', qty: 1, harga: 1000, subtotal: 1000 }],
     totals: { grandTotal: 1000 },
     payment: { metode: 'TUNAI', dibayar: 5000, kembalian: 4000 }
   })
-  assert.doesNotMatch(html, /cd--bayar/)
+  assert.match(html, /cd--bayar/)
   assert.match(html, /Kembalian/)
+  assert.match(html, /Rp\s?4\.000/)
+  const tanpa = V.customerViewHTML({
+    store: { nama: 'X' },
+    items: [{ nama: 'A', qty: 1, harga: 1000, subtotal: 1000 }],
+    totals: { grandTotal: 1000 }
+  })
+  assert.doesNotMatch(tanpa, /cd--bayar/)
+  assert.doesNotMatch(tanpa, /cd__side/)
 })

@@ -140,8 +140,28 @@ function displayPage() {
   .total{display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-top:6px}
   .total b{font-size:clamp(20px,2vw,34px);font-weight:700}
   .total .v{font-size:clamp(40px,5.4vw,92px);font-weight:800;letter-spacing:-.02em;color:#fff;line-height:1}
-  .pay{margin-top:14px;padding-top:12px;border-top:1px dashed rgba(122,226,207,.28)}
-  .pay .change{color:#7ae2cf;font-weight:800;font-size:clamp(18px,1.8vw,30px)}
+  .main{display:flex;flex-direction:column;flex:1 1 auto;min-width:0;min-height:0}
+  /* Panel pembayaran (tunai / QRIS / transfer) di samping pesanan; potret: di bawah */
+  #cd.bayar{flex-direction:row;gap:clamp(18px,2.4vw,40px)}
+  #cd.bayar .main{flex:1 1 55%}
+  #cd.bayar .total .v{font-size:clamp(30px,3.6vw,60px)}
+  .side{flex:0 0 clamp(280px,40%,560px);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:clamp(10px,1.4vw,18px);padding:clamp(18px,2.2vw,36px);border-radius:24px;background:rgba(255,255,255,.05);border:1px solid rgba(122,226,207,.22);min-height:0;overflow:hidden}
+  .s-title{font-size:clamp(18px,1.9vw,30px);font-weight:800;letter-spacing:-.01em}
+  .s-k{font-size:clamp(13px,1.2vw,18px);color:rgba(234,255,249,.66);text-transform:uppercase;letter-spacing:.08em;margin-top:clamp(6px,1vw,14px)}
+  .s-total{font-size:clamp(30px,3.6vw,60px);font-weight:800;color:#fff;line-height:1;letter-spacing:-.02em}
+  .s-sub{font-size:clamp(14px,1.3vw,20px);color:rgba(234,255,249,.66);line-height:1.4;max-width:34ch}
+  .s-rows{width:100%;margin-top:clamp(8px,1.2vw,18px);padding-top:clamp(8px,1.2vw,18px);border-top:1px dashed rgba(122,226,207,.32);display:flex;flex-direction:column;gap:6px}
+  .s-row{display:flex;justify-content:space-between;align-items:baseline;gap:16px;font-size:clamp(16px,1.5vw,24px);font-weight:600}
+  .s-row.change{color:#7ae2cf;font-weight:800;font-size:clamp(22px,2.4vw,40px)}
+  .s-row.kurang{color:#ffb4a2;font-weight:800}
+  .qrf{flex:0 1 auto;min-height:0;width:min(100%,52vh);aspect-ratio:1/1;padding:clamp(10px,1.2vw,18px);border-radius:20px;background:#fff}
+  .qrf img{display:block;width:100%;height:100%;object-fit:contain}
+  .banks{display:flex;flex-direction:column;gap:clamp(8px,1vw,14px);width:100%;overflow-y:auto;min-height:0}
+  .bank{padding:clamp(10px,1.2vw,16px);border-radius:14px;background:rgba(255,255,255,.06);text-align:left}
+  .b-name{font-size:clamp(14px,1.3vw,20px);font-weight:700;color:#7ae2cf;text-transform:uppercase;letter-spacing:.06em}
+  .b-rek{font-size:clamp(24px,2.6vw,44px);font-weight:800;color:#fff;letter-spacing:.04em;line-height:1.15;word-break:break-all}
+  .b-an{font-size:clamp(14px,1.3vw,20px);color:rgba(234,255,249,.66)}
+  @media (max-width:760px),(orientation:portrait){#cd.bayar{flex-direction:column}#cd.bayar .main{flex:1 1 auto}.side{flex:0 0 auto;max-height:55%}.qrf{width:min(100%,32vh)}}
   #cd.thanks{align-items:center;justify-content:center;text-align:center;gap:10px}
   .ic{width:clamp(90px,10vw,150px);height:clamp(90px,10vw,150px);display:flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(122,226,207,.16);border:3px solid #7ae2cf;color:#7ae2cf;font-size:clamp(48px,6vw,88px);font-weight:800;margin-bottom:8px}
   .t-title{font-size:clamp(40px,6vw,84px);font-weight:800}
@@ -183,16 +203,25 @@ function displayPage() {
     var disc=Number(t.totalDiskon)>0?'<div class="line"><span>Diskon</span><span>\\u2212'+rp(t.totalDiskon)+'</span></div>':'';
     var tax=Number(t.totalPajak)>0?'<div class="line"><span>Pajak</span><span>'+rp(t.totalPajak)+'</span></div>':'';
     var side='';
-    if(pay&&pay.qris){
+    var metode=pay?String(pay.metode||'').toUpperCase():'';
+    var dibayar=pay&&pay.dibayar!=null&&pay.dibayar!==''?Number(pay.dibayar):null;
+    if(pay&&(metode==='TUNAI'||(!metode&&dibayar!=null))){
+      var kurang=dibayar!=null&&dibayar<grand?grand-dibayar:0;
+      var rinci=dibayar==null?'<div class="s-sub">Silakan serahkan uang ke kasir.</div>':'<div class="s-rows"><div class="s-row"><span>Dibayar</span><span>'+rp(dibayar)+'</span></div>'+(kurang>0?'<div class="s-row kurang"><span>Kurang</span><span>'+rp(kurang)+'</span></div>':'<div class="s-row change"><span>Kembalian</span><span>'+rp(pay.kembalian)+'</span></div>')+'</div>';
+      side='<aside class="side"><div class="s-title">Pembayaran tunai</div><div class="s-k">Total</div><div class="s-total">'+rp(grand)+'</div>'+rinci+'</aside>';
+    }else if(pay&&pay.qris){
       side='<aside class="side"><div class="s-title">Pindai QRIS untuk membayar</div><div class="qrf"><img src="'+esc(pay.qris)+'" alt="QRIS"></div><div class="s-total">'+rp(grand)+'</div><div class="s-sub">'+(pay.metode==='QRIS_AUTO'?'Pembayaran dicek otomatis setelah Anda memindai.':'Setelah pembayaran berhasil, tunjukkan bukti ke kasir.')+'</div></aside>';
-    }else if(pay&&pay.metode==='TRANSFER'){
+    }else if(pay&&(metode==='QRIS'||metode==='QRIS_AUTO')){
+      side='<aside class="side"><div class="s-title">Pembayaran QRIS</div><div class="s-k">Total</div><div class="s-total">'+rp(grand)+'</div><div class="s-sub">'+(metode==='QRIS_AUTO'?'Kasir sedang menyiapkan kode QR. Mohon tunggu sebentar.':'Pindai kode QRIS yang ditunjukkan kasir, lalu tunjukkan bukti pembayaran.')+'</div></aside>';
+    }else if(pay&&metode==='TRANSFER'){
       var banks=Array.isArray(pay.bank)?pay.bank:[];
       var daftar=banks.length?banks.map(function(b){return '<div class="bank"><div class="b-name">'+esc(b.bank)+'</div><div class="b-rek">'+esc(b.rekening)+'</div><div class="b-an">a.n. '+esc(b.atas_nama)+'</div></div>'}).join(''):'<div class="s-sub">Silakan tanyakan nomor rekening ke kasir.</div>';
       side='<aside class="side"><div class="s-title">Transfer ke rekening</div><div class="banks">'+daftar+'</div><div class="s-total">'+rp(grand)+'</div><div class="s-sub">Transfer sesuai nominal, lalu tunjukkan bukti ke kasir.</div></aside>';
+    }else if(pay){
+      side='<aside class="side"><div class="s-title">Pembayaran '+esc(metode||'')+'</div><div class="s-k">Total</div><div class="s-total">'+rp(grand)+'</div><div class="s-sub">Ikuti arahan kasir untuk menyelesaikan pembayaran.</div></aside>';
     }
-    var paybox=pay&&!side?'<div class="pay"><div class="line"><span>Dibayar'+(pay.metode?' \\u00b7 '+esc(pay.metode):'')+'</span><span>'+rp(pay.dibayar)+'</span></div><div class="line"><span>Kembalian</span><span class="change">'+rp(pay.kembalian)+'</span></div></div>':'';
     root.className=side?'order bayar':'order';
-    root.innerHTML='<div class="main"><div class="top">'+brand+'<div class="count">'+(items.reduce(function(a,i){return a+(Number(i.qty)||0)},0))+' item</div></div><div class="items">'+rows+'</div><div class="foot">'+disc+tax+'<div class="total"><b>Total</b><span class="v">'+rp(grand)+'</span></div>'+paybox+'</div></div>'+side;
+    root.innerHTML='<div class="main"><div class="top">'+brand+'<div class="count">'+(items.reduce(function(a,i){return a+(Number(i.qty)||0)},0))+' item</div></div><div class="items">'+rows+'</div><div class="foot">'+disc+tax+'<div class="total"><b>Total</b><span class="v">'+rp(grand)+'</span></div></div></div>'+side;
   }
   function poll(){ fetch('/display/data',{cache:'no-store'}).then(function(r){return r.json()}).then(function(s){off.style.display='none';render(s)}).catch(function(){off.style.display='block'}); }
   poll(); setInterval(poll, 1400);

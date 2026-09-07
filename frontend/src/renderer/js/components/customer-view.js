@@ -11,6 +11,9 @@ import { esc, fmtIDR, fmtNumber } from '../utils/format.js'
  *   items   : [{ nama, qty, satuan, harga, subtotal }]
  *   totals  : { subtotal, totalDiskon, totalPajak, grandTotal, qtyCount }
  *   payment : { metode, dibayar, kembalian, qris?, bank? } | null
+ *             Ada sejak jendela pembayaran dibuka: metode yang dipilih kasir
+ *             langsung tampil sebagai panel (tunai / QRIS / transfer);
+ *             dibayar null = uang belum dimasukkan.
  *             qris : URL/data-URI gambar QR (QRIS statis atau QRIS otomatis)
  *             bank : [{ bank, rekening, atas_nama }] untuk metode TRANSFER
  *   done    : boolean  (transaksi selesai → layar terima kasih)
@@ -81,12 +84,6 @@ export function customerViewHTML(state) {
   // Tampil di kolom kanan agar pelanggan bisa membayar sambil melihat pesanan.
   const instruksi = pay ? instruksiHTML(pay, grand) : ''
 
-  const bayarBlok = pay && !instruksi ? `
-    <div class="cd__pay">
-      <div class="cd__line cd__line--pay"><span>Dibayar${pay.metode ? ` · ${esc(pay.metode)}` : ''}</span><span class="num">${fmtIDR(pay.dibayar)}</span></div>
-      <div class="cd__line cd__line--change"><span>Kembalian</span><span class="num">${fmtIDR(pay.kembalian)}</span></div>
-    </div>` : ''
-
   return `
     <div class="cd cd--order${instruksi ? ' cd--bayar' : ''}">
       <div class="cd__main">
@@ -101,17 +98,52 @@ export function customerViewHTML(state) {
             <span class="cd__total-k">Total</span>
             <span class="cd__total-v num">${fmtIDR(grand)}</span>
           </div>
-          ${bayarBlok}
         </div>
       </div>
       ${instruksi}
     </div>`
 }
 
-/** Panel QRIS / Transfer untuk pelanggan; '' bila metode tidak butuh instruksi. */
+/** Label metode yang ramah pelanggan. */
+export function labelMetode(metode) {
+  const m = String(metode || '').toUpperCase()
+  if (m === 'TUNAI') return 'Tunai'
+  if (m === 'QRIS' || m === 'QRIS_AUTO') return 'QRIS'
+  if (m === 'TRANSFER') return 'Transfer bank'
+  return m ? m.charAt(0) + m.slice(1).toLowerCase() : 'Pembayaran'
+}
+
+/**
+ * Panel pembayaran untuk pelanggan — selalu ada begitu kasir memilih metode:
+ * tunai (uang diterima & kembalian), QRIS (kode untuk dipindai), transfer
+ * (rekening tujuan). '' hanya bila tidak ada data pembayaran.
+ */
 export function instruksiHTML(pay, grand) {
-  const p = pay || {}
+  if (!pay) return ''
+  const p = pay
   const banks = Array.isArray(p.bank) ? p.bank : []
+  const metode = String(p.metode || '').toUpperCase()
+  const dibayar = p.dibayar == null || p.dibayar === '' ? null : Number(p.dibayar)
+
+  if (metode === 'TUNAI' || (!metode && dibayar != null)) {
+    const kurang = dibayar != null && dibayar < grand ? grand - dibayar : 0
+    const rincian = dibayar == null
+      ? `<div class="cd__side-sub">Silakan serahkan uang ke kasir.</div>`
+      : `
+        <div class="cd__side-rows">
+          <div class="cd__side-row"><span>Dibayar</span><span class="num">${fmtIDR(dibayar)}</span></div>
+          ${kurang > 0
+            ? `<div class="cd__side-row cd__side-row--kurang"><span>Kurang</span><span class="num">${fmtIDR(kurang)}</span></div>`
+            : `<div class="cd__side-row cd__side-row--change"><span>Kembalian</span><span class="num">${fmtIDR(Number(p.kembalian) || 0)}</span></div>`}
+        </div>`
+    return `
+      <aside class="cd__side cd__side--tunai">
+        <div class="cd__side-title">Pembayaran tunai</div>
+        <div class="cd__side-k">Total</div>
+        <div class="cd__side-total num">${fmtIDR(grand)}</div>
+        ${rincian}
+      </aside>`
+  }
   if (p.qris) {
     return `
       <aside class="cd__side cd__side--qris">
@@ -123,7 +155,18 @@ export function instruksiHTML(pay, grand) {
           : 'Setelah pembayaran berhasil, tunjukkan bukti ke kasir.'}</div>
       </aside>`
   }
-  if (p.metode === 'TRANSFER') {
+  if (metode === 'QRIS' || metode === 'QRIS_AUTO') {
+    return `
+      <aside class="cd__side cd__side--qris">
+        <div class="cd__side-title">Pembayaran QRIS</div>
+        <div class="cd__side-k">Total</div>
+        <div class="cd__side-total num">${fmtIDR(grand)}</div>
+        <div class="cd__side-sub">${metode === 'QRIS_AUTO'
+          ? 'Kasir sedang menyiapkan kode QR. Mohon tunggu sebentar.'
+          : 'Pindai kode QRIS yang ditunjukkan kasir, lalu tunjukkan bukti pembayaran.'}</div>
+      </aside>`
+  }
+  if (metode === 'TRANSFER') {
     const daftar = banks.length
       ? banks.map((b) => `
           <div class="cd__bank">
@@ -140,5 +183,11 @@ export function instruksiHTML(pay, grand) {
         <div class="cd__side-sub">Transfer sesuai nominal, lalu tunjukkan bukti ke kasir.</div>
       </aside>`
   }
-  return ''
+  return `
+    <aside class="cd__side">
+      <div class="cd__side-title">Pembayaran ${esc(labelMetode(metode))}</div>
+      <div class="cd__side-k">Total</div>
+      <div class="cd__side-total num">${fmtIDR(grand)}</div>
+      <div class="cd__side-sub">Ikuti arahan kasir untuk menyelesaikan pembayaran.</div>
+    </aside>`
 }
