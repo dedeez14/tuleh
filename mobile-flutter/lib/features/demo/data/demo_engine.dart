@@ -573,6 +573,7 @@ class DemoEngine {
 
     final items = <Map<String, dynamic>>[];
     var grand = 0.0;
+    var totalDiskon = 0.0;
     for (final raw in rawItems) {
       if (raw is! Map) continue;
       final p = _cariProduk(toko, '${raw['id_produk']}');
@@ -581,12 +582,17 @@ class DemoEngine {
       if (qty <= 0) return _err(422, 'Kuantitas "${p['nama']}" tidak valid.');
       final harga = (raw['harga'] as num?)?.toDouble() ??
           (p['harga_jual'] as num).toDouble();
-      final subtotal = harga * qty;
+      final diskonPersen = (raw['diskon_persen'] as num?)?.toDouble() ?? 0;
+      final bruto = harga * qty;
+      final diskon = (bruto * diskonPersen / 100 * 100).round() / 100;
+      final subtotal = bruto - diskon;
       grand += subtotal;
+      totalDiskon += diskon;
       items.add({
         'nama': p['nama'],
         'kuantitas': qty,
         'harga': harga,
+        'diskon_persen': diskonPersen,
         'subtotal': subtotal,
       });
       // Sparepart/produk berstok berkurang; jasa tidak.
@@ -604,18 +610,23 @@ class DemoEngine {
 
     _nTrx += 1;
     final now = DateTime.now();
+    final idPelanggan = '${data['id_pelanggan'] ?? ''}';
+    final pelanggan = idPelanggan.isEmpty
+        ? null
+        : _pelanggan.firstWhere((c) => '${c['id']}' == idPelanggan, orElse: () => const {})['nama'];
     final struk = <String, dynamic>{
       'id': 'TRX-$_nTrx',
       'toko_id': toko,
       'nomor': 'TRX/${_nTrx.toString().padLeft(4, '0')}',
       'tanggal': _iso(now),
       'status': 'SELESAI',
-      'pelanggan': null,
+      'pelanggan': pelanggan,
+      'catatan': data['catatan'],
       'kasir': demoUser['name'],
       'tipe_pembayaran': tipe,
       'metode_bayar': tipe,
-      'subtotal': grand,
-      'total_diskon': 0,
+      'subtotal': grand + totalDiskon,
+      'total_diskon': totalDiskon,
       'total_pajak': 0,
       'grand_total': grand,
       'dibayar': dibayar,

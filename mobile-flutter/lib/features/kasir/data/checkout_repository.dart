@@ -68,23 +68,36 @@ class CheckoutRepository {
         '${h.substring(16, 20)}-${h.substring(20)}';
   }
 
+  /// [diskonPersen] diterapkan ke setiap baris (`items.*.diskon_persen`),
+  /// [idPelanggan] → `id_pelanggan`, [catatan] → `catatan` — kontrak yang
+  /// sama dengan kasir desktop. [total] = yang harus dibayar (setelah diskon).
   Future<HasilBayar> bayar({
     required List<CartItem> items,
     required String metode,
     required double dibayar,
     required double total,
     required Struk Function(String nomor, double kembalian) buatStruk,
+    double diskonPersen = 0,
+    String? idPelanggan,
+    String? catatan,
   }) async {
     final clientRef = buatClientRef();
     final waktu = DateTime.now();
     final payload = [
       for (final e in items)
-        {'id_produk': e.product.id, 'kuantitas': e.qty, 'harga': e.product.harga},
+        {
+          'id_produk': e.product.id,
+          'kuantitas': e.qty,
+          'harga': e.product.harga,
+          if (diskonPersen > 0) 'diskon_persen': diskonPersen,
+        },
     ];
     final body = <String, dynamic>{
       'items': payload,
       'tipe_pembayaran': metode,
       'dibayar': dibayar,
+      if (idPelanggan != null && idPelanggan.isNotEmpty) 'id_pelanggan': idPelanggan,
+      if (catatan != null && catatan.trim().isNotEmpty) 'catatan': catatan.trim(),
       'client_ref': clientRef,
       'waktu_klien': waktu.toIso8601String(),
     };

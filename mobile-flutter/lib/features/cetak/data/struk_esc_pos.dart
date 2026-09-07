@@ -67,6 +67,9 @@ class StrukEscPos {
     if (s.kasir != null && s.kasir!.isNotEmpty) {
       b.addAll(_duaKolom(g, 'Kasir', s.kasir!));
     }
+    if (s.pelanggan != null && s.pelanggan!.isNotEmpty) {
+      b.addAll(_duaKolom(g, 'Pelanggan', s.pelanggan!));
+    }
     b.addAll(g.hr());
 
     // --- item ---
@@ -87,6 +90,10 @@ class StrukEscPos {
     b.addAll(g.hr());
 
     // --- total ---
+    if ((s.diskon ?? 0) > 0) {
+      b.addAll(_duaKolom(g, 'Subtotal', fmtIDR(s.total + s.diskon!)));
+      b.addAll(_duaKolom(g, 'Diskon', '-${fmtIDR(s.diskon!)}'));
+    }
     b.addAll(
       _duaKolom(g, 'TOTAL', fmtIDR(s.total), tebal: true, besar: true),
     );

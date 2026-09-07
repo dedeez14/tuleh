@@ -31,6 +31,8 @@ class Struk {
     this.barcode,
     this.logoUrl,
     this.demo = false,
+    this.pelanggan,
+    this.diskon,
   });
 
   final String namaToko;
@@ -55,6 +57,12 @@ class Struk {
   /// Dibuat di Mode Demo: struk bertanda "MODE DEMO — bukan bukti pembayaran".
   final bool demo;
 
+  /// Nama pelanggan (bila transaksi dikaitkan ke pelanggan).
+  final String? pelanggan;
+
+  /// Potongan diskon transaksi (rupiah); [total] sudah setelah potongan.
+  final double? diskon;
+
   int get jumlahItem =>
       baris.fold<int>(0, (s, b) => s + b.kuantitas.round());
 
@@ -78,6 +86,8 @@ class Struk {
     'barcode': barcode,
     'logo_url': logoUrl,
     'demo': demo,
+    'pelanggan': pelanggan,
+    'diskon': diskon,
   };
 
   factory Struk.fromJson(Map<String, dynamic> j) {
@@ -107,6 +117,8 @@ class Struk {
       barcode: j['barcode']?.toString(),
       logoUrl: j['logo_url']?.toString(),
       demo: j['demo'] == true,
+      pelanggan: j['pelanggan']?.toString(),
+      diskon: d(j['diskon']),
     );
   }
 
@@ -126,5 +138,7 @@ class Struk {
     barcode: barcode ?? this.barcode,
     logoUrl: logoUrl,
     demo: demo,
+    pelanggan: pelanggan,
+    diskon: diskon,
   );
 }

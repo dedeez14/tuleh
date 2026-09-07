@@ -19,6 +19,9 @@ import 'package:tuleh_pos/features/kasir/presentation/controllers/cart_controlle
 import 'package:tuleh_pos/features/cetak/domain/entities/struk.dart';
 import 'package:tuleh_pos/features/kasir/presentation/widgets/cart_sheet.dart';
 import 'package:tuleh_pos/features/kasir/presentation/widgets/hasil_transaksi_sheet.dart';
+import 'package:tuleh_pos/features/kasir/presentation/controllers/keranjang_meta.dart';
+import 'package:tuleh_pos/features/kasir/presentation/widgets/pilih_pelanggan_sheet.dart';
+import 'package:tuleh_pos/features/pelanggan/domain/entities/pelanggan.dart';
 import 'package:tuleh_pos/features/products/presentation/providers/products_provider.dart';
 import 'package:tuleh_pos/features/toko/presentation/providers/toko_providers.dart';
 
@@ -175,6 +178,24 @@ void main() {
     );
     await pompa(t, 40);
     await simpan(t, 'keranjang');
+    // Dengan pelanggan, diskon, catatan terisi.
+    c.read(keranjangMetaProvider.notifier)
+      ..pilihPelanggan(const Pelanggan(id: 'C1', nama: 'Budi Santoso', telepon: '0812-3456-7890'))
+      ..aturDiskon(10)
+      ..aturCatatan('Tanpa es, ambil jam 5');
+    await pompa(t, 20);
+    await simpan(t, 'keranjang-tambahan');
+    Navigator.of(ctx).pop();
+    await pompa(t, 20);
+
+    showModalBottomSheet<void>(
+      context: ctx,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => const PilihPelangganSheet(),
+    );
+    await pompa(t, 40);
+    await simpan(t, 'pilih-pelanggan');
     Navigator.of(ctx).pop();
     await pompa(t, 20);
 

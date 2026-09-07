@@ -32,12 +32,17 @@ class StrukTeks {
     b.add(_duaKolom('No', s.nomor));
     b.add(_duaKolom('Waktu', _waktu(s.waktu)));
     if (s.kasir?.isNotEmpty ?? false) b.add(_duaKolom('Kasir', s.kasir!));
+    if (s.pelanggan?.isNotEmpty ?? false) b.add(_duaKolom('Pelanggan', s.pelanggan!));
     garis();
     for (final r in s.baris) {
       b.addAll(StrukEscPos.bungkus(r.nama, kolom));
       b.add(_duaKolom('  ${fmtQty(r.kuantitas)} x ${fmtIDR(r.harga)}', fmtIDR(r.subtotal)));
     }
     garis();
+    if ((s.diskon ?? 0) > 0) {
+      b.add(_duaKolom('Subtotal', fmtIDR(s.total + s.diskon!)));
+      b.add(_duaKolom('Diskon', '-${fmtIDR(s.diskon!)}'));
+    }
     b.add(_duaKolom('TOTAL', fmtIDR(s.total)));
     if (s.metode?.isNotEmpty ?? false) b.add(_duaKolom('Bayar', s.metode!));
     if (s.dibayar != null) b.add(_duaKolom('Tunai', fmtIDR(s.dibayar!)));

@@ -5,6 +5,12 @@ sebagai isi Release GitHub (workflow flutter-release.yml), dan empat baris
 pertamanya tampil di banner pembaruan dalam aplikasi. Tulis untuk kasir, bukan
 untuk programmer.
 
+## 2.11.0
+
+- Keranjang: pilih pelanggan (cari nama/telepon, tambah cepat), diskon transaksi dalam persen, dan catatan. Total di kasir dan lembar bayar sudah setelah diskon; dikirim ke server dengan kontrak yang sama seperti desktop (diskon per item, id pelanggan, catatan).
+- Struk cetak, teks bagikan, dan lembar hasil menampilkan pelanggan, subtotal, dan potongan diskon; cetak ulang dari Riwayat ikut memuatnya.
+- Mode Demo menghitung diskon dan pelanggan seperti server.
+
 ## 2.10.0
 
 - Cetak ulang dan Bagikan struk dari detail Riwayat; tombol Bagikan struk (WhatsApp/pesan/salin, teks 32 kolom seperti struk thermal) di lembar hasil transaksi.

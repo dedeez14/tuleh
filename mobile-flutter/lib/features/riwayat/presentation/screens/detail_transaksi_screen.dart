@@ -83,6 +83,8 @@ Struk _struk(WidgetRef ref, TransaksiDetail d) {
     barcode: d.nomor,
     logoUrl: (usaha?.strukTampilLogo ?? false) ? usaha?.logo : null,
     demo: ref.read(demoSessionProvider).active,
+    pelanggan: d.pelanggan,
+    diskon: d.totalDiskon > 0 ? d.totalDiskon : null,
   );
 }
 

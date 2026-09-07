@@ -13,6 +13,7 @@ import '../../../products/presentation/providers/products_provider.dart';
 import '../../../sesi/presentation/providers/sesi_providers.dart';
 import '../../../sesi/presentation/widgets/buka_sesi_dialog.dart';
 import '../controllers/cart_controller.dart';
+import '../controllers/keranjang_meta.dart';
 import '../widgets/cart_sheet.dart';
 
 /// Layar Kasir — katalog, pencarian, penyaring kategori, dan keranjang.
@@ -70,7 +71,7 @@ class _KasirScreenState extends ConsumerState<KasirScreen> {
   Widget build(BuildContext context) {
     final products = ref.watch(productsProvider);
     final count = ref.watch(cartCountProvider);
-    final total = ref.watch(cartTotalProvider);
+    final total = ref.watch(cartGrandTotalProvider);
     final items = ref.watch(cartControllerProvider);
     final cart = ref.read(cartControllerProvider.notifier);
 

@@ -176,7 +176,11 @@ class _HasilTransaksiSheetState extends ConsumerState<HasilTransaksiSheet> {
               if (s.dibayar != null)
                 _Baris(label: 'Uang diterima', nilai: fmtIDR(s.dibayar!)),
             ],
+            if ((s.diskon ?? 0) > 0)
+              _Baris(label: 'Diskon', nilai: '−${fmtIDR(s.diskon!)}'),
             _Baris(label: 'Metode', nilai: s.metode ?? '-'),
+            if (s.pelanggan != null && s.pelanggan!.isNotEmpty)
+              _Baris(label: 'Pelanggan', nilai: s.pelanggan!),
             const SizedBox(height: 18),
             if (s.logoUrl != null && s.logoUrl!.isNotEmpty) ...[
               // Logo struk yang diatur pemilik di desktop — pratinjau kepala
