@@ -508,6 +508,11 @@
   gap: 6px;
 }
 
+.pos-sum__row--input { align-items: center; }
+.pos-sum__row--input label { color: var(--text-2); }
+.pos-sum__input { display: inline-flex; align-items: center; gap: 4px; }
+.pos-sum__input .input--sm { width: 64px; padding: 4px 8px; text-align: right; }
+
 .pos-sum__row {
   display: flex;
   justify-content: space-between;

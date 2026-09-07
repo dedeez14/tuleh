@@ -10,7 +10,7 @@ import { getState, subscribe } from '../state.js'
 import { esc, fmtIDR, fmtNumber, parseAmount, debounce } from '../utils/format.js'
 import { toast, showModal, confirmDialog, emptyStateHTML, loadingHTML, icons } from '../components/ui.js'
 import { buildReceiptHTML, printReceipt, tombolBagikanStruk } from '../components/receipt.js'
-import { lineTotals, cartTotals, kembalian, shortfall, quickCashOptions, clampQty } from '../lib/cart.js'
+import { lineTotals, cartTotals, kembalian, shortfall, quickCashOptions, clampQty, diskonGabungan } from '../lib/cart.js'
 import { midtransBoleh, qrisAksi, sisaDetik, formatSisa, harusFallbackStatis } from '../lib/qris-flow.js'
 import { customerViewHTML } from '../components/customer-view.js'
 import { bacaParkir, simpanParkir, tambahParkir, hapusParkir, pulihkanBaris, ringkasParkir } from '../lib/parkir.js'
@@ -27,12 +27,20 @@ const BARCODE_RE = /^\d{5,}$/
 
 let cart = [] // [{ produk, kuantitas, diskonPersen }]
 let pelanggan = null // { id, nama, kode?, telepon? } | null
+// Diskon transaksi (persen) — diterapkan ke semua baris, digabung dengan
+// diskon baris menjadi satu diskon_persen per item (kontrak sama dengan Android).
+let diskonTransaksi = 0
+
+/** Diskon persen efektif satu baris (baris + transaksi). */
+function diskonEfektif(l) {
+  return diskonGabungan(l.diskonPersen, diskonTransaksi)
+}
 
 function cartLines() {
   return cart.map((l) => ({
     harga: hargaJual(l.produk),
     kuantitas: Number(l.kuantitas) || 0,
-    diskonPersen: Number(l.diskonPersen) || 0,
+    diskonPersen: diskonEfektif(l),
     pajakPersen: Number(l.produk.pajak_persen) || 0
   }))
 }
@@ -213,7 +221,7 @@ function renderPos(container) {
     const items = cart.map((l) => {
       const harga = hargaJual(l.produk)
       const qty = Number(l.kuantitas) || 0
-      const lt = lineTotals({ harga, kuantitas: qty, diskonPersen: Number(l.diskonPersen) || 0, pajakPersen: Number(l.produk.pajak_persen) || 0 })
+      const lt = lineTotals({ harga, kuantitas: qty, diskonPersen: diskonEfektif(l), pajakPersen: Number(l.produk.pajak_persen) || 0 })
       return { nama: l.produk.nama, qty, satuan: l.produk.satuan || '', harga, subtotal: lt.bruto }
     })
     return { store: cdStore(), items, totals, payment: cdPayment, done: false, promoVideo: promoVideoUrl() }
@@ -590,13 +598,42 @@ function renderPos(container) {
     const adaDiskon = Number(totals.totalDiskon) > 0
     sumEl.innerHTML = `
       <div class="pos-sum__row"><span>Subtotal</span><span class="num">${fmtIDR(totals.subtotal)}</span></div>
-      <div class="pos-sum__row${adaDiskon ? ' pos-sum__row--disc' : ''}"><span>Diskon</span><span class="num">${adaDiskon ? '−' : ''}${fmtIDR(totals.totalDiskon)}</span></div>
+      <div class="pos-sum__row pos-sum__row--input">
+        <label for="pos-diskon-trx">Diskon transaksi</label>
+        <span class="pos-sum__input"><input type="number" id="pos-diskon-trx" class="input input--sm num" min="0" max="100" step="0.5"
+          value="${diskonTransaksi || ''}" placeholder="0" aria-label="Diskon transaksi persen" ${cart.length ? '' : 'disabled'} /><span>%</span></span>
+      </div>
+      <div class="pos-sum__row${adaDiskon ? ' pos-sum__row--disc' : ''}" id="pos-sum-diskon"><span>Diskon</span><span class="num">${adaDiskon ? '−' : ''}${fmtIDR(totals.totalDiskon)}</span></div>
       <div class="pos-sum__row"><span>Pajak</span><span class="num">${fmtIDR(totals.totalPajak)}</span></div>
       <div class="pos-sum__total">
         <span class="pos-sum__total-label">Total</span>
         <span class="pos-sum__total-value num">${fmtIDR(totals.grandTotal)}</span>
       </div>`
   }
+
+  // Diskon transaksi: ketik persen → hitung ulang tanpa merender ulang kolom
+  // (fokus & kursor tetap); Enter/blur merender penuh.
+  sumEl.addEventListener('input', (e) => {
+    const el = e.target
+    if (!el || el.id !== 'pos-diskon-trx') return
+    let v = Number(el.value)
+    if (!Number.isFinite(v) || v < 0) v = 0
+    if (v > 100) { v = 100; el.value = '100' }
+    diskonTransaksi = v
+    const totals = cartTotals(cartLines())
+    const disc = sumEl.querySelector('#pos-sum-diskon')
+    if (disc) {
+      disc.classList.toggle('pos-sum__row--disc', totals.totalDiskon > 0)
+      disc.querySelector('.num').textContent = `${totals.totalDiskon > 0 ? '−' : ''}${fmtIDR(totals.totalDiskon)}`
+    }
+    const tot = sumEl.querySelector('.pos-sum__total-value')
+    if (tot) tot.textContent = fmtIDR(totals.grandTotal)
+    pushCustomerDisplay()
+  })
+  sumEl.addEventListener('change', (e) => { if (e.target && e.target.id === 'pos-diskon-trx') renderCart() })
+  sumEl.addEventListener('keydown', (e) => {
+    if (e.target && e.target.id === 'pos-diskon-trx' && e.key === 'Enter') { e.preventDefault(); renderCart(); payBtn.focus() }
+  })
 
   function renderCart() {
     if (disposed) return
@@ -633,10 +670,11 @@ function renderPos(container) {
 
   function parkirKeranjang() {
     if (!cart.length) { toast('Keranjang masih kosong.', 'info'); return false }
-    const { daftar, entri, alasan } = tambahParkir(daftarParkir(), { items: cart, pelanggan })
+    const { daftar, entri, alasan } = tambahParkir(daftarParkir(), { items: cart, pelanggan, diskonTransaksi })
     if (!entri) { toast(alasan, 'error'); return false }
     simpanParkir(localStorage, tokoParkir(), daftar)
     cart = []
+    diskonTransaksi = 0
     pelanggan = null
     renderCart()
     toast(`Keranjang diparkir sebagai #${entri.nomor}. Buka "Tersimpan" (F10) untuk melanjutkan.`, 'success')
@@ -698,6 +736,7 @@ function renderPos(container) {
       }
       cart = pulihkanBaris(entri, produkList)
       pelanggan = entri.pelanggan
+      diskonTransaksi = Number(entri.diskonTransaksi) || 0
       simpanParkir(localStorage, tokoParkir(), hapusParkir(daftarParkir(), id))
       modal.close()
       renderCart()
@@ -1105,6 +1144,8 @@ function renderPos(container) {
         done: true
       }
       cart = []
+      diskonTransaksi = 0
+    diskonTransaksi = 0
       pelanggan = null
       if (!disposed) {
         renderCart()
@@ -1248,7 +1289,7 @@ function renderPos(container) {
           idProduk: l.produk.id,
           harga: hargaJual(l.produk),
           kuantitas: Number(l.kuantitas) || 0,
-          diskonPersen: Number(l.diskonPersen) || 0,
+          diskonPersen: diskonEfektif(l),
           pajakPersen: Number(l.produk.pajak_persen) || 0
         })),
         tipePembayaran: 'QRIS',
@@ -1289,7 +1330,7 @@ function renderPos(container) {
           idProduk: l.produk.id,
           harga: hargaJual(l.produk),
           kuantitas: Number(l.kuantitas) || 0,
-          diskonPersen: Number(l.diskonPersen) || 0,
+          diskonPersen: diskonEfektif(l),
           pajakPersen: Number(l.produk.pajak_persen) || 0
         })),
         tipePembayaran: metode,
@@ -1357,6 +1398,9 @@ function renderPos(container) {
           return
         }
         cart = []
+        diskonTransaksi = 0
+      diskonTransaksi = 0
+    diskonTransaksi = 0
         pelanggan = null
         if (!disposed) renderCart()
         // Panel sukses memakai nota tanda-terima (belum lunas) + QR lacak
@@ -1470,6 +1514,7 @@ function renderPos(container) {
     })
     if (!yes || disposed) return
     cart = []
+    diskonTransaksi = 0
     renderCart()
   })
 

@@ -32,7 +32,7 @@ export function simpanParkir(storage, tokoId, daftar) {
  * items: [{ produk, kuantitas, diskonPersen }] — produk disalin seperlunya.
  * Mengembalikan { daftar, entri } atau { daftar, entri: null, alasan } bila penuh.
  */
-export function tambahParkir(daftar, { items, pelanggan = null, catatan = '' }, now = Date.now()) {
+export function tambahParkir(daftar, { items, pelanggan = null, catatan = '', diskonTransaksi = 0 }, now = Date.now()) {
   if (!Array.isArray(items) || !items.length) return { daftar, entri: null, alasan: 'Keranjang kosong.' }
   if (daftar.length >= MAKS_PARKIR) {
     return { daftar, entri: null, alasan: `Maksimal ${MAKS_PARKIR} keranjang terparkir. Selesaikan atau hapus yang lama.` }
@@ -44,6 +44,7 @@ export function tambahParkir(daftar, { items, pelanggan = null, catatan = '' }, 
     waktu: now,
     pelanggan: pelanggan ? { id: pelanggan.id, nama: pelanggan.nama, kode: pelanggan.kode, telepon: pelanggan.telepon } : null,
     catatan: String(catatan || ''),
+    diskonTransaksi: Number(diskonTransaksi) || 0,
     items: items.map((l) => ({
       produk: salinProduk(l.produk),
       kuantitas: Number(l.kuantitas) || 0,

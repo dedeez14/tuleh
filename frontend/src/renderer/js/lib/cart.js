@@ -83,3 +83,14 @@ export function clampQty(qty, { kelolaStok = false, stok = Infinity } = {}) {
   if (kelolaStok && Number.isFinite(stok)) return Math.min(n, Math.max(stok, 0))
   return n
 }
+
+/**
+ * Gabungkan diskon baris dan diskon transaksi (keduanya persen) menjadi satu
+ * persen efektif per baris — server hanya mengenal `items.*.diskon_persen`.
+ * 10% lalu 10% = 19%, bukan 20% (diskon kedua dari harga yang sudah dipotong).
+ */
+export function diskonGabungan(diskonBaris, diskonTransaksi) {
+  const a = Math.min(100, Math.max(0, Number(diskonBaris) || 0))
+  const b = Math.min(100, Math.max(0, Number(diskonTransaksi) || 0))
+  return Math.round((a + b - (a * b) / 100) * 10000) / 10000
+}

@@ -99,3 +99,12 @@ test('clampQty membatasi qty terhadap stok bila kelola stok', () => {
   assert.equal(cart.clampQty(-1, {}), 0)
   assert.equal(cart.clampQty('abc', {}), 0)
 })
+
+test('diskonGabungan: baris + transaksi digabung (10% lalu 10% = 19%), dijepit 0–100', () => {
+  assert.equal(cart.diskonGabungan(10, 10), 19)
+  assert.equal(cart.diskonGabungan(0, 15), 15)
+  assert.equal(cart.diskonGabungan(20, 0), 20)
+  assert.equal(cart.diskonGabungan(100, 50), 100)
+  assert.equal(cart.diskonGabungan(-5, 250), 100)
+  assert.equal(cart.diskonGabungan('abc', undefined), 0)
+})
