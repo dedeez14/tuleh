@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
@@ -5,6 +6,7 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/offline/antrean.dart';
 import '../../../core/offline/koneksi.dart';
 import '../../../core/offline/nomor_lokal.dart';
+import '../../../core/offline/sinkron_latar.dart';
 import '../../cetak/domain/entities/struk.dart';
 import '../domain/entities/cart_item.dart';
 import 'datasources/transaction_remote_datasource.dart';
@@ -182,6 +184,7 @@ class CheckoutRepository {
       ),
       deltaStok: delta,
     );
+    if (!tinjau) unawaited(SinkronLatar.jadwalkanSekali());
     return HasilBayar(
       nomor: nomor,
       kembalian: kembalian,

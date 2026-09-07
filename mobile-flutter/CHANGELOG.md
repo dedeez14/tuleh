@@ -5,6 +5,11 @@ sebagai isi Release GitHub (workflow flutter-release.yml), dan empat baris
 pertamanya tampil di banner pembaruan dalam aplikasi. Tulis untuk kasir, bukan
 untuk programmer.
 
+## 2.15.0
+
+- Sinkronisasi latar belakang: transaksi/pengeluaran/stok/sesi/bon yang diantrekan saat offline kini dikirim juga ketika aplikasi ditutup, begitu jaringan tersedia (WorkManager: tugas sekali jalan tiap ada antrean baru + berkala 15 menit). Kunci bersama mencegah kiriman ganda dengan pengurai di aplikasi.
+- Pengurai mengirim atas nama toko saat data dibuat, bukan toko yang sedang aktif.
+
 ## 2.14.0
 
 - Pemindai barcode kamera di Kasir (ikon pindai di bilah atas): pindai beruntun, tiap barcode yang dikenal langsung masuk keranjang dengan umpan balik nama produk dan jumlah; barcode yang tidak dikenal diberi tahu. Ada tombol lampu dan ganti kamera. Cocok dengan katalog yang sudah termuat sehingga bekerja saat offline.

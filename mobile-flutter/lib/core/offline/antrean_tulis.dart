@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +8,7 @@ import '../network/api_exception.dart';
 import 'antrean.dart';
 import 'koneksi.dart';
 import 'pengurai.dart';
+import 'sinkron_latar.dart';
 
 /// Hasil permintaan tulis lewat [AntreanTulis].
 class HasilTulis {
@@ -89,6 +91,7 @@ class AntreanTulis {
       ),
       deltaStok: deltaStok,
     );
+    if (!tinjau) unawaited(SinkronLatar.jadwalkanSekali());
     return HasilTulis(tertunda: true, perluTinjau: tinjau, clientRef: clientRef);
   }
 }

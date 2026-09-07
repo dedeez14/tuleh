@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +8,7 @@ import '../network/api_client.dart';
 import 'antrean.dart';
 import 'koneksi.dart';
 import 'rujukan_lokal.dart';
+import 'sinkron_latar.dart' show KunciPengurai;
 
 /// Penyiap badan per jenis pesan, dijalankan tepat sebelum kirim (fase 3):
 /// mis. SESI_BUKA mengisi `gudang_id` yang belum sempat diambil saat offline.
@@ -34,8 +36,12 @@ class PenguraiAntrean {
     required this.koneksi,
     this.setelahBerubah,
     this.penyiap = const {},
+    this.kunci,
     DateTime Function()? sekarang,
   }) : _sekarang = sekarang ?? DateTime.now;
+
+  /// Kunci bersama dengan isolate latar (WorkManager); null di test.
+  final KunciPengurai? kunci;
 
   final AntreanStore store;
   final Dio dio;
@@ -72,6 +78,7 @@ class PenguraiAntrean {
     if (_berjalan) return 0;
     _berjalan = true;
     var sukses = 0;
+    await kunci?.kunci();
     try {
       // FIFO ketat: pesan MENUNGGU diproses sesuai urutan; bila yang paling
       // depan masih menunggu jadwal coba-lagi, yang di belakangnya ikut
@@ -89,6 +96,7 @@ class PenguraiAntrean {
       await _jadwalkanUlang();
     } finally {
       _berjalan = false;
+      await kunci?.buka();
     }
     return sukses;
   }
@@ -120,7 +128,12 @@ class PenguraiAntrean {
       var body = badanKirim(p.body);
       final siapkan = penyiap[p.jenis];
       if (siapkan != null) body = await siapkan(body);
-      res = await dio.post<dynamic>(path, data: body);
+      // Atas nama toko saat pesan dibuat (pencegat app melewati bila sudah ada).
+      res = await dio.post<dynamic>(
+        path,
+        data: body,
+        queryParameters: p.tokoId == null ? null : {'toko_id': p.tokoId},
+      );
     } on DioException catch (e) {
       final mungkinSampai =
           e.type == DioExceptionType.receiveTimeout ||
@@ -247,6 +260,7 @@ final penguraiProvider = Provider<PenguraiAntrean>((ref) {
     koneksi: ref.read(koneksiProvider.notifier),
     setelahBerubah: () => ref.read(antreanVersiProvider.notifier).state++,
     penyiap: {'SESI_BUKA': (body) => isiGudangId(dio, body)},
+    kunci: Platform.isAndroid ? KunciPengurai() : null,
   );
   ref.onDispose(p.hentikan);
   return p;
