@@ -227,6 +227,25 @@ class MejaOfflineRepository implements MejaRepository {
     }
   }
 
+  /// Stok berkurang saat bon DIBAYAR (bukan saat ronde), mengikuti server.
+  /// Delta hanya dari ronde yang masih di antrean (punya id produk); ronde
+  /// yang sudah tercatat di server tidak diketahui id produknya.
+  Future<Map<String, double>> _deltaStokBon(String billId) async {
+    final delta = <String, double>{};
+    for (final p in await _tertunda()) {
+      if (p.jenis != jenisRonde || billIdDariPath(p.path) != billId) continue;
+      final tampilan = p.body['_tampilan'];
+      if (tampilan is! List) continue;
+      for (final t in tampilan) {
+        if (t is! Map || t['kelola_stok'] != true) continue;
+        final id = '${t['id_produk'] ?? ''}';
+        if (id.isEmpty) continue;
+        delta[id] = (delta[id] ?? 0) - _angka(t['kuantitas']);
+      }
+    }
+    return delta;
+  }
+
   @override
   Future<Result<HasilTulis>> bayar(
     String billId, {
@@ -239,6 +258,7 @@ class MejaOfflineRepository implements MejaRepository {
         path: '/bills/$billId/settle',
         body: {'tipe_pembayaran': tipe, 'dibayar': dibayar},
         langsungAntre: adalahRujukanLokal(billId),
+        deltaStok: await _deltaStokBon(billId),
         kirim: (badan) => remote.bayarBody(billId, badanKirim(badan)),
       );
       return Ok(hasil);

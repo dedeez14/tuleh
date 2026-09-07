@@ -140,6 +140,13 @@ function registerIpcHandlers(getMainWindow) {
       const query = pesan && pesan.tokoId ? { toko_id: pesan.tokoId } : undefined
       const r = await api.post(jalur, { body, query })
       return r.timeout ? { ...r, status: -1 } : r
+    },
+    // Daftar transaksi server untuk memulihkan baris "mungkin sudah sampai".
+    ambilDaftar: async (tokoId, dari, sampai) => {
+      const r = await api.get('/transaksi', {
+        query: { dari, sampai, tanggal_dari: dari, tanggal_sampai: sampai, ...(tokoId ? { toko_id: tokoId } : {}) }
+      })
+      return r.ok && Array.isArray(r.data) ? r.data : null
     }
   })
   const kirimStatusOffline = () => {

@@ -20,10 +20,12 @@ const PESAN_TIMEOUT_SETELAH_KIRIM =
   'Server tidak menjawab setelah data dikirim. Periksa di Riwayat apakah sudah tercatat sebelum mengirim ulang.'
 
 class Pengurai {
-  constructor({ antrean, kirim, koneksi = null, setelahBerubah = null, sekarang = () => Date.now(), jadwal = setTimeout, batalJadwal = clearTimeout }) {
+  constructor({ antrean, kirim, koneksi = null, setelahBerubah = null, pemulih = null, sekarang = () => Date.now(), jadwal = setTimeout, batalJadwal = clearTimeout }) {
     this.antrean = antrean
     this.kirim = kirim
     this.koneksi = koneksi
+    // Pemulih baris TINJAU "mungkin sudah sampai" (lihat pemulih.js); null = tanpa.
+    this.pemulih = pemulih
     this.setelahBerubah = setelahBerubah
     this.sekarang = sekarang
     this._jadwalFn = jadwal
@@ -41,12 +43,27 @@ class Pengurai {
     let sukses = 0
     try {
       const kini = this.sekarang()
-      const menunggu = this.antrean.semua().filter((p) => p.status === STATUS.MENUNGGU)
-      for (const p of menunggu) {
+      let gagalJaringan = false
+      for (const p of this.antrean.semua().filter((x) => x.status === STATUS.MENUNGGU)) {
         if (p.cobaLagiSetelah && p.cobaLagiSetelah > kini) break // FIFO ketat
         const hasil = await this._kirim(p)
         if (hasil === 'terkirim') sukses++
-        if (hasil === 'berhenti') break
+        if (hasil === 'berhenti') { gagalJaringan = true; break }
+      }
+      // Baris "mungkin sudah sampai": pastikan ke server, lalu yang ternyata
+      // belum tercatat dikirim ulang di putaran ini juga.
+      if (!gagalJaringan && this.pemulih) {
+        let dipulihkan = 0
+        try { dipulihkan = await this.pemulih.jalankan() } catch { dipulihkan = 0 }
+        if (dipulihkan > 0) {
+          this._ubah()
+          for (const p of this.antrean.semua().filter((x) => x.status === STATUS.MENUNGGU)) {
+            if (p.cobaLagiSetelah && p.cobaLagiSetelah > this.sekarang()) break
+            const hasil = await this._kirim(p)
+            if (hasil === 'terkirim') sukses++
+            if (hasil === 'berhenti') break
+          }
+        }
       }
       this._jadwalkanUlang()
     } finally {

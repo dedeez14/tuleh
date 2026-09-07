@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../network/api_client.dart';
 import 'antrean.dart';
 import 'koneksi.dart';
+import 'pemulih_tinjau.dart';
 import 'rujukan_lokal.dart';
 import 'sinkron_latar.dart' show KunciPengurai;
 
@@ -37,11 +38,23 @@ class PenguraiAntrean {
     this.setelahBerubah,
     this.penyiap = const {},
     this.kunci,
+    this.pemulihDiberikan,
+    this.tanpaPemulih = false,
     DateTime Function()? sekarang,
   }) : _sekarang = sekarang ?? DateTime.now;
 
   /// Kunci bersama dengan isolate latar (WorkManager); null di test.
   final KunciPengurai? kunci;
+
+  /// Pemulih baris TINJAU "mungkin sudah sampai" (dicocokkan ke daftar
+  /// transaksi server); dijalankan setelah putaran kirim yang tidak gagal
+  /// jaringan. Default dibuat dari [dio]; null = tidak ada pemulihan.
+  PemulihTinjau? get pemulih => pemulihDiberikan ?? (_pemulihDefault ??= PemulihTinjau(store: store, dio: dio));
+  final PemulihTinjau? pemulihDiberikan;
+  PemulihTinjau? _pemulihDefault;
+
+  /// true = lewati pemulihan (test pengurai murni).
+  final bool tanpaPemulih;
 
   final AntreanStore store;
   final Dio dio;
@@ -87,11 +100,29 @@ class PenguraiAntrean {
       final menunggu = (await store.semua())
           .where((p) => p.status == StatusAntrean.menunggu)
           .toList();
+      var gagalJaringan = false;
       for (final p in menunggu) {
         if (p.cobaLagiSetelah != null && p.cobaLagiSetelah!.isAfter(kini)) break;
         final lanjut = await _kirim(p);
         if (lanjut == _Hasil.terkirim) sukses++;
-        if (lanjut == _Hasil.berhenti) break;
+        if (lanjut == _Hasil.berhenti) {
+          gagalJaringan = true;
+          break;
+        }
+      }
+      // Baris "mungkin sudah sampai": pastikan ke server, lalu (bila ternyata
+      // belum tercatat) kirim ulang di putaran ini juga.
+      if (!gagalJaringan && !tanpaPemulih && pemulih != null) {
+        final dipulihkan = await pemulih!.jalankan();
+        if (dipulihkan > 0) {
+          setelahBerubah?.call();
+          for (final p in (await store.semua()).where((p) => p.status == StatusAntrean.menunggu)) {
+            if (p.cobaLagiSetelah != null && p.cobaLagiSetelah!.isAfter(_sekarang())) break;
+            final lanjut = await _kirim(p);
+            if (lanjut == _Hasil.terkirim) sukses++;
+            if (lanjut == _Hasil.berhenti) break;
+          }
+        }
       }
       await _jadwalkanUlang();
     } finally {

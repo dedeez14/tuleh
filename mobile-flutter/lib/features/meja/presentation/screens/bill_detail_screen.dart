@@ -225,6 +225,7 @@ class _AddPesananSheetState extends ConsumerState<_AddPesananSheet> {
             'nama': _prod[e.key]?.nama ?? '-',
             'harga': _prod[e.key]?.harga ?? 0,
             'kuantitas': e.value,
+            'kelola_stok': _prod[e.key]?.stok != null,
           },
     ];
     final r = await ref

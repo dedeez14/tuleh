@@ -5,6 +5,11 @@ sebagai isi Release GitHub (workflow flutter-release.yml), dan empat baris
 pertamanya tampil di banner pembaruan dalam aplikasi. Tulis untuk kasir, bukan
 untuk programmer.
 
+## 2.16.0
+
+- Baris "perlu ditinjau" karena server tidak menjawab setelah data terkirim kini dipulihkan otomatis saat online: dicocokkan ke daftar transaksi server pada hari itu (total, metode, waktu ±15 menit). Tepat satu yang cocok → dianggap terkirim dengan nomor resminya; tidak ada → dikirim ulang otomatis; lebih dari satu → tetap ditinjau dengan petunjuk nomor kandidatnya.
+- Stok lokal ikut berkurang saat bon meja dibayar (dari pesanan yang dibuat offline), mengikuti aturan server yang memotong stok saat bon dilunasi.
+
 ## 2.15.0
 
 - Sinkronisasi latar belakang: transaksi/pengeluaran/stok/sesi/bon yang diantrekan saat offline kini dikirim juga ketika aplikasi ditutup, begitu jaringan tersedia (WorkManager: tugas sekali jalan tiap ada antrean baru + berkala 15 menit). Kunci bersama mencegah kiriman ganda dengan pengurai di aplikasi.

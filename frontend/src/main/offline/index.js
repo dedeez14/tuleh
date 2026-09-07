@@ -8,6 +8,7 @@ const path = require('node:path')
 const { SalinanBaca } = require('./salinan')
 const { Antrean, STATUS, buatClientRef, labelJenis } = require('./antrean')
 const { Pengurai } = require('./pengurai')
+const { Pemulih } = require('./pemulih')
 const { NomorLokal, buatStrukLokal } = require('./struk-lokal')
 
 class Koneksi {
@@ -43,7 +44,7 @@ let nomorLokal = null
 const koneksi = new Koneksi()
 
 /** Inisialisasi dengan folder userData (dipanggil main/ipc saat start). */
-function init({ dir, kirim }) {
+function init({ dir, kirim, ambilDaftar = null }) {
   salinan = new SalinanBaca({ berkas: path.join(dir, 'offline', 'salinan.json') })
   antrean = new Antrean({ berkas: path.join(dir, 'offline', 'antrean.json') })
   nomorLokal = new NomorLokal({ berkas: path.join(dir, 'offline', 'nomor-lokal.json') })
@@ -51,6 +52,7 @@ function init({ dir, kirim }) {
     antrean,
     kirim,
     koneksi,
+    pemulih: ambilDaftar ? new Pemulih({ antrean, ambilDaftar }) : null,
     setelahBerubah: () => koneksi._siar()
   })
   return { salinan, antrean, pengurai, nomorLokal, koneksi }

@@ -177,3 +177,66 @@ test('buatStrukLokal: bentuk sama dengan struk server, hitung diskon/pajak/kemba
   assert.equal(s.catatan, 'tanpa es')
   assert.equal(s.kasir, 'Dede')
 })
+
+const { Pemulih } = require('../src/main/offline/pemulih')
+
+function tinjau(a, ref, total, tipe, waktuMs) {
+  return a.antrekan({
+    clientRef: ref, jenis: 'CHECKOUT', tokoId: 'T1', path: '/transaksi/checkout',
+    body: { items: [{ id_produk: 'P1', kuantitas: 1, harga: total }], tipe_pembayaran: tipe, dibayar: total, waktu_klien: new Date(waktuMs).toISOString() },
+    status: STATUS.TINJAU, galat: PESAN_TIMEOUT_SETELAH_KIRIM
+  }, { transaksi: { tokoId: 'T1', nomorLokal: `L-${ref}`, waktuKlien: new Date(waktuMs).toISOString(), struk: { grand_total: total } } })
+}
+const trxServer = (id, total, tipe, waktuMs, status = 'SELESAI') =>
+  ({ id, nomor: `N-${id}`, grand_total: total, tipe_pembayaran: tipe, status, tanggal: new Date(waktuMs).toISOString() })
+
+test('Pemulih: satu kandidat → TERKIRIM; tanpa kandidat → MENUNGGU; ganda → TINJAU dengan petunjuk; gagal tarik → dibiarkan', async () => {
+  const jam = Date.parse('2026-09-08T07:00:00Z')
+  const a = antreanMemori()
+  tinjau(a, 'a', 25000, 'TUNAI', jam)
+  tinjau(a, 'b', 40000, 'QRIS', jam)
+  tinjau(a, 'c', 15000, 'TUNAI', jam)
+  const daftar = [
+    trxServer('s1', 25000, 'TUNAI', jam + 3 * 60000),
+    trxServer('s2', 25000, 'TUNAI', jam - 3 * 3600000),          // di luar jendela
+    trxServer('s3', 25000, 'TUNAI', jam, 'DIBATALKAN'),           // dibatalkan
+    trxServer('s4', 15000, 'TUNAI', jam + 60000),
+    trxServer('s5', 15000, 'TUNAI', jam - 120000)                 // ganda untuk c
+  ]
+  const dipanggil = []
+  const pm = new Pemulih({ antrean: a, ambilDaftar: async (toko, dari, sampai) => { dipanggil.push([toko, dari, sampai]); return daftar } })
+  assert.equal(await pm.jalankan(), 2)
+  assert.equal(a.cari('a').status, STATUS.TERKIRIM)
+  assert.equal(a.cari('a').hasil.nomor, 'N-s1')
+  assert.equal(a.transaksiLokal('a'), null)
+  assert.equal(a.cari('b').status, STATUS.MENUNGGU, 'tidak ada QRIS 40.000 → dikirim ulang')
+  assert.equal(a.cari('c').status, STATUS.TINJAU)
+  assert.match(a.cari('c').galat, /N-s4, N-s5/)
+  assert.equal(dipanggil.length, 1, 'daftar per toko+tanggal ditarik sekali')
+  assert.deepEqual(dipanggil[0], ['T1', '2026-09-07', '2026-09-09'])
+
+  const d = antreanMemori()
+  tinjau(d, 'x', 25000, 'TUNAI', jam)
+  const gagal = new Pemulih({ antrean: d, ambilDaftar: async () => null })
+  assert.equal(await gagal.jalankan(), 0)
+  assert.equal(d.cari('x').status, STATUS.TINJAU)
+  assert.equal(d.cari('x').galat, PESAN_TIMEOUT_SETELAH_KIRIM)
+})
+
+test('Pengurai + Pemulih: baris yang dipastikan belum tercatat dikirim ulang di putaran yang sama', async () => {
+  const jam = Date.parse('2026-09-08T07:00:00Z')
+  const a = antreanMemori()
+  tinjau(a, 'a', 25000, 'TUNAI', jam)
+  let kirim = 0
+  const pm = new Pemulih({ antrean: a, ambilDaftar: async () => [trxServer('z', 99000, 'TUNAI', jam)] })
+  const pg = new Pengurai({
+    antrean: a,
+    pemulih: pm,
+    kirim: async () => { kirim++; return { ok: true, status: 201, data: { nomor: '26-POS-000077' } } },
+    jadwal: () => null, batalJadwal: () => {}
+  })
+  assert.equal(await pg.jalankan(), 1)
+  assert.equal(kirim, 1)
+  assert.equal(a.cari('a').status, STATUS.TERKIRIM)
+  assert.equal(a.cari('a').hasil.nomor, '26-POS-000077')
+})
