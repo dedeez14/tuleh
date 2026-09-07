@@ -129,6 +129,8 @@ Tekan **F1** di dalam aplikasi untuk daftar lengkap. Yang paling sering dipakai 
 
 Mengetik huruf atau angka di mana pun pada layar kasir langsung mengisi kolom cari, jadi scanner barcode bekerja tanpa harus mengklik kolom itu dulu.
 
+**Pemindai barcode kamera** (Flutter ≥ 2.14.0): ikon pindai di Kasir membuka kamera (mobile_scanner, model disertakan) dalam mode beruntun, barcode yang dikenal langsung masuk keranjang; form produk punya tombol pindai untuk kolom barcode.
+
 **Tablet Android** (Flutter ≥ 2.13.0): pada layar ≥ 720 dp aplikasi memakai rail samping dan tata letak ala desktop: kasir dua panel (katalog grid + keranjang menetap, langkah bayar di panel), riwayat master-detail, beranda dua kolom, daftar lain berlebar terbatas; lembar (hasil transaksi, pilih pelanggan, menu Lainnya) tampil sebagai dialog. Ambang dan pembungkusnya ada di `mobile-flutter/lib/core/layout/lebar.dart`.
 
 **Display Pelanggan saat bayar** (desktop ≥ 0.9.18): begitu kasir memilih metode di jendela pembayaran, display (jendela kedua maupun halaman LAN di tablet/HP) menampilkan panel metode itu: tunai (total, lalu uang diterima & kembalian saat diketik), QRIS (kode untuk dipindai, atau arahan bila gambar QR belum diunggah), transfer (daftar rekening). Layar potret menaruh panel di bawah pesanan.

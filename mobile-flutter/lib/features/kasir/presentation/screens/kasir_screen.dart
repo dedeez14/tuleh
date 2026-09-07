@@ -8,6 +8,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../core/widgets/app_background.dart';
 import '../../../../core/widgets/motion.dart';
+import '../../../../core/widgets/pindai_barcode.dart';
 import '../../../../core/widgets/states.dart';
 import '../../../products/domain/entities/product.dart';
 import '../../../products/presentation/providers/products_provider.dart';
@@ -66,6 +67,39 @@ class _KasirScreenState extends ConsumerState<KasirScreen> {
   void _tambah(Product p) {
     ref.read(cartControllerProvider.notifier).add(p);
     HapticFeedback.selectionClick();
+  }
+
+  /// Pindai beruntun: tiap barcode yang dikenal langsung masuk keranjang.
+  /// Dicocokkan ke katalog yang sudah termuat (semua halaman) — bekerja juga
+  /// saat offline; bila tak ada, dicari ke server berdasarkan kode.
+  Future<void> _pindai() async {
+    FocusScope.of(context).unfocus();
+    await PindaiBarcodeScreen.beruntun(context, onKode: (kode) async {
+      final produk = await _cariBarcode(kode);
+      if (produk == null) return null;
+      ref.read(cartControllerProvider.notifier).add(produk);
+      final qty = ref.read(cartControllerProvider).firstWhere((e) => e.product.id == produk.id).qty;
+      return '${produk.nama} · ×$qty';
+    });
+  }
+
+  Future<Product?> _cariBarcode(String kode) async {
+    final k = kode.trim();
+    bool cocok(Product p) => (p.barcode ?? '').trim() == k;
+    final termuat = ref.read(productsProvider).valueOrNull ?? const <Product>[];
+    for (final p in termuat) {
+      if (cocok(p)) return p;
+    }
+    final r = await ref.read(productRepositoryProvider).list(query: k);
+    return r.when(
+      ok: (list) {
+        for (final p in list) {
+          if (cocok(p)) return p;
+        }
+        return null;
+      },
+      err: (_) => null,
+    );
   }
 
   @override
@@ -169,6 +203,11 @@ class _KasirScreenState extends ConsumerState<KasirScreen> {
           title: const Text('Kasir'),
           actions: [
             IconButton(
+              tooltip: 'Pindai barcode dengan kamera',
+              onPressed: _pindai,
+              icon: const Icon(Icons.qr_code_scanner_rounded),
+            ),
+            IconButton(
               tooltip: 'Muat ulang katalog',
               onPressed: () => ref.invalidate(productsProvider),
               icon: const Icon(Icons.refresh_rounded),
@@ -198,6 +237,11 @@ class _KasirScreenState extends ConsumerState<KasirScreen> {
       appBar: AppBar(
         title: const Text('Kasir'),
         actions: [
+          IconButton(
+            tooltip: 'Pindai barcode dengan kamera',
+            onPressed: _pindai,
+            icon: const Icon(Icons.qr_code_scanner_rounded),
+          ),
           IconButton(
             tooltip: 'Muat ulang katalog',
             onPressed: () => ref.invalidate(productsProvider),

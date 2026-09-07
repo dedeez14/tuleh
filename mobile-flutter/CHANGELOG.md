@@ -5,6 +5,12 @@ sebagai isi Release GitHub (workflow flutter-release.yml), dan empat baris
 pertamanya tampil di banner pembaruan dalam aplikasi. Tulis untuk kasir, bukan
 untuk programmer.
 
+## 2.14.0
+
+- Pemindai barcode kamera di Kasir (ikon pindai di bilah atas): pindai beruntun, tiap barcode yang dikenal langsung masuk keranjang dengan umpan balik nama produk dan jumlah; barcode yang tidak dikenal diberi tahu. Ada tombol lampu dan ganti kamera. Cocok dengan katalog yang sudah termuat sehingga bekerja saat offline.
+- Form produk: tombol pindai untuk mengisi kolom barcode dari kamera.
+- Ukuran APK bertambah sekitar 16 MB karena model pembaca barcode disertakan (tidak bergantung layanan Google).
+
 ## 2.13.1
 
 - Pembaruan aplikasi lebih andal: APK diunduh langsung oleh aplikasi (bukan lewat DownloadManager sistem yang dibatasi di sebagian HP), mengikuti pengalihan GitHub, memverifikasi ukuran berkas, dan mendeteksi unduhan macet; DownloadManager tinggal cadangan.

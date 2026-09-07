@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../../../core/widgets/pindai_barcode.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/utils/rupiah_input.dart';
@@ -161,9 +163,18 @@ class _ProductFormSheetState extends ConsumerState<ProductFormSheet> {
               controller: _barcode,
               textInputAction: TextInputAction.done,
               onFieldSubmitted: (_) => _loading ? null : _save(),
-              decoration: const InputDecoration(
-                  labelText: 'Barcode (opsional)',
-                  prefixIcon: Icon(Icons.qr_code_2_outlined)),
+              decoration: InputDecoration(
+                labelText: 'Barcode (opsional)',
+                prefixIcon: const Icon(Icons.qr_code_2_outlined),
+                suffixIcon: IconButton(
+                  tooltip: 'Pindai dengan kamera',
+                  icon: const Icon(Icons.qr_code_scanner_rounded),
+                  onPressed: () async {
+                    final kode = await PindaiBarcodeScreen.sekali(context, judul: 'Pindai barcode produk');
+                    if (kode != null && mounted) setState(() => _barcode.text = kode);
+                  },
+                ),
+              ),
             ),
             const SizedBox(height: 18),
             FilledButton(
