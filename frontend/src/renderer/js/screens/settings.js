@@ -7,6 +7,7 @@ import { esc, fmtDateTime, fmtDate } from '../utils/format.js'
 import { mulaiPembayaran } from '../langganan-bayar.js'
 import { mountProfilUsaha } from './profil-usaha.js'
 import { mountPembayaran } from './pembayaran-setelan.js'
+import { renderPanelSinkronisasi } from '../components/sinkronisasi.js'
 
 const DASH = '<span class="u-faint">—</span>'
 
@@ -166,6 +167,14 @@ export const SettingsScreen = {
             </div>
           </section>
 
+          <section class="card" id="set-sinkron-card">
+            <div class="card__header"><h2 class="card__title">Sinkronisasi</h2></div>
+            <div class="card__body">
+              <div class="field__hint" style="margin-bottom:10px">Transaksi, pengeluaran, dan stok masuk yang dibuat saat internet mati disimpan di komputer ini lalu dikirim berurutan begitu server terjangkau.</div>
+              <div id="set-sinkron"></div>
+            </div>
+          </section>
+
           <div id="set-profil-usaha"></div>
 
           <div id="set-pembayaran"></div>
@@ -219,6 +228,7 @@ export const SettingsScreen = {
     // Profil Usaha & Struk + Pembayaran — kartu dimuat & di-wiring secara async.
     mountProfilUsaha(container.querySelector('#set-profil-usaha'))
     mountPembayaran(container.querySelector('#set-pembayaran'))
+    renderPanelSinkronisasi(container.querySelector('#set-sinkron'))
 
     // Perpanjang langganan (alur pembayaran Midtrans)
     const perpanjangBtn = container.querySelector('#set-perpanjang')

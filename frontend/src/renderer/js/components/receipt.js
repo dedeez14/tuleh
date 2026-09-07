@@ -21,6 +21,8 @@ export function buildReceiptHTML(struk) {
   const isPrabon = struk.status === 'BELUM DIBAYAR'
   // Mode Demo: struk bertanda agar tidak dipakai sebagai bukti pembayaran sungguhan.
   const tandaDemo = getState().demo ? `<div class="receipt__demo">${TANDA_DEMO}</div>` : ''
+  // Transaksi offline: nomor lokal, nomor resmi menyusul setelah tersinkron.
+  const tandaOffline = struk.belum_sinkron ? '<div class="receipt__antrian" style="background:#fdf1df;color:#b45309">BELUM TERSINKRON — nomor resmi menyusul</div>' : ''
 
   const itemRows = (struk.items || [])
     .map((item) => {
@@ -56,6 +58,7 @@ export function buildReceiptHTML(struk) {
       </div>
       <div class="receipt__sep"></div>
       ${isPrabon ? `<div class="receipt__antrian" style="background:#fdf1df;color:#b45309">BILL — BELUM DIBAYAR</div>` : ''}
+      ${tandaOffline}
       ${struk.meja ? `<div class="receipt__antrian">${esc(struk.meja)}${struk.pax ? ` · ${esc(struk.pax)} org` : ''}</div>` : ''}
       <div class="receipt__row"><span>No.</span><span class="mono">${esc(struk.nomor)}</span></div>
       ${struk.no_antrian ? `<div class="receipt__antrian">ANTRIAN: ${esc(struk.no_antrian)}</div>` : ''}

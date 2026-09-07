@@ -431,8 +431,15 @@ function renderShell() {
           ${icons.logout}
         </button>
       </header>
+      <div class="pita-offline" id="pita-offline" hidden></div>
       <main class="shell__main" id="screen-root"></main>
     </div>`
+
+  // Pita status offline/antrean (padanan Android PitaKoneksi).
+  import('./components/sinkronisasi.js').then(({ pasangPitaOffline }) => {
+    const pita = appRoot.querySelector('#pita-offline')
+    if (pita) pasangPitaOffline(pita, { onTinjau: () => showScreen('settings') })
+  })
 
   const sessionBtn = appRoot.querySelector('#tb-session')
   const connEl = appRoot.querySelector('#tb-conn')
@@ -736,7 +743,19 @@ async function doLogout() {
     danger: true
   })
   if (!yes) return
-  await api.auth.logout()
+  let r = await api.auth.logout()
+  if (!r.ok && r.code === 'ANTREAN') {
+    // Antrean berisi penjualan yang belum terkirim — jangan hilang diam-diam.
+    const paksa = await confirmDialog({
+      title: 'Masih ada data yang belum terkirim',
+      message: `${r.message}`,
+      confirmText: 'Keluar paksa',
+      cancelText: 'Kembali',
+      danger: true
+    })
+    if (!paksa) return
+    r = await api.auth.logout({ paksa: true })
+  }
   enterLogin()
 }
 
@@ -931,12 +950,22 @@ async function boot() {
       await loadTokoAndManifest()
       await loadWorkspace()
       renderShell()
-      await showScreen('home')
+      await showScreen(info.ok && info.data && info.data.smokeScreen ? info.data.smokeScreen : 'home')
       hideSplash()
       return
     }
   }
   enterLogin()
+  // Jalur uji: isi formulir masuk dari env (IPOS_SMOKE_USER/PASS) lalu kirim,
+  // agar alur setelah masuk (mis. salinan offline) bisa diverifikasi otomatis.
+  if (info.ok && info.data && info.data.smokeMasuk) {
+    await new Promise((r) => setTimeout(r, 300))
+    const u = document.querySelector('#login-user'); const p = document.querySelector('#login-pass')
+    if (u && p) {
+      u.value = info.data.smokeMasuk.user; p.value = info.data.smokeMasuk.pass
+      document.querySelector('#login-form')?.requestSubmit()
+    }
+  }
 }
 
 // Mode "Display Pelanggan" (jendela kedua desktop): render layar pelanggan saja,
@@ -946,6 +975,8 @@ if (new URLSearchParams(location.search).get('display') === 'customer') {
 } else {
   // Terapkan tema tersimpan sedini mungkin agar tidak ada kedip warna saat boot.
   applyTheme()
+  // Status offline/antrean dari main (pita di kerangka + panel Sinkronisasi).
+  import('./components/sinkronisasi.js').then((m) => m.mulaiPantauOffline())
   // Auto-Update: langganan sinyal 426 (update wajib) + cek versi saat start &
   // kembali-ke-foreground. FAIL-OPEN: kegagalan cek tak boleh memblokir aplikasi.
   import('./update.js').then((u) => {

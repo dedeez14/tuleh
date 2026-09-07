@@ -143,6 +143,10 @@ Selama demo, beberapa hal sengaja dibatasi (desktop ≥ 0.9.17, Android ≥ 2.10
 
 Tiga lapis: catatan lokal bertanda (sudah aktif), pendaftaran perangkat di server, dan identitas lewat OTP WhatsApp/email. Lapis 2 dan 3 sudah ada di aplikasi (desktop ≥ 0.9.14, Android ≥ 2.6.0) dan aktif otomatis begitu server MOVERA memasang endpoint di [KONTRAK-MASA-COBA.md](KONTRAK-MASA-COBA.md); sebelum itu hanya lapis lokal yang berlaku, sehingga menghapus aplikasi masih mengulang masa coba.
 
+## Mode offline (desktop)
+
+Sejak desktop 0.9.19 aplikasi Windows punya mode offline yang sama dengan Android fase 1–2, dikerjakan di proses utama Electron tanpa dependensi native: setiap jawaban GET terautentikasi disalin ke `userData/offline/salinan.json` (per toko + jalur + query, maks 600 entri) dan disajikan saat jaringan gagal, dengan pita "Offline · menampilkan data terakhir HH:MM" di bawah topbar; identitas hasil masuk disalin sebagai `/auth/me` sehingga aplikasi tetap bisa dibuka tanpa internet. Checkout (kecuali QRIS otomatis), pengeluaran, dan stok masuk yang gagal jaringan diantrekan di `antrean.json` beserta `client_ref`/`waktu_klien`, struk lokal bernomor `L-yyMMdd-NNNN` (tampil di Riwayat berstatus BELUM SINKRON, bisa dicetak), lalu dikirim FIFO ketat dengan mundur eksponensial begitu server terjangkau; penolakan server atau timeout setelah kirim masuk *perlu ditinjau* di Pengaturan → Sinkronisasi (Kirim ulang / Batalkan). Keluar akun ditahan bila antrean berisi. Jalur uji: `IPOS_SMOKE_OFFLINE=1` memutus jaringan pura-pura, `IPOS_SMOKE_USER/PASS` mengisi formulir masuk.
+
 ## Mode offline (Android)
 
 Sejak Android 2.7.0 aplikasi menyimpan salinan setiap jawaban baca dari server di SQLite (`drift`). Saat internet mati, layar tetap menampilkan data terakhir dengan pita "Offline · menampilkan data terakhir HH:MM"; begitu server terjangkau lagi, data dimuat ulang (fase 1).

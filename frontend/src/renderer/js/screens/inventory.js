@@ -151,7 +151,8 @@ async function mutasi(ctx, mode, picker) {
   btn.disabled = false
 
   if (!r.ok) { toast(firstError(r), 'error'); return } // 422 "Stok tidak mencukupi…" apa adanya
-  const baru = r.data && r.data.stok_sekarang != null ? Number(r.data.stok_sekarang) : it.stok
+  if (r.tertunda) toast('Offline — stok masuk disimpan di komputer ini dan dikirim saat internet kembali.', 'info', 5000)
+  const baru = r.data && r.data.stok_sekarang != null ? Number(r.data.stok_sekarang) : (r.tertunda ? Number(it.stok) + Number(jumlah) : it.stok)
   // Perbarui stok di daftar produk (cermin di kedua picker)
   const ref = ctx.produk.find((x) => x.id === it.id)
   if (ref) ref.stok = baru

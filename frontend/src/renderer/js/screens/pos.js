@@ -1295,8 +1295,18 @@ function renderPos(container) {
         tipePembayaran: metode,
         dibayar,
         idPelanggan: pelanggan ? pelanggan.id : undefined,
-        catatan: noteEl.value.trim() || undefined
+        catatan: noteEl.value.trim() || undefined,
+        // Untuk struk lokal bila offline (nama item, satuan, stok dikelola).
+        tampilan: cart.map((l) => ({ id_produk: l.produk.id, nama: l.produk.nama, satuan: l.produk.satuan || '', kelola_stok: !!l.produk.kelola_stok })),
+        kasirNama: getState().user?.name || undefined,
+        pelangganNama: pelanggan ? pelanggan.nama : undefined
       })
+
+      if (result.ok && result.tertunda) {
+        toast(result.perluTinjau
+          ? 'Server tidak menjawab setelah data dikirim. Periksa Pengaturan → Sinkronisasi.'
+          : 'Offline — transaksi disimpan di komputer ini dan dikirim otomatis saat internet kembali.', 'info', 6000)
+      }
 
       if (!result.ok) {
         submitBtn.disabled = false

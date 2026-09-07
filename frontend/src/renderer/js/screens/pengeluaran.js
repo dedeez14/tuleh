@@ -161,6 +161,8 @@ async function tambah(ctx) {
 
   c.querySelector('#ex-ket').value = ''
   c.querySelector('#ex-nom').value = ''
-  toast(`Pengeluaran ${fmtIDR(nominal)} dicatat.`, 'success')
+  toast(r.tertunda
+    ? `Pengeluaran ${fmtIDR(nominal)} disimpan offline — dikirim saat internet kembali.`
+    : `Pengeluaran ${fmtIDR(nominal)} dicatat.`, r.tertunda ? 'info' : 'success')
   refresh(ctx)
 }

@@ -19,7 +19,8 @@ const METHOD_BADGE = {
 const STATUS_BADGE = {
   SELESAI: 'badge--success',
   LUNAS: 'badge--success',
-  DIBATALKAN: 'badge--danger'
+  DIBATALKAN: 'badge--danger',
+  'BELUM SINKRON': 'badge--warn'
 }
 
 const isVoided = (status) => String(status || '').toUpperCase() === 'DIBATALKAN'
@@ -216,6 +217,7 @@ export const HistoryScreen = {
 
         if (isVoided(struk.status)) return
         footer.appendChild(tombolBagikanStruk(struk))
+        if (struk.belum_sinkron || String(struk.id || '').startsWith('lokal:')) return // batalkan lewat Pengaturan → Sinkronisasi
 
         const btnCancel = document.createElement('button')
         btnCancel.className = 'btn btn--danger-outline'

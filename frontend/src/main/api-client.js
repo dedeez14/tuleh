@@ -1,6 +1,19 @@
 'use strict'
 
 const { net, app } = require('electron')
+const offline = require('./offline')
+
+// Jalur GET yang TIDAK disalin untuk offline (status pembayaran, masa coba,
+// versi): jawaban lama justru menyesatkan.
+const TANPA_SALINAN = ['/qris', '/demo', '/ping', '/app/versi', '/langganan']
+function bolehDisalin(endpoint) {
+  return !TANPA_SALINAN.some((p) => endpoint.startsWith(p))
+}
+// Identitas (/auth/me) berlaku lintas toko → kunci salinan tanpa toko/query,
+// agar masuk otomatis saat offline tetap bekerja walau toko aktif berganti.
+function kunciSalinanUntuk(endpoint, query) {
+  return endpoint === '/auth/me' ? [null, endpoint, {}] : [activeTokoId, endpoint, query]
+}
 
 const API_PREFIX = '/api/pos/v1'
 const TIMEOUT_MS = 15000
@@ -108,6 +121,9 @@ async function request(method, endpoint, { query, body, auth = true } = {}) {
 
   let response
   try {
+    // Jalur uji: pura-pura jaringan putus (IPOS_SMOKE_OFFLINE=1) untuk
+    // memverifikasi salinan baca & antrean tanpa mencabut kabel.
+    if (process.env.IPOS_SMOKE_OFFLINE === '1') throw new TypeError('smoke offline')
     response = await net.fetch(buildUrl(endpoint, query), {
       method,
       headers,
@@ -116,9 +132,20 @@ async function request(method, endpoint, { query, body, auth = true } = {}) {
     })
   } catch (err) {
     const timedOut = err && err.name === 'AbortError'
+    // Offline fase 1: GET terautentikasi yang gagal jaringan → sajikan salinan
+    // terakhir (bila ada) dan tandai aplikasi offline.
+    if (method === 'GET' && auth && offline.salinan && bolehDisalin(endpoint)) {
+      const s = offline.salinan.ambil(...kunciSalinanUntuk(endpoint, query))
+      if (s) {
+        offline.koneksi.tandaiOffline(s.ditarikPada)
+        return { ok: true, status: 200, data: s.data, meta: s.meta, message: '', offline: true, ditarikPada: s.ditarikPada }
+      }
+      offline.koneksi.tandaiOffline()
+    }
     return {
       ok: false,
       status: 0,
+      timeout: timedOut,
       message: timedOut ? 'Server tidak merespons (timeout).' : statusMessage(0),
       errors: null
     }
@@ -127,6 +154,8 @@ async function request(method, endpoint, { query, body, auth = true } = {}) {
   }
 
   const payload = await readJsonSafe(response)
+  // Server terjangkau (apa pun jawabannya) → online.
+  if (auth) offline.koneksi.tandaiOnline()
 
   if (!response.ok || !payload || payload.success === false) {
     const message = (payload && payload.message) || statusMessage(response.status)
@@ -135,13 +164,17 @@ async function request(method, endpoint, { query, body, auth = true } = {}) {
     return { ok: false, status: response.status, message, errors: (payload && payload.errors) || null }
   }
 
-  return {
+  const hasil = {
     ok: true,
     status: response.status,
     data: payload.data !== undefined ? payload.data : null,
     meta: payload.meta !== undefined ? payload.meta : null,
     message: payload.message || ''
   }
+  if (method === 'GET' && auth && offline.salinan && bolehDisalin(endpoint)) {
+    offline.salinan.simpan(...kunciSalinanUntuk(endpoint, query), hasil)
+  }
+  return hasil
 }
 
 const get = (endpoint, options) => request('GET', endpoint, options)

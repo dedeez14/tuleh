@@ -180,6 +180,18 @@ contextBridge.exposeInMainWorld('iposAPI', {
     tutup: invoke('sesi:tutup'),
     rekap: invoke('sesi:rekap')
   },
+  offline: {
+    status: invoke('offline:status'),
+    daftar: invoke('offline:daftar'),
+    sinkron: invoke('offline:sinkron'),
+    kirimUlang: invoke('offline:kirimUlang'),
+    batalkan: invoke('offline:batalkan'),
+    onStatus: (callback) => {
+      const listener = (_event, status) => callback(status)
+      ipcRenderer.on('offline:status', listener)
+      return () => ipcRenderer.removeListener('offline:status', listener)
+    }
+  },
   trx: {
     checkout: invoke('trx:checkout'),
     list: invoke('trx:list'),

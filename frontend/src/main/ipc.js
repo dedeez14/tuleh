@@ -14,6 +14,7 @@ const tunnel = require('./tunnel')
 const qr = require('./qr')
 const customerWindow = require('./customer-window')
 const updater = require('./updater')
+const offline = require('./offline')
 
 // ---------- Validasi input dari renderer (jangan percaya begitu saja) ----------
 
@@ -128,6 +129,78 @@ function registerIpcHandlers(getMainWindow) {
   // Muat pengaturan + token tersimpan saat start
   const settings = settingsStore.load()
   api.setBaseUrl(settings.baseUrl)
+
+  // ---------- Mode offline (salinan baca + antrean kirim) ----------
+  // Pengurai mengirim ulang lewat api.post; timeout diberi status -1 agar
+  // dibedakan dari "tidak sampai" (0) — lihat offline/pengurai.js.
+  offline.init({
+    dir: app.getPath('userData'),
+    kirim: async (jalur, body, pesan) => {
+      // Kirim atas nama toko saat pesan dibuat, bukan toko aktif sekarang.
+      const query = pesan && pesan.tokoId ? { toko_id: pesan.tokoId } : undefined
+      const r = await api.post(jalur, { body, query })
+      return r.timeout ? { ...r, status: -1 } : r
+    }
+  })
+  const kirimStatusOffline = () => {
+    const win = getMainWindow()
+    if (win && !win.isDestroyed()) win.webContents.send('offline:status', offline.status(api.getActiveTokoId()))
+  }
+  offline.koneksi.langgan(kirimStatusOffline)
+  // Kembali online (dari permintaan mana pun) → uraikan antrean.
+  offline.koneksi.langgan(() => {
+    if (offline.koneksi.online && offline.antrean.ringkas().menunggu > 0) offline.pengurai.jalankan()
+  })
+  // Jalankan sekali saat start bila ada sisa antrean dari sesi sebelumnya.
+  setTimeout(() => { if (api.hasToken()) offline.pengurai.jalankan() }, 3000).unref?.()
+
+  /**
+   * Permintaan tulis dengan jalur offline: bila diketahui offline → antrekan
+   * langsung; bila gagal jaringan → antrekan; timeout setelah kirim → antrekan
+   * berstatus TINJAU. Server menolak (4xx) → kembalikan apa adanya.
+   */
+  async function tulisAtauAntre({ jenis, jalur, body, transaksi = null, deltaStok = {} }) {
+    const clientRef = offline.buatClientRef()
+    const badan = { ...body, client_ref: clientRef, waktu_klien: new Date().toISOString() }
+    let tinjau = false
+    if (offline.koneksi.online) {
+      const r = await withAuthWatch(api.post(jalur, { body: badan }))
+      if (r.ok) return { ...r, clientRef }
+      if (r.status !== 0) return r // ditolak server: tampilkan apa adanya
+      tinjau = !!r.timeout
+    }
+    offline.antrean.antrekan({
+      clientRef, jenis, tokoId: api.getActiveTokoId(), path: jalur, body: badan,
+      status: tinjau ? offline.STATUS.TINJAU : offline.STATUS.MENUNGGU,
+      galat: tinjau ? 'Server tidak menjawab setelah data dikirim. Periksa dulu apakah sudah tercatat sebelum mengirim ulang.' : null
+    }, { transaksi, deltaStok })
+    kirimStatusOffline()
+    return { ok: true, status: 202, data: null, meta: null, message: '', tertunda: true, perluTinjau: tinjau, clientRef }
+  }
+
+  handle('offline:status', () => ({ ok: true, data: offline.status(api.getActiveTokoId()) }))
+  handle('offline:daftar', () => ({
+    ok: true,
+    data: offline.antrean.semua().map((p) => ({ ...p, label: offline.labelJenis(p.jenis) }))
+  }))
+  handle('offline:sinkron', async () => {
+    const ping = await api.get('/ping', { auth: false })
+    if (!ping.ok) { offline.koneksi.tandaiOffline(); kirimStatusOffline(); return { ok: false, status: 0, message: 'Server belum terjangkau.' } }
+    offline.koneksi.tandaiOnline()
+    const n = await offline.pengurai.jalankan()
+    kirimStatusOffline()
+    return { ok: true, data: { terkirim: n, ...offline.status(api.getActiveTokoId()) } }
+  })
+  handle('offline:kirimUlang', async ({ clientRef }) => {
+    await offline.pengurai.kirimUlang(str(clientRef, { required: true }))
+    kirimStatusOffline()
+    return { ok: true, data: offline.status(api.getActiveTokoId()) }
+  })
+  handle('offline:batalkan', ({ clientRef }) => {
+    offline.antrean.batalkan(str(clientRef, { required: true }))
+    kirimStatusOffline()
+    return { ok: true, data: offline.status(api.getActiveTokoId()) }
+  })
   const savedToken = authStore.restore()
   if (savedToken) api.setToken(savedToken)
 
@@ -186,7 +259,8 @@ function registerIpcHandlers(getMainWindow) {
       smokeTheme: process.env.IPOS_SMOKE_THEME || null,
       smokeOpenBill: process.env.IPOS_SMOKE_OPENBILL === '1',
       smokeFlow: process.env.IPOS_SMOKE_FLOW || null,
-      smokeLogin: process.env.IPOS_SMOKE_LOGIN === '1'
+      smokeLogin: process.env.IPOS_SMOKE_LOGIN === '1',
+      smokeMasuk: process.env.IPOS_SMOKE_USER ? { user: process.env.IPOS_SMOKE_USER, pass: process.env.IPOS_SMOKE_PASS || '' } : null
     }
   }))
 
@@ -385,7 +459,11 @@ function registerIpcHandlers(getMainWindow) {
     return { ok: true, data: { baseUrl: result.baseUrl } }
   })
 
-  handle('net:ping', () => api.get('/ping', { auth: false }))
+  handle('net:ping', async () => {
+    const r = await api.get('/ping', { auth: false })
+    if (r.ok) offline.koneksi.tandaiOnline(); else offline.koneksi.tandaiOffline()
+    return r
+  })
 
   // ---------- Autentikasi ----------
 
@@ -406,13 +484,21 @@ function registerIpcHandlers(getMainWindow) {
       // Token cukup di main process — jangan bocorkan ke renderer
       delete result.data.token
       delete result.data.token_type
+      // Identitas disalin sebagai /auth/me agar masuk otomatis tetap bisa
+      // saat internet mati (bentuknya sama dengan jawaban /auth/me).
+      if (offline.salinan) offline.salinan.simpan(null, '/auth/me', {}, { data: result.data, meta: null })
     }
     return result
   })
 
   handle('auth:me', () => withAuthWatch(api.get('/auth/me')))
 
-  handle('auth:logout', async () => {
+  handle('auth:logout', async ({ paksa } = {}) => {
+    // Antrean berisi = penjualan yang sudah terjadi; jangan hilang diam-diam.
+    const sisa = offline.antrean.ringkas().total
+    if (sisa > 0 && !paksa) {
+      return { ok: false, status: 409, code: 'ANTREAN', message: `${sisa} data belum terkirim ke server. Sambungkan internet dan buka Pengaturan → Sinkronisasi dulu, atau keluar paksa (antrean tetap tersimpan untuk akun yang sama).`, errors: null }
+    }
     const result = await api.post('/auth/logout')
     api.setToken(null)
     authStore.clear()
@@ -718,13 +804,16 @@ function registerIpcHandlers(getMainWindow) {
   // ---------- Inventory (kelola stok — layar Inventory O/M) ----------
 
   handle('inventory:stokMasuk', ({ idProduk, jumlah, keterangan }) =>
-    withAuthWatch(api.post('/inventory/stok-masuk', {
+    tulisAtauAntre({
+      jenis: 'STOK_MASUK',
+      jalur: '/inventory/stok-masuk',
       body: {
         id_produk: str(idProduk, { required: true }),
         jumlah: num(jumlah, { required: true }),
         keterangan: str(keterangan, { max: 300 })
-      }
-    })))
+      },
+      deltaStok: { [str(idProduk, { required: true })]: num(jumlah, { required: true }) }
+    }))
 
   handle('inventory:opname', ({ idProduk, jumlah, keterangan }) =>
     withAuthWatch(api.post('/inventory/opname', {
@@ -746,13 +835,15 @@ function registerIpcHandlers(getMainWindow) {
     withAuthWatch(api.get('/pengeluaran', { query: { bulan: str(bulan, { max: 7 }) } })))
 
   handle('pengeluaran:create', ({ keterangan, nominal, tanggal }) =>
-    withAuthWatch(api.post('/pengeluaran', {
+    tulisAtauAntre({
+      jenis: 'PENGELUARAN',
+      jalur: '/pengeluaran',
       body: {
         keterangan: str(keterangan, { required: true, max: 190 }),
         nominal: num(nominal, { required: true }),
         tanggal: str(tanggal, { max: 10 })
       }
-    })))
+    }))
 
   handle('pengeluaran:remove', ({ id }) =>
     withAuthWatch(api.request('DELETE', `/pengeluaran/${encodeURIComponent(str(id, { required: true }))}`)))
@@ -790,7 +881,7 @@ function registerIpcHandlers(getMainWindow) {
 
   // ---------- Transaksi ----------
 
-  handle('trx:checkout', ({ items, tipePembayaran, dibayar, idPelanggan, catatan, qrisTagihanId }) => {
+  handle('trx:checkout', async ({ items, tipePembayaran, dibayar, idPelanggan, catatan, qrisTagihanId, tampilan, kasirNama, pelangganNama }) => {
     if (!Array.isArray(items) || items.length === 0) return fail('Keranjang masih kosong.')
     if (items.length > 200) return fail('Terlalu banyak item dalam satu transaksi.')
     const cleanItems = items.map((item) => ({
@@ -800,21 +891,44 @@ function registerIpcHandlers(getMainWindow) {
       diskon_persen: num(item.diskonPersen) ?? 0,
       pajak_persen: num(item.pajakPersen) ?? 0
     }))
-    return withAuthWatch(api.post('/transaksi/checkout', {
-      body: {
-        items: cleanItems,
-        tipe_pembayaran: str(tipePembayaran, { required: true, max: 20 }),
-        dibayar: num(dibayar, { required: true }),
-        id_pelanggan: str(idPelanggan) || null,
-        catatan: str(catatan, { max: 500 }) || null,
-        // QRIS terverifikasi (Midtrans): id tagihan LUNAS. Hanya dikirim bila ada.
-        qris_tagihan_id: str(qrisTagihanId) || undefined
-      }
-    }))
+    const body = {
+      items: cleanItems,
+      tipe_pembayaran: str(tipePembayaran, { required: true, max: 20 }),
+      dibayar: num(dibayar, { required: true }),
+      id_pelanggan: str(idPelanggan) || null,
+      catatan: str(catatan, { max: 500 }) || null,
+      // QRIS terverifikasi (Midtrans): id tagihan LUNAS. Hanya dikirim bila ada.
+      qris_tagihan_id: str(qrisTagihanId) || undefined
+    }
+    // QRIS otomatis butuh server (tagihan diverifikasi online) → tanpa antrean.
+    if (body.qris_tagihan_id) return withAuthWatch(api.post('/transaksi/checkout', { body }))
+
+    // Struk lokal disusun dulu (nomor L-…) agar bisa dicetak & masuk riwayat
+    // walau antre; bila terkirim langsung, struk server yang dipakai.
+    const nomor = offline.nomorLokal.berikutnya()
+    const struk = offline.buatStrukLokal({
+      nomor, body,
+      tampilan: Array.isArray(tampilan) ? tampilan : [],
+      kasir: str(kasirNama, { max: 100 }) || null,
+      pelangganNama: str(pelangganNama, { max: 150 }) || null
+    })
+    const deltaStok = {}
+    for (const t of (Array.isArray(tampilan) ? tampilan : [])) {
+      if (t && t.kelola_stok) deltaStok[String(t.id_produk)] = -(Number((cleanItems.find((i) => i.id_produk === String(t.id_produk)) || {}).kuantitas) || 0)
+    }
+    const r = await tulisAtauAntre({
+      jenis: 'CHECKOUT', jalur: '/transaksi/checkout', body, deltaStok,
+      transaksi: { tokoId: api.getActiveTokoId(), nomorLokal: nomor, waktuKlien: struk.tanggal, struk }
+    })
+    if (r.tertunda) {
+      struk.catatan_kaki = 'Belum tersinkron — nomor resmi menyusul setelah online.'
+      return { ...r, data: struk }
+    }
+    return r
   })
 
-  handle('trx:list', ({ status, sesiId, tanggalDari, tanggalSampai }) =>
-    withAuthWatch(api.get('/transaksi', {
+  handle('trx:list', async ({ status, sesiId, tanggalDari, tanggalSampai }) => {
+    const r = await withAuthWatch(api.get('/transaksi', {
       query: {
         status: str(status, { max: 20 }),
         sesi_id: str(sesiId),
@@ -826,10 +940,25 @@ function registerIpcHandlers(getMainWindow) {
         dari: str(tanggalDari, { max: 10 }),
         sampai: str(tanggalSampai, { max: 10 })
       }
-    })))
+    }))
+    // Transaksi lokal yang belum terkirim ditaruh paling atas (id lokal:<ref>).
+    const lokal = offline.antrean.transaksiTertunda(api.getActiveTokoId())
+      .map((t) => ({ ...t.struk, id: `lokal:${t.clientRef}`, nomor: t.nomorLokal, status: 'BELUM SINKRON' }))
+    if (!lokal.length) return r
+    if (r.ok && Array.isArray(r.data)) return { ...r, data: [...lokal, ...r.data] }
+    if (!r.ok) return { ok: true, status: 200, data: lokal, meta: null, message: '', offline: true }
+    return r
+  })
 
-  handle('trx:detail', ({ id }) =>
-    withAuthWatch(api.get(`/transaksi/${encodeURIComponent(str(id, { required: true }))}`)))
+  handle('trx:detail', ({ id }) => {
+    const sid = str(id, { required: true })
+    if (sid.startsWith('lokal:')) {
+      const t = offline.antrean.transaksiLokal(sid.slice(6))
+      if (!t) return fail('Transaksi lokal tidak ditemukan (mungkin sudah terkirim).')
+      return { ok: true, status: 200, data: { ...t.struk, id: sid, nomor: t.nomorLokal, status: 'BELUM SINKRON' }, meta: null, message: '' }
+    }
+    return withAuthWatch(api.get(`/transaksi/${encodeURIComponent(sid)}`))
+  })
 
   handle('trx:batal', ({ id }) =>
     withAuthWatch(api.post(`/transaksi/${encodeURIComponent(str(id, { required: true }))}/batal`)))
