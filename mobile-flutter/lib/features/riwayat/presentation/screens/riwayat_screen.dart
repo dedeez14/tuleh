@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/layout/lebar.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../core/widgets/app_background.dart';
@@ -13,19 +14,34 @@ import 'detail_transaksi_screen.dart';
 /// Riwayat transaksi — dikelompokkan per hari dengan subtotal, karena
 /// pertanyaan kasir biasanya "tadi siang jam berapa" dan "hari ini total
 /// berapa", bukan menelusuri deretan nomor nota.
-class RiwayatScreen extends ConsumerWidget {
+class RiwayatScreen extends ConsumerStatefulWidget {
   const RiwayatScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final riwayat = ref.watch(riwayatListProvider);
+  ConsumerState<RiwayatScreen> createState() => _RiwayatScreenState();
+}
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Riwayat')),
-      body: AppBackground(
-        ombak: false,
-        intensitas: 0.45,
-        child: RefreshIndicator(
+class _RiwayatScreenState extends ConsumerState<RiwayatScreen> {
+  /// Transaksi yang dibuka di panel kanan (tablet). Di ponsel detail dibuka
+  /// sebagai layar sendiri.
+  String? _terpilihId;
+
+  void _buka(BuildContext context, Transaksi trx) {
+    if (layarLebar(context)) {
+      setState(() => _terpilihId = trx.id);
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => DetailTransaksiScreen(id: trx.id)),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final riwayat = ref.watch(riwayatListProvider);
+    final lebar = layarLebar(context);
+
+    final daftar = RefreshIndicator(
           onRefresh: () async => ref.invalidate(riwayatListProvider),
           child: riwayat.when(
             loading: () => const DaftarKerangka(jumlah: 7, tinggiBaris: 72),
@@ -48,17 +64,51 @@ class RiwayatScreen extends ConsumerWidget {
                       ),
                     ],
                   )
-                : _DaftarPerHari(list: list),
+                : _DaftarPerHari(
+                    list: list,
+                    terpilihId: lebar ? _terpilihId : null,
+                    onBuka: (t) => _buka(context, t),
+                  ),
           ),
-        ),
+        );
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Riwayat')),
+      body: AppBackground(
+        ombak: false,
+        intensitas: 0.45,
+        child: lebar
+            ? Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SizedBox(width: 420, child: daftar),
+                  const VerticalDivider(width: 1),
+                  Expanded(
+                    child: _terpilihId == null
+                        ? const KeadaanKosong(
+                            ikon: Icons.receipt_long_outlined,
+                            judul: 'Pilih transaksi',
+                            detail: 'Detail struk tampil di sini.',
+                          )
+                        : DetailTransaksiScreen(
+                            key: ValueKey(_terpilihId),
+                            id: _terpilihId!,
+                            tertanam: true,
+                          ),
+                  ),
+                ],
+              )
+            : daftar,
       ),
     );
   }
 }
 
 class _DaftarPerHari extends StatelessWidget {
-  const _DaftarPerHari({required this.list});
+  const _DaftarPerHari({required this.list, required this.onBuka, this.terpilihId});
   final List<Transaksi> list;
+  final ValueChanged<Transaksi> onBuka;
+  final String? terpilihId;
 
   @override
   Widget build(BuildContext context) {
@@ -92,7 +142,7 @@ class _DaftarPerHari extends StatelessWidget {
       anak.add(
         MunculBertahap(
           urutan: urut++,
-          child: _KartuHari(trx: trx),
+          child: _KartuHari(trx: trx, onBuka: onBuka, terpilihId: terpilihId),
         ),
       );
       anak.add(const SizedBox(height: 18));
@@ -177,8 +227,10 @@ class _KepalaHari extends StatelessWidget {
 /// Satu kartu per hari berisi baris-baris transaksi — lebih ringan daripada
 /// satu kartu per transaksi, dan batas harinya jelas.
 class _KartuHari extends StatelessWidget {
-  const _KartuHari({required this.trx});
+  const _KartuHari({required this.trx, required this.onBuka, this.terpilihId});
   final List<Transaksi> trx;
+  final ValueChanged<Transaksi> onBuka;
+  final String? terpilihId;
 
   @override
   Widget build(BuildContext context) {
@@ -193,7 +245,11 @@ class _KartuHari extends StatelessWidget {
       child: Column(
         children: [
           for (var i = 0; i < trx.length; i++) ...[
-            _BarisTrx(trx: trx[i]),
+            _BarisTrx(
+              trx: trx[i],
+              terpilih: trx[i].id == terpilihId,
+              onTap: () => onBuka(trx[i]),
+            ),
             if (i < trx.length - 1)
               Divider(height: 1, color: cs.outline, indent: 62),
           ],
@@ -204,8 +260,10 @@ class _KartuHari extends StatelessWidget {
 }
 
 class _BarisTrx extends StatelessWidget {
-  const _BarisTrx({required this.trx});
+  const _BarisTrx({required this.trx, required this.onTap, this.terpilih = false});
   final Transaksi trx;
+  final VoidCallback onTap;
+  final bool terpilih;
 
   static IconData _ikonMetode(String? m) => switch ((m ?? '').toUpperCase()) {
     'QRIS' => Icons.qr_code_2_rounded,
@@ -222,11 +280,9 @@ class _BarisTrx extends StatelessWidget {
     final jam = _jam(trx.tanggal);
 
     return ListTile(
-      onTap: () => Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => DetailTransaksiScreen(id: trx.id),
-        ),
-      ),
+      onTap: onTap,
+      selected: terpilih,
+      selectedTileColor: cs.primary.withValues(alpha: 0.08),
       leading: Container(
         height: 40,
         width: 40,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/layout/lebar.dart';
 import '../../../../core/offline/pengurai.dart';
 import '../../../../core/utils/rupiah_input.dart';
 import '../../../../core/network/api_exception.dart';
@@ -28,7 +29,7 @@ class PengeluaranScreen extends ConsumerWidget {
         icon: const Icon(Icons.add),
         label: const Text('Tambah'),
       ),
-      body: RefreshIndicator(
+      body: LebarKonten(child: RefreshIndicator(
         onRefresh: () async => ref.invalidate(pengeluaranListProvider),
         child: list.when(
           loading: () => const Center(child: CircularProgressIndicator()),
@@ -43,7 +44,7 @@ class PengeluaranScreen extends ConsumerWidget {
           ]),
           data: (rows) => _Body(rows: rows),
         ),
-      ),
+      )),
     );
   }
 }

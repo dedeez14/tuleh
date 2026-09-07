@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/layout/lebar.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/format.dart';
@@ -28,7 +29,11 @@ import '../screens/kasir_screen.dart' show bukaSesiDenganUmpanBalik;
 /// memeriksa dan mengoreksi item, langkah "Pembayaran" untuk memilih metode
 /// dan menghitung kembalian. Tombol utama selalu di bawah, dalam jangkauan ibu jari.
 class CartSheet extends ConsumerStatefulWidget {
-  const CartSheet({super.key});
+  const CartSheet({super.key, this.tertanam = false});
+
+  /// true = dipasang sebagai panel menetap (tablet), bukan bottom sheet:
+  /// tanpa batas tinggi, tidak menutup diri setelah bayar.
+  final bool tertanam;
 
   @override
   ConsumerState<CartSheet> createState() => _CartSheetState();
@@ -134,7 +139,14 @@ class _CartSheetState extends ConsumerState<CartSheet> {
         ref.invalidate(productsProvider); // stok tampil ikut delta tertunda
       }
       if (!mounted) return;
-      Navigator.of(context).pop();
+      if (widget.tertanam) {
+        setState(() {
+          _langkah = _Langkah.keranjang;
+          _uangCtrl.clear();
+        });
+      } else {
+        Navigator.of(context).pop();
+      }
       HapticFeedback.mediumImpact();
       await _tampilkanHasil(
         struk,
@@ -167,12 +179,8 @@ class _CartSheetState extends ConsumerState<CartSheet> {
     bool perluTinjau = false,
   }) async {
     if (!mounted) return;
-    await showModalBottomSheet<void>(
-      context: context,
-      useRootNavigator: true,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
+    await tampilkanLembar<void>(
+      context,
       builder: (_) => HasilTransaksiSheet(
         struk: struk,
         kembalian: kembalian,
@@ -219,15 +227,7 @@ class _CartSheetState extends ConsumerState<CartSheet> {
       _langkah = _Langkah.keranjang;
     }
 
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-        ),
-        child: FractionallySizedBox(
-          heightFactor: 0.9,
-          child: Column(
+    final isi = Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _Judul(
@@ -274,8 +274,18 @@ class _CartSheetState extends ConsumerState<CartSheet> {
                   cs: cs,
                 ),
             ],
-          ),
+          );
+
+    if (widget.tertanam) {
+      return Padding(padding: const EdgeInsets.only(top: 10), child: isi);
+    }
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
         ),
+        child: FractionallySizedBox(heightFactor: 0.9, child: isi),
       ),
     );
   }

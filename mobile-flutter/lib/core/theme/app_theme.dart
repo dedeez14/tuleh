@@ -212,9 +212,12 @@ class AppTheme {
           borderRadius: BorderRadius.circular(999),
         ),
         side: BorderSide(color: scheme.outline),
+        // Warna label WAJIB disebut: tanpa ini label ActionChip (mis. saran
+        // nominal uang) tak terlihat karena warna default ikut latar chip.
         labelStyle: GoogleFonts.plusJakartaSans(
           fontSize: 13,
           fontWeight: FontWeight.w700,
+          color: scheme.onSurface,
         ),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       ),

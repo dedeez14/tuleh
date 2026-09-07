@@ -5,6 +5,12 @@ sebagai isi Release GitHub (workflow flutter-release.yml), dan empat baris
 pertamanya tampil di banner pembaruan dalam aplikasi. Tulis untuk kasir, bukan
 untuk programmer.
 
+## 2.13.0
+
+- Tablet (layar ≥ 720 dp) kini tampil ala desktop: kasir dua panel (katalog grid di kiri, keranjang menetap di kanan dengan langkah bayar di panel yang sama), riwayat master-detail (daftar di kiri, struk di kanan dengan Bagikan/Cetak ulang), beranda dua kolom, dan daftar Produk/Stok/Pengeluaran/Pelanggan/Sesi/Pengaturan/Laporan dibatasi lebarnya agar nyaman dibaca. Ponsel tetap memakai tata letak sebelumnya.
+- Hasil transaksi, pilih pelanggan, dan menu Lainnya tampil sebagai dialog di tablet, bukan lembar selebar layar.
+- Perbaikan: label saran nominal uang (Uang pas, Rp 20.000, …) sebelumnya tidak terlihat karena warna teks chip tidak ditetapkan.
+
 ## 2.12.0
 
 - Kasir lebih ringkas: harga, satuan, dan stok dalam satu baris, tombol tambah bulat; sekitar delapan produk terlihat sekali pandang (sebelumnya lima). Pengatur jumlah tetap muncul untuk item yang sudah di keranjang.

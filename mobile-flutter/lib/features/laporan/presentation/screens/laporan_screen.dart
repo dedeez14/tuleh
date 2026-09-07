@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/layout/lebar.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../core/widgets/app_background.dart';
@@ -31,7 +32,7 @@ class LaporanScreen extends ConsumerWidget {
       body: AppBackground(
         ombak: false,
         intensitas: 0.5,
-        child: RefreshIndicator(
+        child: LebarKonten(child: RefreshIndicator(
           onRefresh: () async {
             ref.invalidate(laporanKeuanganProvider);
             ref.invalidate(penjualanHarianProvider);
@@ -125,7 +126,7 @@ class LaporanScreen extends ConsumerWidget {
             ],
           ),
         ),
-      ),
+      )),
     );
   }
 }

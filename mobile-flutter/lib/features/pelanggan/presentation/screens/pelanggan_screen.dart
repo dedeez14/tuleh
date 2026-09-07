@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/layout/lebar.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../domain/entities/pelanggan.dart';
@@ -26,7 +27,7 @@ class PelangganScreen extends ConsumerWidget {
         icon: const Icon(Icons.person_add_alt_1),
         label: const Text('Tambah'),
       ),
-      body: RefreshIndicator(
+      body: LebarKonten(child: RefreshIndicator(
         onRefresh: () async => ref.invalidate(pelangganListProvider),
         child: list.when(
           loading: () => const Center(child: CircularProgressIndicator()),
@@ -52,7 +53,7 @@ class PelangganScreen extends ConsumerWidget {
                   itemBuilder: (_, i) => _Tile(p: rows[i]),
                 ),
         ),
-      ),
+      )),
     );
   }
 }

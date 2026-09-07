@@ -66,27 +66,76 @@ class HomeScreen extends ConsumerWidget {
             },
             child: LayoutBuilder(
               builder: (context, c) {
-                final pad = c.maxWidth >= 700 ? 28.0 : 20.0;
+                final lebar = c.maxWidth >= 700;
+                final pad = lebar ? 28.0 : 20.0;
+                final header = MunculBertahap(
+                  child: _Header(
+                    user: user,
+                    toko: activeToko,
+                    tokoGagal: tokoAsync.hasError,
+                    onMuatUlangToko: () => ref.invalidate(tokoListProvider),
+                    bisaGanti: tokos.length > 1,
+                    isDemo: ref.read(demoSessionProvider).active,
+                    sisaHariDemo: ref.read(demoSessionProvider).active
+                        ? ref.watch(masaCobaStatusProvider).valueOrNull?.sisaHari
+                        : null,
+                    onGantiToko: tokos.length > 1
+                        ? () => _pilihToko(context, ref, tokos, activeId)
+                        : null,
+                    onLogout: () => keluarDenganPenjagaAntrean(context, ref),
+                  ),
+                );
+                if (lebar) {
+                  // Tablet ala desktop: ringkasan & aksi di kiri, transaksi
+                  // terbaru di kanan; lebar dibatasi agar tetap nyaman dibaca.
+                  return ListView(
+                    padding: EdgeInsets.fromLTRB(pad, 12, pad, 28),
+                    children: [
+                      Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 1100),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              header,
+                              const SizedBox(height: 20),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    flex: 5,
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                                      children: [
+                                        const MunculBertahap(urutan: 1, child: _KartuSesi()),
+                                        const SizedBox(height: 14),
+                                        const MunculBertahap(urutan: 2, child: _RingkasanHariIni()),
+                                        const SizedBox(height: 22),
+                                        MunculBertahap(
+                                          urutan: 3,
+                                          child: _AksiCepat(bertahap: bertahap, pakaiMeja: pakaiMeja),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 24),
+                                  const Expanded(
+                                    flex: 4,
+                                    child: MunculBertahap(urutan: 4, child: _TransaksiTerbaru()),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                }
                 return ListView(
                   padding: EdgeInsets.fromLTRB(pad, 12, pad, 28),
                   children: [
-                    MunculBertahap(
-                      child: _Header(
-                        user: user,
-                        toko: activeToko,
-                        tokoGagal: tokoAsync.hasError,
-                        onMuatUlangToko: () => ref.invalidate(tokoListProvider),
-                        bisaGanti: tokos.length > 1,
-                        isDemo: ref.read(demoSessionProvider).active,
-                        sisaHariDemo: ref.read(demoSessionProvider).active
-                            ? ref.watch(masaCobaStatusProvider).valueOrNull?.sisaHari
-                            : null,
-                        onGantiToko: tokos.length > 1
-                            ? () => _pilihToko(context, ref, tokos, activeId)
-                            : null,
-                        onLogout: () => keluarDenganPenjagaAntrean(context, ref),
-                      ),
-                    ),
+                    header,
                     const SizedBox(height: 20),
                     const MunculBertahap(urutan: 1, child: _KartuSesi()),
                     const SizedBox(height: 14),

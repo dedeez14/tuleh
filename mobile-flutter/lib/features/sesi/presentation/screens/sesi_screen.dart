@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/layout/lebar.dart';
 import '../../../../core/utils/rupiah_input.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -18,7 +19,7 @@ class SesiScreen extends ConsumerWidget {
     final rekap = ref.watch(sesiRekapProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('Sesi Kasir')),
-      body: RefreshIndicator(
+      body: LebarKonten(child: RefreshIndicator(
         onRefresh: () async => ref.invalidate(sesiRekapProvider),
         child: rekap.when(
           loading: () => const Center(child: CircularProgressIndicator()),
@@ -35,7 +36,7 @@ class SesiScreen extends ConsumerWidget {
               ? _KosongAtauOffline()
               : _RekapView(rekap: r),
         ),
-      ),
+      )),
     );
   }
 }

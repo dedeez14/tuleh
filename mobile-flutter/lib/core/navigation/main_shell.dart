@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/kasir/presentation/controllers/cart_controller.dart';
+import '../layout/lebar.dart';
 import '../offline/pita_koneksi.dart';
 import '../../features/toko/presentation/providers/toko_providers.dart';
 import 'destinasi.dart';
@@ -73,12 +74,10 @@ class MainShell extends ConsumerWidget {
 
   Future<void> _bukaLainnya(BuildContext context, WidgetRef ref) {
     final manifest = ref.read(activeManifestProvider).valueOrNull;
-    return showModalBottomSheet<void>(
-      context: context,
-      useRootNavigator: true,
-      showDragHandle: true,
-      useSafeArea: true,
-      isScrollControlled: true,
+    // Tablet: dialog berlebar tetap; ponsel: bottom sheet.
+    return tampilkanLembar<void>(
+      context,
+      lebarDialog: 440,
       builder: (_) => _LembarLainnya(menu: TujuanUtama.menuLain(manifest)),
     );
   }

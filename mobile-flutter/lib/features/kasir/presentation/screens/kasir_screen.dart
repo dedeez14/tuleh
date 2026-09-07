@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/layout/lebar.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/format.dart';
@@ -86,6 +87,111 @@ class _KasirScreenState extends ConsumerState<KasirScreen> {
     final tampil = _kategori == null
         ? semua
         : semua.where((p) => p.kategori?.trim() == _kategori).toList();
+    final lebar = layarLebar(context);
+
+    // Isi katalog (kepala, cari, kategori, daftar/grid) — dipakai kedua tata letak.
+    Widget katalog() => Column(
+      children: [
+        const _SesiBanner(),
+        _Pencarian(
+          controller: _queryCtrl,
+          onChanged: _onQueryChanged,
+          onClear: _clearQuery,
+        ),
+        if (kategori.isNotEmpty)
+          _FilterKategori(
+            kategori: kategori,
+            terpilih: _kategori,
+            onPilih: (k) => setState(() => _kategori = k),
+          ),
+        Expanded(
+          child: products.when(
+            loading: () => const DaftarKerangka(),
+            error: (e, _) => KeadaanGagal(
+              error: e,
+              onUlangi: () => ref.invalidate(productsProvider),
+            ),
+            data: (_) => tampil.isEmpty
+                ? _kosong()
+                : RefreshIndicator(
+                    onRefresh: () async => ref.invalidate(productsProvider),
+                    child: lebar
+                        // Tablet: grid kartu ringkas 2–3 kolom seperti katalog desktop.
+                        ? LayoutBuilder(
+                            builder: (_, c) => GridView.builder(
+                              padding: const EdgeInsets.fromLTRB(16, 6, 16, 24),
+                              // Kolom mengikuti lebar (sel ≥ 320 dp) agar nama
+                              // & harga tidak terhimpit di panel yang sempit.
+                              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: ((c.maxWidth - 32) / 320).floor().clamp(1, 4),
+                                mainAxisExtent: 112,
+                                mainAxisSpacing: 10,
+                                crossAxisSpacing: 10,
+                              ),
+                              itemCount: tampil.length,
+                              itemBuilder: (_, i) => _KartuProduk(
+                                product: tampil[i],
+                                qty: qty[tampil[i].id] ?? 0,
+                                onTambah: () => _tambah(tampil[i]),
+                                onUbahQty: (n) => cart.setQty(tampil[i].id, n),
+                              ),
+                            ),
+                          )
+                        : ListView.separated(
+                            padding: EdgeInsets.fromLTRB(
+                              16,
+                              6,
+                              16,
+                              count == 0 ? 24 : 118,
+                            ),
+                            itemCount: tampil.length,
+                            separatorBuilder: (_, _) => const SizedBox(height: 10),
+                            itemBuilder: (_, i) => MunculBertahap(
+                              urutan: i,
+                              child: _KartuProduk(
+                                product: tampil[i],
+                                qty: qty[tampil[i].id] ?? 0,
+                                onTambah: () => _tambah(tampil[i]),
+                                onUbahQty: (n) => cart.setQty(tampil[i].id, n),
+                              ),
+                            ),
+                          ),
+                  ),
+          ),
+        ),
+      ],
+    );
+
+    if (lebar) {
+      // Tablet ala desktop: katalog di kiri, keranjang menetap di kanan.
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Kasir'),
+          actions: [
+            IconButton(
+              tooltip: 'Muat ulang katalog',
+              onPressed: () => ref.invalidate(productsProvider),
+              icon: const Icon(Icons.refresh_rounded),
+            ),
+            const SizedBox(width: 4),
+          ],
+        ),
+        body: AppBackground(
+          ombak: false,
+          intensitas: 0.55,
+          child: SafeArea(
+            bottom: false,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(child: katalog()),
+                const _PanelKeranjang(),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       extendBody: true, // bilah keranjang mengambang di atas daftar
@@ -103,60 +209,7 @@ class _KasirScreenState extends ConsumerState<KasirScreen> {
       body: AppBackground(
         ombak: false,
         intensitas: 0.55,
-        child: SafeArea(
-          bottom: false,
-          child: Column(
-            children: [
-              const _SesiBanner(),
-              _Pencarian(
-                controller: _queryCtrl,
-                onChanged: _onQueryChanged,
-                onClear: _clearQuery,
-              ),
-              if (kategori.isNotEmpty)
-                _FilterKategori(
-                  kategori: kategori,
-                  terpilih: _kategori,
-                  onPilih: (k) => setState(() => _kategori = k),
-                ),
-              Expanded(
-                child: products.when(
-                  loading: () => const DaftarKerangka(),
-                  error: (e, _) => KeadaanGagal(
-                    error: e,
-                    onUlangi: () => ref.invalidate(productsProvider),
-                  ),
-                  data: (_) => tampil.isEmpty
-                      ? _kosong()
-                      : RefreshIndicator(
-                          onRefresh: () async =>
-                              ref.invalidate(productsProvider),
-                          child: ListView.separated(
-                            padding: EdgeInsets.fromLTRB(
-                              16,
-                              6,
-                              16,
-                              count == 0 ? 24 : 118,
-                            ),
-                            itemCount: tampil.length,
-                            separatorBuilder: (_, _) => const SizedBox(height: 10),
-                            itemBuilder: (_, i) => MunculBertahap(
-                              urutan: i,
-                              child: _KartuProduk(
-                                product: tampil[i],
-                                qty: qty[tampil[i].id] ?? 0,
-                                onTambah: () => _tambah(tampil[i]),
-                                onUbahQty: (n) =>
-                                    cart.setQty(tampil[i].id, n),
-                              ),
-                            ),
-                          ),
-                        ),
-                ),
-              ),
-            ],
-          ),
-        ),
+        child: SafeArea(bottom: false, child: katalog()),
       ),
       bottomNavigationBar: BilahKeranjang(
         count: count,
@@ -193,6 +246,28 @@ class _KasirScreenState extends ConsumerState<KasirScreen> {
       ikon: Icons.inventory_2_outlined,
       judul: 'Katalog masih kosong',
       detail: 'Tambahkan produk atau layanan lebih dulu lewat menu Produk.',
+    );
+  }
+}
+
+/// Panel keranjang menetap di kanan (tablet): lembar keranjang yang sama
+/// dengan ponsel, tertanam — langkah bayar berlangsung di panel ini.
+class _PanelKeranjang extends StatelessWidget {
+  const _PanelKeranjang();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      width: 380,
+      margin: const EdgeInsets.fromLTRB(0, 8, 16, 16),
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: cs.outline),
+      ),
+      child: const CartSheet(tertanam: true),
     );
   }
 }
@@ -327,7 +402,10 @@ class _KartuProduk extends StatelessWidget {
               _Lambang(jasa: _jasa, gambar: product.gambar),
               const SizedBox(width: 12),
               Expanded(
-                child: Column(
+                // Di sel grid bertinggi tetap (tablet), isi yang kelewat
+                // panjang dipotong rapi alih-alih meluap.
+                child: ClipRect(
+                  child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -379,6 +457,7 @@ class _KartuProduk extends StatelessWidget {
                       ],
                     ),
                   ],
+                ),
                 ),
               ),
               const SizedBox(width: 10),

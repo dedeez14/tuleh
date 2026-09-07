@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/layout/lebar.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/offline/antrean.dart';
 import '../../../../core/offline/pengurai.dart';
@@ -41,7 +42,7 @@ class PengaturanScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Pengaturan')),
-      body: ListView(
+      body: LebarKonten(child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           Card(
@@ -136,7 +137,7 @@ class PengaturanScreen extends ConsumerWidget {
             label: const Text('Keluar'),
           ),
         ],
-      ),
+      )),
     );
   }
 

@@ -324,5 +324,42 @@ Future<void> _jalankan(WidgetTester t) async {
     );
     await pompa(t, 40);
     await simpan(t, 'gelap-keranjang');
+    Navigator.of(t.element(find.byType(Scaffold).first)).pop();
+    await pompa(t, 20);
+    await c.read(temaProvider.notifier).pilih(ThemeMode.light);
+
+    // Tablet lanskap 1280×800 (dp): rail samping, kasir dua panel,
+    // riwayat master-detail, beranda dua kolom, daftar berlebar terbatas.
+    t.view.physicalSize = const Size(2560, 1600);
+    t.view.devicePixelRatio = 2.0;
+    await pompa(t, 30);
+    for (final (rute, nama) in [
+      ('/home', 'tablet-home'),
+      ('/kasir', 'tablet-kasir'),
+      ('/riwayat', 'tablet-riwayat'),
+      ('/laporan', 'tablet-laporan'),
+      ('/produk', 'tablet-produk'),
+      ('/pengaturan', 'tablet-pengaturan'),
+    ]) {
+      router.go(rute);
+      await pompa(t, 40);
+      if (nama == 'tablet-riwayat') {
+        await t.tap(find.textContaining('TRX/').first);
+        await pompa(t, 40);
+      }
+      await simpan(t, nama);
+    }
+    // Kasir tablet: keranjang menetap berisi + langkah bayar di panel.
+    router.go('/kasir');
+    await pompa(t, 30);
+    await t.tap(find.text('Lanjut ke pembayaran'));
+    await pompa(t, 30);
+    await simpan(t, 'tablet-kasir-bayar');
+    // Login tablet.
+    await t.runAsync(() async {
+      await c.read(authControllerProvider.notifier).logout();
+    });
+    await pompa(t, 40);
+    await simpan(t, 'tablet-login');
   }
 }

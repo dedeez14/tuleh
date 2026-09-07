@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/layout/lebar.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/states.dart';
@@ -19,11 +20,9 @@ class PilihPelangganSheet extends ConsumerStatefulWidget {
   static const hapus = Pelanggan(id: '', nama: '');
 
   static Future<Pelanggan?> tampilkan(BuildContext context, {Pelanggan? terpilih}) =>
-      showModalBottomSheet<Pelanggan>(
-        context: context,
-        isScrollControlled: true,
-        useSafeArea: true,
-        showDragHandle: true,
+      tampilkanLembar<Pelanggan>(
+        context,
+        useRootNavigator: false,
         builder: (_) => PilihPelangganSheet(terpilih: terpilih),
       );
 

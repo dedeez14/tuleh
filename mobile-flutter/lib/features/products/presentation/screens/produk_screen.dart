@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/layout/lebar.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../../../core/offline/antrean_tulis.dart';
 import '../../../../core/offline/pengurai.dart';
@@ -31,7 +32,7 @@ class ProdukScreen extends ConsumerWidget {
         icon: const Icon(Icons.add),
         label: const Text('Tambah Produk'),
       ),
-      body: Column(
+      body: LebarKonten(child: Column(
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
@@ -67,7 +68,7 @@ class ProdukScreen extends ConsumerWidget {
             ),
           ),
         ],
-      ),
+      )),
     );
   }
 }

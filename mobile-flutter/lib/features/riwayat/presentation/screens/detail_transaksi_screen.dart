@@ -12,9 +12,12 @@ import '../providers/riwayat_providers.dart';
 
 /// Layar Detail Transaksi — tampilan struk dari `/transaksi/{id}`.
 class DetailTransaksiScreen extends ConsumerWidget {
-  const DetailTransaksiScreen({super.key, required this.id});
+  const DetailTransaksiScreen({super.key, required this.id, this.tertanam = false});
 
   final String id;
+
+  /// true = ditampilkan di panel kanan layar Riwayat (tablet), tanpa AppBar.
+  final bool tertanam;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -22,9 +25,7 @@ class DetailTransaksiScreen extends ConsumerWidget {
     final d = detail.valueOrNull;
     final bisaAksi = d != null && (d.status?.toUpperCase() != 'DIBATALKAN');
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Detail Transaksi')),
-      body: detail.when(
+    final isi = detail.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(
           child: Padding(
@@ -63,7 +64,17 @@ class DetailTransaksiScreen extends ConsumerWidget {
             ],
           ],
         ),
-      ),
+      );
+
+    if (tertanam) {
+      return Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 560), child: isi),
+      );
+    }
+    return Scaffold(
+      appBar: AppBar(title: const Text('Detail Transaksi')),
+      body: isi,
     );
   }
 }
