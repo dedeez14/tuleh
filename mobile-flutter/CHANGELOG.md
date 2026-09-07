@@ -5,6 +5,12 @@ sebagai isi Release GitHub (workflow flutter-release.yml), dan empat baris
 pertamanya tampil di banner pembaruan dalam aplikasi. Tulis untuk kasir, bukan
 untuk programmer.
 
+## 2.13.1
+
+- Pembaruan aplikasi lebih andal: APK diunduh langsung oleh aplikasi (bukan lewat DownloadManager sistem yang dibatasi di sebagian HP), mengikuti pengalihan GitHub, memverifikasi ukuran berkas, dan mendeteksi unduhan macet; DownloadManager tinggal cadangan.
+- Sebelum pemasang dibuka, berkas diperiksa: paket, versi lebih baru, dan tanda tangan sama dengan yang terpasang. Bila tidak cocok (misalnya aplikasi terpasang dari build lokal), pesannya menjelaskan langkah yang harus dilakukan alih-alih "Aplikasi tidak terpasang" dari sistem.
+- Pesan galat unduhan menyebut sebabnya (HTTP, jaringan, macet, berkas tidak utuh).
+
 ## 2.13.0
 
 - Tablet (layar ≥ 720 dp) kini tampil ala desktop: kasir dua panel (katalog grid di kiri, keranjang menetap di kanan dengan langkah bayar di panel yang sama), riwayat master-detail (daftar di kiri, struk di kanan dengan Bagikan/Cetak ulang), beranda dua kolom, dan daftar Produk/Stok/Pengeluaran/Pelanggan/Sesi/Pengaturan/Laporan dibatasi lebarnya agar nyaman dibaca. Ponsel tetap memakai tata letak sebelumnya.

@@ -21,7 +21,7 @@ class _InstallerPalsu extends ApkInstaller {
   @override
   Stream<int> get progress => const Stream.empty();
   @override
-  Future<String> download(String url, {required String filename}) async {
+  Future<String> download(String url, {required String filename, int? ukuran, String? direktori}) async {
     unduhan++;
     return '/data/unduhan/$filename';
   }

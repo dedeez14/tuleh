@@ -16,7 +16,10 @@ import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.content.pm.PackageInfo
+import android.content.pm.PackageManager
 import androidx.core.content.FileProvider
+import java.security.MessageDigest
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
@@ -115,6 +118,27 @@ class MainActivity : FlutterActivity() {
                     }
                     result.success(ok)
                 }
+                // Folder unduhan app (dibagikan ke pemasang lewat FileProvider
+                // external-files-path). Unduhan utama kini dilakukan Dart (Dio);
+                // DownloadManager di bawah tinggal cadangan.
+                "downloadDir" -> {
+                    val dir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+                    if (dir == null) result.error("STORAGE", "Penyimpanan tidak tersedia.", null)
+                    else result.success(dir.absolutePath)
+                }
+                // Info paket terpasang: versi + sidik jari tanda tangan (diagnosa).
+                "infoPaket" -> {
+                    try {
+                        val info = packageInfoTerpasang()
+                        result.success(mapOf(
+                            "versionName" to (info.versionName ?: ""),
+                            "versionCode" to kodeVersi(info),
+                            "signatureSha256" to (sidikJari(info) ?: "")
+                        ))
+                    } catch (e: Exception) {
+                        result.error("INFO", e.message, null)
+                    }
+                }
                 "download" -> {
                     val url = call.argument<String>("url")
                     val filename = call.argument<String>("filename") ?: "tuleh-update.apk"
@@ -134,9 +158,9 @@ class MainActivity : FlutterActivity() {
                         result.error("PATH", "Path berkas kosong.", null)
                     } else {
                         val file = File(path)
-                        if (!verifyPackage(file)) {
-                            result.error("MISMATCH",
-                                "Berkas pembaruan tidak cocok dengan aplikasi ini.", null)
+                        val masalah = periksaBerkasPembaruan(file)
+                        if (masalah != null) {
+                            result.error(masalah.first, masalah.second, null)
                         } else {
                             try {
                                 val launched = pasangAtauTunda(file)
@@ -162,14 +186,59 @@ class MainActivity : FlutterActivity() {
         return false
     }
 
-    /// APK sah hanya bila nama paketnya == paket app ini (update ke DIRI sendiri).
-    private fun verifyPackage(file: File): Boolean {
-        return try {
-            val info = packageManager.getPackageArchiveInfo(file.absolutePath, 0)
-            info?.packageName == packageName
-        } catch (_: Exception) {
-            false
+    /// Periksa APK SEBELUM pemasang sistem dibuka, supaya kegagalan punya
+    /// sebab yang jelas (pemasang sistem hanya bilang "Aplikasi tidak
+    /// terpasang"). Mengembalikan (kode, pesan) atau null bila sah.
+    private fun periksaBerkasPembaruan(file: File): Pair<String, String>? {
+        if (!file.exists() || file.length() < 1024L * 100) {
+            return "BERKAS" to "Berkas pembaruan tidak lengkap (${file.length()} byte). Unduh ulang."
         }
+        val arsip = try {
+            packageManager.getPackageArchiveInfo(file.absolutePath, flagTandaTangan())
+        } catch (e: Exception) { null }
+            ?: return "BERKAS" to "Berkas pembaruan tidak bisa dibaca sebagai APK. Unduh ulang."
+        if (arsip.packageName != packageName) {
+            return "MISMATCH" to "Berkas pembaruan untuk paket lain (${arsip.packageName}), bukan aplikasi ini."
+        }
+        val terpasang = try { packageInfoTerpasang() } catch (_: Exception) { null }
+        if (terpasang != null) {
+            val kodeBaru = kodeVersi(arsip)
+            val kodeLama = kodeVersi(terpasang)
+            if (kodeBaru in 1..kodeLama) {
+                return "VERSI" to "Berkas ${arsip.versionName} (kode $kodeBaru) bukan versi lebih baru dari yang terpasang " +
+                    "(${terpasang.versionName}, kode $kodeLama)."
+            }
+            val sidikBaru = sidikJari(arsip)
+            val sidikLama = sidikJari(terpasang)
+            if (sidikBaru != null && sidikLama != null && sidikBaru != sidikLama) {
+                return "TANDA_TANGAN" to "Aplikasi yang terpasang ditandatangani kunci berbeda dari rilis resmi " +
+                    "(biasanya dipasang dari build lokal/debug), jadi Android menolak menimpanya. " +
+                    "Hapus aplikasi ini lalu pasang APK terbaru dari GitHub sekali; pembaruan berikutnya otomatis."
+            }
+        }
+        return null
+    }
+
+    private fun flagTandaTangan(): Int =
+        if (Build.VERSION.SDK_INT >= 28) PackageManager.GET_SIGNING_CERTIFICATES
+        else @Suppress("DEPRECATION") PackageManager.GET_SIGNATURES
+
+    private fun packageInfoTerpasang(): PackageInfo =
+        packageManager.getPackageInfo(packageName, flagTandaTangan())
+
+    private fun kodeVersi(info: PackageInfo): Long =
+        if (Build.VERSION.SDK_INT >= 28) info.longVersionCode else @Suppress("DEPRECATION") info.versionCode.toLong()
+
+    /// SHA-256 sertifikat penandatangan pertama (hex kecil), atau null.
+    private fun sidikJari(info: PackageInfo): String? {
+        val sig = if (Build.VERSION.SDK_INT >= 28) {
+            val si = info.signingInfo ?: return null
+            (if (si.hasMultipleSigners()) si.apkContentsSigners else si.signingCertificateHistory)?.firstOrNull()
+        } else {
+            @Suppress("DEPRECATION") info.signatures?.firstOrNull()
+        } ?: return null
+        val d = MessageDigest.getInstance("SHA-256").digest(sig.toByteArray())
+        return d.joinToString("") { "%02x".format(it) }
     }
 
     /// Unduh APK via DownloadManager → resolve path lokal. Emit progres 0..100.

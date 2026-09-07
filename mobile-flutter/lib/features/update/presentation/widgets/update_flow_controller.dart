@@ -81,6 +81,7 @@ class UpdateFlowController extends ChangeNotifier {
       final path = await _installer.download(
         _info.androidUrl!,
         filename: _info.androidNama ?? 'Tuleh-update.apk',
+        ukuran: _info.ukuran,
       );
       await _sub?.cancel();
       _downloadedPath = path;
@@ -89,10 +90,14 @@ class UpdateFlowController extends ChangeNotifier {
       _set(UpdatePhase.launched);
     } on PlatformException catch (e) {
       await _sub?.cancel();
+      if (e.code == 'BATAL') {
+        _set(UpdatePhase.ready);
+        return;
+      }
       _set(UpdatePhase.error, err: e.message ?? 'Unduhan gagal.');
-    } catch (_) {
+    } catch (e) {
       await _sub?.cancel();
-      _set(UpdatePhase.error, err: 'Unduhan gagal. Periksa koneksi lalu coba lagi.');
+      _set(UpdatePhase.error, err: 'Unduhan gagal ($e). Periksa koneksi lalu coba lagi.');
     }
   }
 
