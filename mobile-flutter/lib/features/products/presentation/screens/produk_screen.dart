@@ -58,7 +58,7 @@ class ProdukScreen extends ConsumerWidget {
                   : RefreshIndicator(
                       onRefresh: () async => ref.invalidate(produkKelolaProvider),
                       child: ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
                         itemCount: list.length,
                         separatorBuilder: (_, _) => const SizedBox(height: 8),
                         itemBuilder: (_, i) => _Tile(product: list[i]),

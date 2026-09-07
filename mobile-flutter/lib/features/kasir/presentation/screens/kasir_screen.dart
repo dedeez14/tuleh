@@ -314,7 +314,7 @@ class _KartuProduk extends StatelessWidget {
         onTap: onTambah,
         child: AnimatedContainer(
           duration: Gerak.cepat,
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+          padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
@@ -329,6 +329,7 @@ class _KartuProduk extends StatelessWidget {
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       product.nama,
@@ -336,61 +337,51 @@ class _KartuProduk extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontWeight: FontWeight.w700,
-                        fontSize: 15,
+                        fontSize: 14.5,
                         height: 1.25,
                       ),
                     ),
-                    const SizedBox(height: 6),
-                    Row(
+                    const SizedBox(height: 5),
+                    // Harga · satuan · lencana stok dalam satu baris agar kartu
+                    // ringkas dan lebih banyak produk terlihat sekali pandang.
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 6,
+                      runSpacing: 4,
                       children: [
-                        Flexible(
-                          child: Text(
-                            fmtIDR(product.harga),
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontWeight: FontWeight.w800,
-                              fontSize: 15,
-                              color: cs.primary,
-                            ),
+                        Text(
+                          fmtIDR(product.harga),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 15,
+                            color: cs.primary,
                           ),
                         ),
                         if (product.promo && product.hargaNormal != null)
-                          Flexible(
-                            child: Padding(
-                              padding: const EdgeInsets.only(left: 6),
-                              child: Text(
-                                fmtIDR(product.hargaNormal!),
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  decoration: TextDecoration.lineThrough,
-                                  color: cs.onSurface.withValues(alpha: 0.5),
-                                ),
-                              ),
+                          Text(
+                            fmtIDR(product.hargaNormal!),
+                            style: TextStyle(
+                              fontSize: 12,
+                              decoration: TextDecoration.lineThrough,
+                              color: cs.onSurface.withValues(alpha: 0.5),
                             ),
                           ),
-                        if (product.satuan != null &&
-                            product.satuan!.isNotEmpty)
-                          Flexible(
-                            child: Text(
-                              ' / ${product.satuan}',
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 12.5,
-                                color: cs.onSurface.withValues(alpha: 0.55),
-                              ),
+                        if (product.satuan != null && product.satuan!.isNotEmpty)
+                          Text(
+                            '/ ${product.satuan}',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              color: cs.onSurface.withValues(alpha: 0.55),
                             ),
                           ),
+                        if (!_jasa && product.stok != null)
+                          _LencanaStok(stok: product.stok!),
                       ],
                     ),
-                    if (!_jasa && product.stok != null) ...[
-                      const SizedBox(height: 7),
-                      _LencanaStok(stok: product.stok!),
-                    ],
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 10),
               AnimatedSwitcher(
                 duration: Gerak.cepat,
                 child: _diKeranjang
@@ -399,20 +390,26 @@ class _KartuProduk extends StatelessWidget {
                         qty: qty,
                         onUbah: onUbahQty,
                       )
-                    : FilledButton.tonal(
+                    : Semantics(
                         key: const ValueKey('tambah'),
-                        onPressed: onTambah,
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size(88, 44),
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.add_rounded, size: 18),
-                            SizedBox(width: 4),
-                            Text('Tambah'),
-                          ],
+                        button: true,
+                        label: 'Tambah ${product.nama}',
+                        child: Material(
+                          color: AppColors.mint400,
+                          shape: const CircleBorder(),
+                          child: InkWell(
+                            customBorder: const CircleBorder(),
+                            onTap: onTambah,
+                            child: const SizedBox(
+                              height: 44,
+                              width: 44,
+                              child: Icon(
+                                Icons.add_rounded,
+                                size: 24,
+                                color: AppColors.mint900,
+                              ),
+                            ),
+                          ),
                         ),
                       ),
               ),

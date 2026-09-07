@@ -23,22 +23,7 @@ class DetailTransaksiScreen extends ConsumerWidget {
     final bisaAksi = d != null && (d.status?.toUpperCase() != 'DIBATALKAN');
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Detail Transaksi'),
-        actions: [
-          IconButton(
-            tooltip: 'Bagikan struk',
-            onPressed: bisaAksi ? () => bagikanStruk(context, _struk(ref, d)) : null,
-            icon: const Icon(Icons.share_outlined),
-          ),
-          IconButton(
-            tooltip: 'Cetak ulang',
-            onPressed: bisaAksi ? () => cetakStrukDenganUmpanBalik(context, ref, _struk(ref, d)) : null,
-            icon: const Icon(Icons.print_outlined),
-          ),
-          const SizedBox(width: 4),
-        ],
-      ),
+      appBar: AppBar(title: const Text('Detail Transaksi')),
       body: detail.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(
@@ -52,7 +37,31 @@ class DetailTransaksiScreen extends ConsumerWidget {
         ),
         data: (d) => ListView(
           padding: const EdgeInsets.all(16),
-          children: [_Receipt(d: d)],
+          children: [
+            _Receipt(d: d),
+            if (bisaAksi) ...[
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => bagikanStruk(context, _struk(ref, d)),
+                      icon: const Icon(Icons.share_outlined, size: 19),
+                      label: const Text('Bagikan'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () => cetakStrukDenganUmpanBalik(context, ref, _struk(ref, d)),
+                      icon: const Icon(Icons.print_rounded, size: 19),
+                      label: const Text('Cetak ulang'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
         ),
       ),
     );

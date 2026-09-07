@@ -228,7 +228,7 @@ class _Header extends StatelessWidget {
                 children: [
                   Flexible(
                     child: Text(
-                      'Halo, $firstName',
+                      '${sapaanWaktu()}, $firstName',
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
@@ -817,4 +817,14 @@ class _KerangkaKartu extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Sapaan sesuai jam perangkat: pagi (<11), siang (<15), sore (<18), malam.
+String sapaanWaktu([DateTime? kini]) {
+  final jam = (kini ?? DateTime.now()).hour;
+  if (jam < 4) return 'Selamat malam';
+  if (jam < 11) return 'Selamat pagi';
+  if (jam < 15) return 'Selamat siang';
+  if (jam < 18) return 'Selamat sore';
+  return 'Selamat malam';
 }

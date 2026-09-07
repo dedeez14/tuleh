@@ -13,6 +13,7 @@ import 'package:tuleh_pos/core/offline/antrean.dart';
 import 'package:tuleh_pos/core/router/app_router.dart';
 import 'package:tuleh_pos/core/storage/secure_storage.dart';
 import 'package:tuleh_pos/core/theme/app_theme.dart';
+import 'package:tuleh_pos/core/theme/tema_provider.dart';
 import 'package:tuleh_pos/features/auth/presentation/controllers/auth_controller.dart';
 import 'package:tuleh_pos/features/demo/data/masa_coba_service.dart';
 import 'package:tuleh_pos/features/kasir/presentation/controllers/cart_controller.dart';
@@ -22,6 +23,11 @@ import 'package:tuleh_pos/features/kasir/presentation/widgets/hasil_transaksi_sh
 import 'package:tuleh_pos/features/kasir/presentation/controllers/keranjang_meta.dart';
 import 'package:tuleh_pos/features/kasir/presentation/widgets/pilih_pelanggan_sheet.dart';
 import 'package:tuleh_pos/features/pelanggan/domain/entities/pelanggan.dart';
+import 'package:tuleh_pos/features/cetak/presentation/screens/printer_screen.dart';
+import 'package:tuleh_pos/features/products/presentation/screens/product_form_sheet.dart';
+import 'package:tuleh_pos/features/riwayat/presentation/providers/riwayat_providers.dart';
+import 'package:tuleh_pos/features/riwayat/presentation/screens/detail_transaksi_screen.dart';
+import 'package:tuleh_pos/features/sesi/presentation/widgets/buka_sesi_dialog.dart';
 import 'package:tuleh_pos/features/products/presentation/providers/products_provider.dart';
 import 'package:tuleh_pos/features/toko/presentation/providers/toko_providers.dart';
 
@@ -45,15 +51,18 @@ class _Storage extends SecureStorage {
   @override
   Future<String?> readToken() async => _m['token'];
   @override
-  Future<void> writeToken(String? v) async => v == null ? _m.remove('token') : _m['token'] = v;
+  Future<void> writeToken(String? v) async =>
+      v == null ? _m.remove('token') : _m['token'] = v;
   @override
   Future<String?> readActiveTokoId() async => _m['toko'];
   @override
-  Future<void> writeActiveTokoId(String? v) async => v == null ? _m.remove('toko') : _m['toko'] = v;
+  Future<void> writeActiveTokoId(String? v) async =>
+      v == null ? _m.remove('toko') : _m['toko'] = v;
   @override
   Future<String?> bacaNilai(String k) async => _m[k];
   @override
-  Future<void> tulisNilai(String k, String? v) async => v == null ? _m.remove(k) : _m[k] = v;
+  Future<void> tulisNilai(String k, String? v) async =>
+      v == null ? _m.remove(k) : _m[k] = v;
   @override
   Future<void> clearSession() async {
     _m.remove('token');
@@ -67,7 +76,17 @@ Future<void> _muatFont() async {
   if (_font.isNotEmpty) {
     final bytes = await File(_font).readAsBytes();
     // Nama keluarga yang dipakai google_fonts untuk tiap varian bobot.
-    for (final v in ['regular', '500', '600', '700', '800', 'italic', '300', '500italic', '700italic']) {
+    for (final v in [
+      'regular',
+      '500',
+      '600',
+      '700',
+      '800',
+      'italic',
+      '300',
+      '500italic',
+      '700italic',
+    ]) {
       final loader = FontLoader('PlusJakartaSans_$v')
         ..addFont(Future.value(ByteData.view(bytes.buffer)));
       await loader.load();
@@ -90,24 +109,36 @@ void main() {
   GoogleFonts.config.allowRuntimeFetching = false;
   setUpAll(_muatFont);
 
-  Future<void> pompa(WidgetTester t, [int kali = 25]) async {
-    for (var i = 0; i < kali; i++) {
-      await t.pump(const Duration(milliseconds: 40));
-    }
-  }
-
-  Future<void> simpan(WidgetTester t, String nama) async {
-    await expectLater(
-      find.byType(MaterialApp),
-      matchesGoldenFile(Uri.file('$_dir/a-$nama.png')),
-    );
-  }
-
   testWidgets('tangkap layar demo', (t) async {
     t.view.physicalSize = const Size(1080, 2280);
     t.view.devicePixelRatio = 2.5;
     addTearDown(t.view.reset);
+    // Bayangan asli (bukan garis hitam pengganti); wajib dipulihkan sebelum
+    // test selesai karena flutter_test memeriksa variabel debug.
+    debugDisableShadows = false;
+    try {
+      await _jalankan(t);
+    } finally {
+      debugDisableShadows = true;
+    }
+  });
+}
 
+Future<void> pompa(WidgetTester t, [int kali = 25]) async {
+  for (var i = 0; i < kali; i++) {
+    await t.pump(const Duration(milliseconds: 40));
+  }
+}
+
+Future<void> simpan(WidgetTester t, String nama) async {
+  await expectLater(
+    find.byType(MaterialApp),
+    matchesGoldenFile(Uri.file('$_dir/a-$nama.png')),
+  );
+}
+
+Future<void> _jalankan(WidgetTester t) async {
+  {
     final c = ProviderContainer(
       overrides: [
         secureStorageProvider.overrideWithValue(_Storage()),
@@ -123,6 +154,8 @@ void main() {
         child: Consumer(
           builder: (_, ref, _) => MaterialApp.router(
             theme: AppTheme.light(),
+            darkTheme: AppTheme.dark(),
+            themeMode: ref.watch(temaProvider),
             routerConfig: ref.watch(routerProvider),
             debugShowCheckedModeBanner: false,
           ),
@@ -180,7 +213,13 @@ void main() {
     await simpan(t, 'keranjang');
     // Dengan pelanggan, diskon, catatan terisi.
     c.read(keranjangMetaProvider.notifier)
-      ..pilihPelanggan(const Pelanggan(id: 'C1', nama: 'Budi Santoso', telepon: '0812-3456-7890'))
+      ..pilihPelanggan(
+        const Pelanggan(
+          id: 'C1',
+          nama: 'Budi Santoso',
+          telepon: '0812-3456-7890',
+        ),
+      )
       ..aturDiskon(10)
       ..aturCatatan('Tanpa es, ambil jam 5');
     await pompa(t, 20);
@@ -209,7 +248,10 @@ void main() {
           namaToko: 'Minimarket Demo',
           nomor: 'TRX/0051',
           waktu: DateTime(2026, 9, 6, 14, 5),
-          baris: [for (final p in produk.take(3)) StrukBaris(nama: p.nama, kuantitas: 1, harga: p.harga)],
+          baris: [
+            for (final p in produk.take(3))
+              StrukBaris(nama: p.nama, kuantitas: 1, harga: p.harga),
+          ],
           total: produk.take(3).fold(0, (s, p) => s + p.harga),
           metode: 'TUNAI',
           dibayar: 50000,
@@ -222,5 +264,65 @@ void main() {
     );
     await pompa(t, 40);
     await simpan(t, 'hasil');
-  });
+    Navigator.of(ctx).pop();
+    await pompa(t, 20);
+
+    // Layar sekunder yang dibuka lewat Navigator (bukan rute).
+    {
+      final riwayat = await c.read(riwayatListProvider.future);
+      final nav = Navigator.of(t.element(find.byType(Scaffold).first), rootNavigator: true);
+      nav.push(MaterialPageRoute<void>(builder: (_) => DetailTransaksiScreen(id: riwayat.first.id)));
+      await pompa(t, 40);
+      await simpan(t, 'detail-transaksi');
+      nav.pop();
+      await pompa(t, 20);
+      nav.push(MaterialPageRoute<void>(builder: (_) => const PrinterScreen()));
+      await pompa(t, 40);
+      await simpan(t, 'printer');
+      nav.pop();
+      await pompa(t, 20);
+      final ctx2 = t.element(find.byType(Scaffold).first);
+      showModalBottomSheet<void>(
+        context: ctx2,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (_) => const ProductFormSheet(),
+      );
+      await pompa(t, 40);
+      await simpan(t, 'form-produk');
+      Navigator.of(ctx2).pop();
+      await pompa(t, 20);
+      showBukaSesiDialog(ctx2);
+      await pompa(t, 40);
+      await simpan(t, 'buka-sesi');
+      Navigator.of(ctx2, rootNavigator: true).pop();
+      await pompa(t, 20);
+    }
+
+    // Mode gelap: layar utama yang sama.
+    await c.read(temaProvider.notifier).pilih(ThemeMode.dark);
+    await pompa(t, 20);
+    for (final (rute, nama) in [
+      ('/home', 'gelap-home'),
+      ('/kasir', 'gelap-kasir'),
+      ('/riwayat', 'gelap-riwayat'),
+      ('/laporan', 'gelap-laporan'),
+      ('/pengaturan', 'gelap-pengaturan'),
+      ('/sesi', 'gelap-sesi'),
+    ]) {
+      router.go(rute);
+      await pompa(t, 40);
+      await simpan(t, nama);
+    }
+    router.go('/kasir');
+    await pompa(t, 30);
+    showModalBottomSheet<void>(
+      context: t.element(find.byType(Scaffold).first),
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => const CartSheet(),
+    );
+    await pompa(t, 40);
+    await simpan(t, 'gelap-keranjang');
+  }
 }

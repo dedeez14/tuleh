@@ -5,6 +5,13 @@ sebagai isi Release GitHub (workflow flutter-release.yml), dan empat baris
 pertamanya tampil di banner pembaruan dalam aplikasi. Tulis untuk kasir, bukan
 untuk programmer.
 
+## 2.12.0
+
+- Kasir lebih ringkas: harga, satuan, dan stok dalam satu baris, tombol tambah bulat; sekitar delapan produk terlihat sekali pandang (sebelumnya lima). Pengatur jumlah tetap muncul untuk item yang sudah di keranjang.
+- Beranda menyapa sesuai waktu (pagi/siang/sore/malam).
+- Detail transaksi punya tombol Bagikan dan Cetak ulang yang jelas di bawah struk.
+- Daftar produk tidak lagi tertutup tombol Tambah Produk di baris terakhir.
+
 ## 2.11.0
 
 - Keranjang: pilih pelanggan (cari nama/telepon, tambah cepat), diskon transaksi dalam persen, dan catatan. Total di kasir dan lembar bayar sudah setelah diskon; dikirim ke server dengan kontrak yang sama seperti desktop (diskon per item, id pelanggan, catatan).
