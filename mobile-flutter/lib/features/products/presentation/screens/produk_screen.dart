@@ -184,10 +184,14 @@ class DetailProdukSheet extends ConsumerWidget {
             if ((product.tipe ?? '').toUpperCase() != 'JASA')
               Padding(
                 padding: const EdgeInsets.only(top: 10),
+                // Teks memakai warna ink (kontras AA); ikon yang berwarna warn
+                // sudah cukup menandai sifat aksinya.
                 child: TextButton.icon(
                   onPressed: () => _mutasiStok(context, ref, masuk: false),
-                  style: TextButton.styleFrom(foregroundColor: AppColors.warn),
-                  icon: const Icon(Icons.inventory_outlined, size: 18),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.onSurface,
+                  ),
+                  icon: const Icon(Icons.inventory_outlined, size: 18, color: AppColors.warn),
                   label: const Text('Opname — kurangi stok (rusak / hilang / selisih)'),
                 ),
               ),

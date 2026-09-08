@@ -130,7 +130,9 @@ export const HistoryScreen = {
               icon: mencari ? icons.search : icons.history,
               title: mencari ? 'Tidak ada yang cocok' : 'Tidak ada transaksi',
               desc: mencari
-                ? `Tidak ada transaksi yang cocok dengan "${esc(elCari.value.trim())}" pada rentang ini.`
+                // emptyStateHTML() sudah meng-escape; jangan di-escape dua kali
+                // atau "Nasi & Es Teh" tampil sebagai "Nasi &amp; Es Teh".
+                ? `Tidak ada transaksi yang cocok dengan "${elCari.value.trim()}" pada rentang ini.`
                 : 'Belum ada transaksi pada rentang ini. Coba perlebar rentang tanggal atau ubah filter status.'
             })}
           </div>`

@@ -7,6 +7,8 @@ import '../../../../core/offline/pengurai.dart';
 import '../../../../core/offline/rujukan_lokal.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/format.dart';
+import '../../../../core/offline/nomor_lokal.dart';
+import '../../../../core/storage/secure_storage.dart';
 import '../../../cetak/domain/entities/struk.dart';
 import '../../../demo/demo_session.dart';
 import '../../../kasir/presentation/widgets/hasil_transaksi_sheet.dart';
@@ -153,6 +155,17 @@ class _Body extends ConsumerWidget {
     if (dibayar == null || !context.mounted) return;
     final struk = _struk(ref, dibayar: dibayar, total: total);
     final r = await ref.read(mejaRepositoryProvider).bayar(billId, tipe: 'TUNAI', dibayar: dibayar);
+    // Bon yang dibuka offline bernomor sama ("Bon offline") untuk semua meja;
+    // beri nomor lokal unik supaya dua pelanggan tidak menerima struk kembar
+    // dan nomornya bisa dicocokkan lagi di layar Sinkronisasi.
+    String? nomorLokal;
+    if (r.isOk && (r.valueOrNull?.tertunda ?? false)) {
+      try {
+        nomorLokal = await NomorLokal(ref.read(secureStorageProvider)).berikutnya();
+      } catch (_) {
+        nomorLokal = null; // penyimpanan bermasalah — pakai nomor bon apa adanya
+      }
+    }
     if (!context.mounted) return;
     r.when(
       ok: (h) {
@@ -171,6 +184,8 @@ class _Body extends ConsumerWidget {
           builder: (_) => HasilTransaksiSheet(
             struk: h.tertunda
                 ? struk.salinDengan(
+                    nomor: nomorLokal,
+                    barcode: nomorLokal,
                     catatanKaki: 'Belum tersinkron — nomor resmi menyusul setelah online.',
                   )
                 : struk,
@@ -234,7 +249,7 @@ class _DialogBayarTunai extends StatefulWidget {
 
 class _DialogBayarTunaiState extends State<_DialogBayarTunai> {
   late final TextEditingController _ctrl = TextEditingController(
-    text: widget.total.toInt().toString(),
+    text: teksRupiah(widget.total),
   );
 
   @override
@@ -243,34 +258,59 @@ class _DialogBayarTunaiState extends State<_DialogBayarTunai> {
     super.dispose();
   }
 
-  void _kirim() {
+  double get _diterima {
     final teks = _ctrl.text.trim();
-    Navigator.pop(context, teks.isEmpty ? widget.total : parseRupiah(teks));
+    return teks.isEmpty ? 0 : parseRupiah(teks);
+  }
+
+  /// Kurang bayar = server tetap menerimanya (tidak divalidasi di sana), jadi
+  /// kasirlah yang harus dijaga di sini — sama seperti lembar bayar kasir.
+  double get _kurang => widget.total - _diterima;
+
+  void _kirim() {
+    if (_kurang > 0) return;
+    Navigator.pop(context, _diterima);
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Bayar Tunai'),
-    content: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text('Total ${fmtIDR(widget.total)}'),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _ctrl,
-          keyboardType: TextInputType.number,
-          inputFormatters: const [RupiahInputFormatter()],
-          autofocus: true,
-          onSubmitted: (_) => _kirim(),
-          decoration: const InputDecoration(labelText: 'Uang diterima', prefixText: 'Rp '),
-        ),
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final kurang = _kurang;
+    return AlertDialog(
+      title: const Text('Bayar Tunai'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Total ${fmtIDR(widget.total)}'),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _ctrl,
+            keyboardType: TextInputType.number,
+            inputFormatters: const [RupiahInputFormatter()],
+            autofocus: true,
+            onChanged: (_) => setState(() {}),
+            onSubmitted: (_) => _kirim(),
+            decoration: const InputDecoration(labelText: 'Uang diterima', prefixText: 'Rp '),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            kurang > 0
+                ? 'Kurang ${fmtIDR(kurang)}'
+                : 'Kembalian ${fmtIDR(-kurang)}',
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: kurang > 0 ? cs.error : AppColors.mint600,
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
+        FilledButton(onPressed: kurang > 0 ? null : _kirim, child: const Text('Bayar')),
       ],
-    ),
-    actions: [
-      TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
-      FilledButton(onPressed: _kirim, child: const Text('Bayar')),
-    ],
-  );
+    );
+  }
 }
 
 /// Sheet pilih produk → kirim sebagai ronde ke bon.

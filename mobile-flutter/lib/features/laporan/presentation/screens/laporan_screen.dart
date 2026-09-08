@@ -8,6 +8,8 @@ import '../../../../core/utils/format.dart';
 import '../../../../core/widgets/app_background.dart';
 import '../../../../core/widgets/motion.dart';
 import '../../../../core/widgets/states.dart';
+import '../../../../core/offline/koneksi.dart';
+import '../../../../core/offline/pengurai.dart';
 import '../../../demo/demo_session.dart';
 import '../../../pengaturan/presentation/providers/pengaturan_providers.dart';
 import '../../../sesi/domain/entities/sesi_rekap.dart';
@@ -193,10 +195,25 @@ Future<void> _bagikan(BuildContext context, WidgetRef ref, LaporanKeuangan k) as
     harian: ref.read(penjualanHarianProvider).valueOrNull ?? const [],
     terlaris: ref.read(penjualanProdukProvider).valueOrNull ?? const [],
     rekap: ref.read(rekapKasirProvider).valueOrNull ?? const [],
+    // Angka bisa berasal dari salinan lama dan belum memuat transaksi yang
+    // masih mengantre — jangan biarkan itu beredar tanpa keterangan.
+    peringatan: _peringatanData(ref),
   );
   await SharePlus.instance.share(
     ShareParams(text: teks, subject: 'Laporan $nama · ${k.bulan}'),
   );
+}
+
+/// Keterangan tambahan bila angka laporan belum tentu lengkap.
+String? _peringatanData(WidgetRef ref) {
+  final online = ref.read(koneksiProvider).online;
+  final antre = ref.read(ringkasAntreanProvider).valueOrNull?.total ?? 0;
+  if (online && antre == 0) return null;
+  final bagian = [
+    if (!online) 'sedang offline, angka dari data terakhir yang tersimpan',
+    if (antre > 0) '$antre transaksi belum terkirim ke server',
+  ];
+  return 'Catatan: ${bagian.join('; ')}.';
 }
 
 class _JudulBagian extends StatelessWidget {

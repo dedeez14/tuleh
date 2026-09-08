@@ -1,6 +1,8 @@
 // Ringkasan laporan sebagai teks siap kirim (2.18.0) — padanan ringkasTeks()
 // di desktop.
 
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tuleh_pos/features/laporan/domain/entities/laporan_keuangan.dart';
 import 'package:tuleh_pos/features/laporan/domain/entities/penjualan_hari.dart';
@@ -135,6 +137,22 @@ void main() {
     expect(teks, contains('1. Kopi Susu: Rp 2.160.000 (120 terjual)'));
     expect(teks, contains('2. Roti Bakar: Rp 675.000 (45 terjual)'));
     expect(teks, isNot(contains('Es Teh')), reason: 'dibatasi maksTerlaris');
+  });
+
+  test('peringatan data belum lengkap muncul tepat di bawah periode', () {
+    final teks = laporanTeks(
+      namaToko: 'X',
+      keuangan: _keuangan,
+      peringatan: 'Catatan: sedang offline; 3 transaksi belum terkirim.',
+    );
+    final baris = const LineSplitter().convert(teks);
+    expect(baris[1], 'Periode: September 2026');
+    expect(baris[2], '_Catatan: sedang offline; 3 transaksi belum terkirim._');
+    // Tanpa peringatan, tidak ada baris tambahan.
+    expect(
+      const LineSplitter().convert(laporanTeks(namaToko: 'X', keuangan: _keuangan))[2],
+      '',
+    );
   });
 
   test('tanpa data terlaris, bagiannya tidak dicetak', () {

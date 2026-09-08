@@ -362,12 +362,17 @@ class _Judul extends StatelessWidget {
               icon: const Icon(Icons.local_parking_rounded, size: 18),
               label: const Text('Parkir'),
             ),
-          if (!bayar && onKosongkan != null)
-            IconButton(
-              tooltip: 'Kosongkan keranjang',
+          // Berlabel & agak jauh dari Parkir: ikon tong sampah telanjang di
+          // sebelah Parkir membuat satu ketukan meleset menghapus keranjang.
+          if (!bayar && onKosongkan != null) ...[
+            const SizedBox(width: 4),
+            TextButton.icon(
               onPressed: onKosongkan,
-              icon: const Icon(Icons.delete_outline_rounded),
+              style: TextButton.styleFrom(foregroundColor: AppColors.danger),
+              icon: const Icon(Icons.delete_outline_rounded, size: 18),
+              label: const Text('Kosongkan'),
             ),
+          ],
         ],
       ),
     );

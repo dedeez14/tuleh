@@ -259,13 +259,19 @@ class AntreanMemori implements AntreanStore {
 
   @override
   Future<Map<String, double>> deltaStokTertunda({String? tokoId}) async {
+    final refToko = tokoId == null ? null : _refTokoAntrean(tokoId);
     final out = <String, double>{};
     for (final d in _delta) {
-      if (tokoId != null && _trx[d.$1]?.tokoId != tokoId) continue;
+      if (refToko != null && !refToko.contains(d.$1)) continue;
       out[d.$2] = (out[d.$2] ?? 0) + d.$3;
     }
     return out;
   }
+
+  Set<String> _refTokoAntrean(String tokoId) => {
+    for (final p in _pesan)
+      if (p.tokoId == tokoId || p.tokoId == null) p.clientRef,
+  };
 }
 
 // ----------------------------------------------------------------- drift
@@ -437,7 +443,13 @@ class AntreanDriftStore implements AntreanStore {
     final out = <String, double>{};
     Set<String>? refToko;
     if (tokoId != null) {
-      refToko = (await transaksiTertunda(tokoId: tokoId)).map((t) => t.clientRef).toSet();
+      // Toko pemilik delta diambil dari OUTBOX, bukan dari transaksi_lokal:
+      // tabel itu hanya berisi checkout kasir, sehingga opname, stok masuk, dan
+      // pelunasan bon (yang juga menitipkan delta) dulu selalu tersaring habis
+      // dan stok di katalog tidak pernah ikut berubah saat offline.
+      final q = _db.select(_db.outbox)
+        ..where((t) => t.tokoId.equals(tokoId) | t.tokoId.isNull());
+      refToko = (await q.get()).map((p) => p.clientRef).toSet();
     }
     for (final r in rows) {
       if (refToko != null && !refToko.contains(r.clientRef)) continue;

@@ -48,6 +48,26 @@ class AntreanTulis {
 
   /// [langsungAntre] = jangan coba ke server (mis. path merujuk bon lokal
   /// yang id servernya belum ada). [tokoId] menimpa toko default.
+  /// Petunjuk untuk baris "perlu ditinjau": tunjukkan tempat yang benar untuk
+  /// memeriksa, karena hanya CHECKOUT yang muncul di Riwayat. Opname/stok masuk
+  /// dicek di layar Produk, bon di peta meja.
+  static String _pesanTinjau(String jenis) {
+    const awal = 'Server tidak menjawab setelah data dikirim. ';
+    return awal + switch (jenis) {
+      'OPNAME' || 'STOK_MASUK' =>
+        'Periksa stok produknya di layar Produk sebelum mengirim ulang — '
+            'mengirim dua kali akan mengubah stok dua kali.',
+      'BILL_BUKA' || 'BILL_RONDE' || 'BILL_BAYAR' =>
+        'Periksa bon meja itu lebih dulu sebelum mengirim ulang.',
+      'PENGELUARAN' =>
+        'Periksa daftar Pengeluaran lebih dulu sebelum mengirim ulang.',
+      'SESI_BUKA' =>
+        'Periksa apakah sesi kasir sudah terbuka sebelum mengirim ulang.',
+      _ =>
+        'Periksa dulu apakah sudah tercatat sebelum mengirim ulang.',
+    };
+  }
+
   Future<HasilTulis> jalankan({
     required String jenis,
     required String path,
@@ -84,10 +104,7 @@ class AntreanTulis {
         body: badan,
         dibuat: waktu,
         status: tinjau ? StatusAntrean.tinjau : StatusAntrean.menunggu,
-        galatTerakhir: tinjau
-            ? 'Server tidak menjawab setelah data dikirim. Periksa dulu apakah '
-                  'sudah tercatat sebelum mengirim ulang.'
-            : null,
+        galatTerakhir: tinjau ? _pesanTinjau(jenis) : null,
       ),
       deltaStok: deltaStok,
     );

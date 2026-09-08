@@ -182,6 +182,14 @@ class DemoEngine {
     }
   }
 
+  /// Produk pertama yang namanya cocok — bon meja menyimpan nama, bukan id.
+  Map<String, dynamic>? _produkNama(String toko, String nama) {
+    for (final p in _produk(toko)) {
+      if (p['nama'] == nama) return p;
+    }
+    return null;
+  }
+
   /// Pembatalan transaksi demo: status DIBATALKAN, stok item ber-stok kembali,
   /// total sesi pada hari transaksi dikurangi — meniru server & desktop.
   DemoResponse _batalTransaksi(String toko, String id) {
@@ -191,15 +199,8 @@ class DemoEngine {
     t['status'] = 'DIBATALKAN';
     final tokoTrx = '${t['toko_id'] ?? toko}';
     for (final it in (t['items'] as List? ?? const []).cast<Map>()) {
-      var p = _cariProduk(tokoTrx, '${it['id_produk'] ?? ''}');
-      if (p == null) {
-        for (final x in _produk(tokoTrx)) {
-          if (x['nama'] == it['nama']) {
-            p = x;
-            break;
-          }
-        }
-      }
+      final p = _cariProduk(tokoTrx, '${it['id_produk'] ?? ''}') ??
+          _produkNama(tokoTrx, '${it['nama']}');
       if (p != null && p['kelola_stok'] == true) {
         p['stok'] = (p['stok'] as num) + ((it['kuantitas'] as num?) ?? 0);
       }
@@ -663,7 +664,10 @@ class DemoEngine {
       return _err(422, 'Keranjang masih kosong.');
     }
 
+    // Validasi dulu SEMUANYA, baru ubah stok: kalau ditolak di tengah jalan
+    // (batas demo, uang kurang), stok sebagian item sudah telanjur berkurang.
     final items = <Map<String, dynamic>>[];
+    final potong = <(Map<String, dynamic>, double)>[];
     var grand = 0.0;
     var totalDiskon = 0.0;
     for (final raw in rawItems) {
@@ -688,9 +692,15 @@ class DemoEngine {
         'diskon_persen': diskonPersen,
         'subtotal': subtotal,
       });
-      // Sparepart/produk berstok berkurang; jasa tidak.
+      // Sparepart/produk berstok berkurang; jasa tidak. Server menolak bila
+      // stok tidak cukup, jadi demo harus menolak juga — bukan menjepit ke 0
+      // (yang membuat pembatalan mengembalikan stok lebih banyak dari terjual).
       if (p['kelola_stok'] == true) {
-        p['stok'] = ((p['stok'] as num) - qty).clamp(0, double.infinity);
+        final stok = (p['stok'] as num).toDouble();
+        if (qty > stok) {
+          return _err(422, 'Stok tidak mencukupi — stok "${p['nama']}" hanya tersisa ${fmtQty(stok)}.');
+        }
+        potong.add((p, qty));
       }
     }
 
@@ -700,6 +710,10 @@ class DemoEngine {
       return _err(422, 'Uang dibayar kurang dari total.');
     }
     if (_lewatBatasHarian()) return _err(422, pesanBatasTransaksi);
+
+    for (final (p, qty) in potong) {
+      p['stok'] = (p['stok'] as num).toDouble() - qty;
+    }
 
     _nTrx += 1;
     final now = DateTime.now();
@@ -823,6 +837,9 @@ class DemoEngine {
       var jumlah = 0;
       for (final t in _transaksi) {
         if (t['toko_id'] != toko) continue;
+        // Sama seperti laporan keuangan & produk terlaris: yang dibatalkan
+        // tidak dihitung, supaya tiga kartu di layar Laporan tidak berselisih.
+        if ('${t['status']}'.toUpperCase() != 'SELESAI') continue;
         if (!'${t['tanggal']}'.startsWith(tgl)) continue;
         omzet += (t['grand_total'] as num).toDouble();
         jumlah += 1;
@@ -954,7 +971,20 @@ class DemoEngine {
     final grand = (bon['total'] as num).toDouble();
     final tipe = '${data['tipe_pembayaran'] ?? 'TUNAI'}';
     final dibayar = (data['dibayar'] as num?)?.toDouble() ?? grand;
+    if (tipe == 'TUNAI' && dibayar < grand) {
+      return _err(422, 'Uang dibayar kurang dari total.');
+    }
     if (_lewatBatasHarian()) return _err(422, pesanBatasTransaksi);
+
+    // Stok baru berkurang saat bon dilunasi (aturan server), sehingga
+    // pembatalan transaksinya nanti mengembalikan jumlah yang sama.
+    for (final it in (bon['items'] as List? ?? const []).cast<Map>()) {
+      final p = _cariProduk(toko, '${it['id_produk'] ?? ''}') ?? _produkNama(toko, '${it['nama']}');
+      if (p != null && p['kelola_stok'] == true) {
+        final qty = (it['kuantitas'] as num?)?.toDouble() ?? 0;
+        p['stok'] = ((p['stok'] as num).toDouble() - qty).clamp(0, double.infinity);
+      }
+    }
     _nTrx += 1;
     _transaksi.insert(0, {
       'id': 'TRX-$_nTrx',

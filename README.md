@@ -145,6 +145,8 @@ Mode Demo di desktop dan Android berlaku **7 hari** sejak pertama dibuka di pera
 
 **Cari di Riwayat** (desktop ≥ 0.9.23, Android ≥ 2.19.0): kotak Cari menyaring baris yang sudah dimuat — nomor nota, metode, status, atau nominal ("Rp 25.000" sama dengan "25000") — tanpa memanggil server lagi, jadi tetap jalan saat offline; Esc mengosongkannya. KPI di atas tabel tetap menghitung seluruh rentang.
 
+Sejak 0.9.24 cetak langsung hanya berlaku untuk **struk** — ekspor PDF laporan dan cetak QR meja selalu lewat dialog Windows (sebelumnya ikut tersedot ke printer thermal), dan **Uji cetak** memakai setelan yang sedang dicoba tanpa menyimpannya.
+
 **Printer struk** (desktop ≥ 0.9.22): Pengaturan → Printer struk memuat daftar printer Windows; pilih printer thermal, centang *cetak langsung tanpa dialog* agar struk keluar tanpa jendela cetak, dan *cetak otomatis setelah pembayaran* agar struk langsung tercetak begitu transaksi tercatat (termasuk struk lokal saat offline). Tombol **Uji cetak** dan **Uji lewat dialog** mencetak struk contoh; preferensi disimpan di `settings.json` (`cetak`). Bila printer pilihan dicabut, aplikasi memberi tahu dan jatuh ke dialog Windows.
 
 Selama demo, beberapa hal sengaja dibatasi (desktop ≥ 0.9.17, Android ≥ 2.10.0) agar demo tetap untuk mencoba, bukan berjualan: struk cetak/pratinjau/teks bertanda **MODE DEMO — bukan bukti pembayaran**; paling banyak **20 transaksi per hari** (checkout kasir & bayar bon meja) yang dibuat pengguna; di desktop, ekspor CSV laporan, PDF & bagikan WhatsApp laporan keuangan, dan akses internet publik (tunnel) tidak tersedia. Data contoh tetap bisa dijelajahi seluruhnya.

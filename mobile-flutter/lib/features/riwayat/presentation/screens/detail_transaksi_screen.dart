@@ -8,7 +8,10 @@ import '../../../../core/utils/format.dart';
 import '../../../cetak/domain/entities/struk.dart';
 import '../../../cetak/presentation/aksi_struk.dart';
 import '../../../demo/demo_session.dart';
+import '../../../laporan/presentation/providers/laporan_providers.dart';
 import '../../../pengaturan/presentation/providers/pengaturan_providers.dart';
+import '../../../products/presentation/providers/products_provider.dart';
+import '../../../sesi/presentation/providers/sesi_providers.dart';
 import '../../domain/entities/transaksi_detail.dart';
 import '../providers/riwayat_providers.dart';
 
@@ -159,6 +162,13 @@ Future<void> _konfirmasiBatal(BuildContext context, WidgetRef ref, TransaksiDeta
     ok: (_) {
       ref.invalidate(transaksiDetailProvider(d.id));
       ref.invalidate(riwayatListProvider);
+      // Stok kembali ke gudang dan penjualannya keluar dari rekap: layar lain
+      // harus ikut menyegarkan, kalau tidak kasir melihat angka yang batal.
+      ref.invalidate(activeSesiProvider);
+      ref.invalidate(productsProvider);
+      ref.invalidate(produkKelolaProvider);
+      ref.invalidate(laporanKeuanganProvider);
+      ref.invalidate(penjualanProdukProvider);
       messenger
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(

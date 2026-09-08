@@ -5,6 +5,20 @@ sebagai isi Release GitHub (workflow flutter-release.yml), dan empat baris
 pertamanya tampil di banner pembaruan dalam aplikasi. Tulis untuk kasir, bukan
 untuk programmer.
 
+## 2.22.0
+
+Perbaikan dari pemeriksaan menyeluruh kode rilis terakhir:
+
+- **Stok saat offline kini benar.** Opname, stok masuk, dan pelunasan bon yang dicatat tanpa sinyal sebelumnya tidak mengubah stok yang tampil di katalog — kasir bisa menjual barang yang baru saja dicatat rusak, lalu stok di server jadi kacau. Sekarang perubahannya langsung terlihat sambil menunggu terkirim.
+- **Bayar bon meja tidak bisa kurang dari total.** Salah ketik nominal (mis. "50.000" untuk tagihan Rp 500.000) kini ditolak dengan keterangan "Kurang Rp …", persis seperti di kasir. Nominal awalnya juga sudah berpemisah ribuan.
+- Struk bon meja yang dibayar offline memakai nomor lokal sendiri; dulu semua bon offline bernomor sama sehingga dua pelanggan bisa menerima struk kembar.
+- Tombol **Kosongkan** keranjang kembali berlabel (dulu hanya ikon tong sampah di sebelah tombol Parkir — sekali meleset, keranjang terhapus).
+- Setelah membatalkan transaksi, rekap sesi, stok, dan laporan ikut disegarkan.
+- Pesan "perlu ditinjau" kini menunjuk tempat yang benar: opname/stok masuk diperiksa di layar Produk, bukan di Riwayat.
+- Ringkasan laporan yang dibagikan saat offline atau saat masih ada transaksi mengantre kini memuat catatan bahwa angkanya belum lengkap.
+- Tombol Opname lebih terbaca di bawah cahaya terang.
+- Mode Demo dirapikan agar sama dengan server: menjual melebihi stok ditolak, transaksi yang ditolak tidak memotong stok, bon meja menolak kurang bayar dan memotong stok saat dilunasi, serta grafik penjualan harian tidak lagi menghitung transaksi yang dibatalkan.
+
 ## 2.21.1
 
 - Bagian Produk terlaris tidak lagi menampilkan kartu galat pada server yang belum menyediakan datanya; bagian itu hanya dikosongkan dan sisa laporan tetap tampil.

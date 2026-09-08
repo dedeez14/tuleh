@@ -61,11 +61,14 @@ export async function mountPrinterSetelan(container) {
     await preferensiCetak(true)
     toast('Pengaturan printer disimpan.', 'success')
   })
+  // Uji cetak memakai setelan yang sedang tampil TANPA menyimpannya — dulu
+  // mencentang "cetak otomatis" lalu menekan Uji cetak sudah menyalakannya
+  // meski pengguna tidak pernah menekan Simpan.
   container.querySelector('#pr-uji').addEventListener('click', async () => {
-    await api.settings.setCetak({ printer: sel.value, langsung: langsung.checked, otomatis: otomatis.checked })
-    await preferensiCetak(true)
-    const ok = await printReceipt(STRUK_UJI)
-    if (ok) toast('Struk uji dikirim ke printer.', 'success')
+    const ok = await printReceipt(STRUK_UJI, {
+      coba: { printer: sel.value, langsung: langsung.checked },
+    })
+    if (ok) toast('Struk uji dikirim ke printer. Tekan Simpan bila setelan ini mau dipakai.', 'success', 5000)
   })
   container.querySelector('#pr-uji-dialog').addEventListener('click', () => printReceipt(STRUK_UJI, { paksaDialog: true }))
 }

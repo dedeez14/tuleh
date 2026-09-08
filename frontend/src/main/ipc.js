@@ -310,19 +310,28 @@ function registerIpcHandlers(getMainWindow) {
 
   // Cetak isi #print-root. Bila preferensi "cetak langsung" aktif dan printer
   // dipilih → tanpa dialog (silent) ke printer itu; selain itu dialog OS.
-  handle('app:print', ({ paksaDialog } = {}) => {
+  // `struk: true` = dokumen ini memang struk kasir; hanya itu yang boleh
+  // memakai preferensi "cetak langsung". Tanpa penanda (PDF laporan, QR meja)
+  // selalu lewat dialog Windows — kalau tidak, ekspor PDF diam-diam keluar di
+  // printer thermal tanpa berkas apa pun.
+  // `printerSekaliPakai`/`langsungSekaliPakai` = uji cetak: pakai setelan yang
+  // sedang dicoba tanpa menyimpannya.
+  handle('app:print', ({ paksaDialog, struk, printerSekaliPakai, langsungSekaliPakai } = {}) => {
     const win = getMainWindow()
     if (!win || win.isDestroyed()) return fail('Jendela tidak tersedia.')
     const cetak = settingsStore.getCetak()
-    const langsung = !paksaDialog && cetak.langsung && !!cetak.printer
+    const uji = printerSekaliPakai !== undefined || langsungSekaliPakai !== undefined
+    const printer = uji ? str(printerSekaliPakai, { max: 200 }) : cetak.printer
+    const maunyaLangsung = uji ? !!langsungSekaliPakai : cetak.langsung
+    const langsung = !paksaDialog && (struk === true || uji) && maunyaLangsung && !!printer
     const opsi = { printBackground: true, margins: { marginType: 'printableArea' } }
-    if (langsung) { opsi.silent = true; opsi.deviceName = cetak.printer }
+    if (langsung) { opsi.silent = true; opsi.deviceName = printer }
     return new Promise((resolve) => {
       win.webContents.print(opsi, (success, reason) => {
         if (success) return resolve({ ok: true, data: { langsung } })
         // Printer pilihan tidak ada (dicabut/diganti nama) → beri tahu jelas.
         const pesan = langsung && /device|printer|not found|tidak/i.test(String(reason || ''))
-          ? `Printer "${cetak.printer}" tidak ditemukan. Pilih ulang di Pengaturan → Printer struk.`
+          ? `Printer "${printer}" tidak ditemukan. Pilih ulang di Pengaturan → Printer struk.`
           : (reason || 'Cetak dibatalkan.')
         resolve(fail(pesan))
       })

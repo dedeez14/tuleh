@@ -133,11 +133,15 @@ export function tombolBagikanStruk(struk) {
  * Pengaturan → Printer struk, selain itu lewat dialog printer OS.
  * `paksaDialog` = abaikan preferensi (mis. tombol "Cetak lewat dialog").
  */
-export async function printReceipt(struk, { paksaDialog = false } = {}) {
+export async function printReceipt(struk, { paksaDialog = false, coba = null } = {}) {
   const printRoot = document.getElementById('print-root')
   if (!printRoot) return false
   printRoot.innerHTML = buildReceiptHTML(struk)
-  const result = await api.app.print({ paksaDialog })
+  const result = await api.app.print({
+    paksaDialog,
+    struk: true, // hanya struk yang boleh memakai preferensi cetak langsung
+    ...(coba ? { printerSekaliPakai: coba.printer, langsungSekaliPakai: coba.langsung } : {}),
+  })
   printRoot.innerHTML = ''
   if (!result.ok && result.message && !/dibatalkan|cancel/i.test(result.message)) {
     toast(`Gagal mencetak: ${result.message}`, 'error')

@@ -24,33 +24,20 @@ class KartuTambahanKeranjang extends ConsumerWidget {
 
   Future<void> _aturDiskon(BuildContext context, WidgetRef ref) async {
     final meta = ref.read(keranjangMetaProvider);
-    final ctrl = TextEditingController(
-      text: meta.diskonPersen > 0 ? fmtQty(meta.diskonPersen) : '',
-    );
     final hasil = await showDialog<double>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Diskon transaksi'),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(
-            suffixText: '%',
-            helperText: 'Berlaku untuk semua item. Kosongkan untuk menghapus.',
-          ),
-          onSubmitted: (v) => Navigator.pop(ctx, double.tryParse(v.replaceAll(',', '.')) ?? 0),
+      builder: (_) => _DialogTeks<double>(
+        judul: 'Diskon transaksi',
+        awal: meta.diskonPersen > 0 ? fmtQty(meta.diskonPersen) : '',
+        labelSimpan: 'Terapkan',
+        keyboard: const TextInputType.numberWithOptions(decimal: true),
+        dekorasi: const InputDecoration(
+          suffixText: '%',
+          helperText: 'Berlaku untuk semua item. Kosongkan untuk menghapus.',
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, double.tryParse(ctrl.text.replaceAll(',', '.')) ?? 0),
-            child: const Text('Terapkan'),
-          ),
-        ],
+        ubah: (teks) => double.tryParse(teks.replaceAll(',', '.')) ?? 0,
       ),
     );
-    ctrl.dispose();
     if (hasil == null) return;
     if (hasil < 0 || hasil > 100) {
       if (!context.mounted) return;
@@ -64,26 +51,19 @@ class KartuTambahanKeranjang extends ConsumerWidget {
   }
 
   Future<void> _aturCatatan(BuildContext context, WidgetRef ref) async {
-    final ctrl = TextEditingController(text: ref.read(keranjangMetaProvider).catatan);
     final hasil = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Catatan transaksi'),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          maxLength: 200,
-          maxLines: 3,
-          textCapitalization: TextCapitalization.sentences,
-          decoration: const InputDecoration(hintText: 'Mis. tanpa es, ambil jam 5'),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, ctrl.text), child: const Text('Simpan')),
-        ],
+      builder: (_) => _DialogTeks<String>(
+        judul: 'Catatan transaksi',
+        awal: ref.read(keranjangMetaProvider).catatan,
+        labelSimpan: 'Simpan',
+        maksHuruf: 200,
+        baris: 3,
+        kapital: TextCapitalization.sentences,
+        dekorasi: const InputDecoration(hintText: 'Mis. tanpa es, ambil jam 5'),
+        ubah: (teks) => teks,
       ),
     );
-    ctrl.dispose();
     if (hasil == null) return;
     ref.read(keranjangMetaProvider.notifier).aturCatatan(hasil);
   }
@@ -164,4 +144,65 @@ class KartuTambahanKeranjang extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// Dialog satu kolom isian yang MEMILIKI controllernya sendiri — kalau
+/// controller dibuang oleh pemanggil tepat setelah showDialog kembali, dialog
+/// yang masih beranimasi menutup akan memakai controller yang sudah dilepas.
+class _DialogTeks<T> extends StatefulWidget {
+  const _DialogTeks({
+    required this.judul,
+    required this.awal,
+    required this.labelSimpan,
+    required this.ubah,
+    this.dekorasi,
+    this.keyboard,
+    this.maksHuruf,
+    this.baris = 1,
+    this.kapital = TextCapitalization.none,
+  });
+
+  final String judul;
+  final String awal;
+  final String labelSimpan;
+  final T Function(String teks) ubah;
+  final InputDecoration? dekorasi;
+  final TextInputType? keyboard;
+  final int? maksHuruf;
+  final int baris;
+  final TextCapitalization kapital;
+
+  @override
+  State<_DialogTeks<T>> createState() => _DialogTeksState<T>();
+}
+
+class _DialogTeksState<T> extends State<_DialogTeks<T>> {
+  late final TextEditingController _ctrl = TextEditingController(text: widget.awal);
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _simpan() => Navigator.pop(context, widget.ubah(_ctrl.text));
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text(widget.judul),
+    content: TextField(
+      controller: _ctrl,
+      autofocus: true,
+      keyboardType: widget.keyboard,
+      maxLength: widget.maksHuruf,
+      maxLines: widget.baris,
+      textCapitalization: widget.kapital,
+      decoration: widget.dekorasi,
+      onSubmitted: widget.baris == 1 ? (_) => _simpan() : null,
+    ),
+    actions: [
+      TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
+      FilledButton(onPressed: _simpan, child: Text(widget.labelSimpan)),
+    ],
+  );
 }

@@ -18,10 +18,15 @@ String laporanTeks({
   int maksHari = 8,
   int maksSesi = 3,
   int maksTerlaris = 5,
+  String? peringatan,
 }) {
   final b = StringBuffer()
     ..writeln('*Laporan $namaToko*')
-    ..writeln('Periode: ${keuangan.bulan}')
+    ..writeln('Periode: ${keuangan.bulan}');
+  if (peringatan != null && peringatan.trim().isNotEmpty) {
+    b.writeln('_${peringatan.trim()}_');
+  }
+  b
     ..writeln()
     ..writeln('Omzet: ${fmtIDR(keuangan.omset)}')
     ..writeln('Transaksi: ${fmtQty(keuangan.jumlahTransaksi)}')
