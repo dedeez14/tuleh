@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/network/api_exception.dart';
+import '../../../../core/offline/koneksi.dart';
+import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/format.dart';
 import '../../../cetak/domain/entities/struk.dart';
 import '../../../cetak/presentation/aksi_struk.dart';
@@ -24,6 +26,11 @@ class DetailTransaksiScreen extends ConsumerWidget {
     final detail = ref.watch(transaksiDetailProvider(id));
     final d = detail.valueOrNull;
     final bisaAksi = d != null && (d.status?.toUpperCase() != 'DIBATALKAN');
+    // Pembatalan hanya untuk transaksi yang sudah tercatat di server dan saat
+    // online — struk lokal (belum sinkron) dibatalkan lewat layar Sinkronisasi.
+    final lokal = id.startsWith(awalanIdLokal);
+    final online = ref.watch(koneksiProvider.select((s) => s.online));
+    final bisaBatal = bisaAksi && !lokal;
 
     final isi = detail.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -62,6 +69,13 @@ class DetailTransaksiScreen extends ConsumerWidget {
                 ],
               ),
             ],
+            if (bisaBatal) ...[
+              const SizedBox(height: 10),
+              _TombolBatal(
+                aktif: online,
+                onTekan: () => _konfirmasiBatal(context, ref, d),
+              ),
+            ],
           ],
         ),
       );
@@ -77,6 +91,92 @@ class DetailTransaksiScreen extends ConsumerWidget {
       body: isi,
     );
   }
+}
+
+/// Tombol "Batalkan transaksi" — merah garis tepi, nonaktif saat offline
+/// dengan keterangan sebabnya (pembatalan tidak diantrekan).
+class _TombolBatal extends StatelessWidget {
+  const _TombolBatal({required this.aktif, required this.onTekan});
+
+  final bool aktif;
+  final VoidCallback onTekan;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        OutlinedButton.icon(
+          onPressed: aktif ? onTekan : null,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.danger,
+            side: BorderSide(color: AppColors.danger.withValues(alpha: aktif ? 0.6 : 0.25)),
+          ),
+          icon: const Icon(Icons.cancel_outlined, size: 19),
+          label: const Text('Batalkan transaksi'),
+        ),
+        if (!aktif)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              'Pembatalan hanya bisa dilakukan saat terhubung ke internet.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+Future<void> _konfirmasiBatal(BuildContext context, WidgetRef ref, TransaksiDetail d) async {
+  final ya = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Batalkan transaksi ini?'),
+      content: Text(
+        'Transaksi ${d.nomor} (${fmtIDR(d.grandTotal)}) akan dibatalkan — stok barang '
+        'dikembalikan ke gudang dan penjualannya dihapus dari laporan. '
+        'Tindakan ini tidak dapat diurungkan.',
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Kembali')),
+        FilledButton(
+          onPressed: () => Navigator.pop(ctx, true),
+          style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+          child: const Text('Ya, batalkan'),
+        ),
+      ],
+    ),
+  );
+  if (ya != true || !context.mounted) return;
+  final messenger = ScaffoldMessenger.of(context);
+  final hasil = await ref.read(riwayatRepositoryProvider).batal(d.id);
+  hasil.when(
+    ok: (_) {
+      ref.invalidate(transaksiDetailProvider(d.id));
+      ref.invalidate(riwayatListProvider);
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(
+          backgroundColor: AppColors.success,
+          content: Text('Transaksi ${d.nomor} dibatalkan.'),
+        ));
+    },
+    err: (e) {
+      // 409 "sudah dibatalkan" → segarkan detail agar tombol ikut hilang.
+      if (e.statusCode == 409) ref.invalidate(transaksiDetailProvider(d.id));
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(
+          backgroundColor: AppColors.danger,
+          content: Text(e.firstError() ?? e.message),
+        ));
+    },
+  );
 }
 
 /// Struk untuk cetak ulang/bagikan, dibangun dari detail server + profil

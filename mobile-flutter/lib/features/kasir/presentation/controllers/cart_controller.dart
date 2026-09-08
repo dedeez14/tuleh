@@ -55,6 +55,9 @@ class CartController extends Notifier<List<CartItem>> {
       state = [for (final e in state) if (e.product.id != productId) e];
 
   void clear() => state = const [];
+
+  /// Ganti seluruh isi keranjang (melanjutkan keranjang terparkir).
+  void ganti(List<CartItem> items) => state = List.unmodifiable(items);
 }
 
 final cartControllerProvider =

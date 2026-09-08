@@ -17,6 +17,7 @@ import '../../../pengaturan/presentation/providers/pengaturan_providers.dart';
 import '../../../sesi/presentation/providers/sesi_providers.dart';
 import '../controllers/cart_controller.dart';
 import '../controllers/keranjang_meta.dart';
+import 'parkir_sheet.dart';
 import 'pilih_pelanggan_sheet.dart';
 import '../../../../core/offline/pengurai.dart';
 import '../../../products/presentation/providers/products_provider.dart';
@@ -235,6 +236,13 @@ class _CartSheetState extends ConsumerState<CartSheet> {
                 count: count,
                 onKembali: () => setState(() => _langkah = _Langkah.keranjang),
                 onKosongkan: items.isEmpty || _loading ? null : cart.clear,
+                onParkir: items.isEmpty || _loading
+                    ? null
+                    : () async {
+                        final ok = await parkirKeranjang(context, ref);
+                        // Lembar ponsel ditutup setelah parkir; panel tablet tetap.
+                        if (ok && !widget.tertanam && context.mounted) Navigator.of(context).pop();
+                      },
               ),
               const Divider(height: 1),
               Expanded(
@@ -297,12 +305,14 @@ class _Judul extends StatelessWidget {
     required this.count,
     required this.onKembali,
     required this.onKosongkan,
+    this.onParkir,
   });
 
   final _Langkah langkah;
   final int count;
   final VoidCallback onKembali;
   final VoidCallback? onKosongkan;
+  final VoidCallback? onParkir;
 
   @override
   Widget build(BuildContext context) {
@@ -344,11 +354,17 @@ class _Judul extends StatelessWidget {
               ],
             ),
           ),
+          if (!bayar && onParkir != null)
+            IconButton(
+              tooltip: 'Parkir keranjang (lanjutkan nanti)',
+              onPressed: onParkir,
+              icon: const Icon(Icons.local_parking_rounded),
+            ),
           if (!bayar && onKosongkan != null)
-            TextButton.icon(
+            IconButton(
+              tooltip: 'Kosongkan keranjang',
               onPressed: onKosongkan,
-              icon: const Icon(Icons.delete_outline_rounded, size: 18),
-              label: const Text('Kosongkan'),
+              icon: const Icon(Icons.delete_outline_rounded),
             ),
         ],
       ),

@@ -217,6 +217,8 @@ class _BarisAntrean extends ConsumerWidget {
       'CHECKOUT' => '${(p.body['items'] as List?)?.length ?? 0} item · ${p.body['tipe_pembayaran'] ?? ''}',
       'PENGELUARAN' => '${p.body['keterangan'] ?? ''}',
       'STOK_MASUK' => 'Jumlah ${fmtQty((p.body['jumlah'] as num?) ?? 0)}',
+      'OPNAME' => 'Kurang ${fmtQty((p.body['jumlah'] as num?) ?? 0)}'
+          '${(p.body['keterangan'] ?? '').toString().isNotEmpty ? ' · ${p.body['keterangan']}' : ''}',
       'SESI_BUKA' => 'Kas awal ${fmtIDR(((p.body['kas_awal'] as num?) ?? 0).toDouble())}',
       'BILL_BUKA' => 'Meja ${p.body['meja_id'] ?? ''}${p.body['pax'] != null ? ' · ${p.body['pax']} org' : ''}',
       'BILL_RONDE' => '${(p.body['items'] as List?)?.length ?? 0} item ke dapur',
@@ -240,7 +242,7 @@ class _BarisAntrean extends ConsumerWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    '${p.label}${total is num && p.jenis != 'STOK_MASUK' ? ' · ${fmtIDR(total.toDouble())}' : ''}',
+                    '${p.label}${total is num && p.jenis != 'STOK_MASUK' && p.jenis != 'OPNAME' ? ' · ${fmtIDR(total.toDouble())}' : ''}',
                     style: const TextStyle(fontWeight: FontWeight.w800),
                   ),
                 ),

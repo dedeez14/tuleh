@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import '../../../core/utils/format.dart';
+
 import 'demo_data.dart';
 
 /// Balasan palsu Mode Demo: status HTTP + body envelope MOVERA.
@@ -178,6 +180,50 @@ class DemoEngine {
       }
       _sesi.insert(0, sesi);
     }
+  }
+
+  /// Pembatalan transaksi demo: status DIBATALKAN, stok item ber-stok kembali,
+  /// total sesi pada hari transaksi dikurangi — meniru server & desktop.
+  DemoResponse _batalTransaksi(String toko, String id) {
+    final t = _transaksi.firstWhere((x) => x['id'] == id, orElse: () => const {});
+    if (t.isEmpty) return _err(404, 'Transaksi tidak ditemukan.');
+    if (t['status'] == 'DIBATALKAN') return _err(409, 'Transaksi sudah dibatalkan.');
+    t['status'] = 'DIBATALKAN';
+    final tokoTrx = '${t['toko_id'] ?? toko}';
+    for (final it in (t['items'] as List? ?? const []).cast<Map>()) {
+      var p = _cariProduk(tokoTrx, '${it['id_produk'] ?? ''}');
+      if (p == null) {
+        for (final x in _produk(tokoTrx)) {
+          if (x['nama'] == it['nama']) {
+            p = x;
+            break;
+          }
+        }
+      }
+      if (p != null && p['kelola_stok'] == true) {
+        p['stok'] = (p['stok'] as num) + ((it['kuantitas'] as num?) ?? 0);
+      }
+    }
+    final tgl = '${t['tanggal']}'.length >= 10 ? '${t['tanggal']}'.substring(0, 10) : '';
+    for (final s in _sesi) {
+      if (s['toko_id'] == tokoTrx && tgl.isNotEmpty && '${s['waktu_buka']}'.startsWith(tgl)) {
+        _kurangiDariSesi(s, '${t['tipe_pembayaran']}', (t['grand_total'] as num).toDouble());
+        break;
+      }
+    }
+    return _ok(t);
+  }
+
+  void _kurangiDariSesi(Map<String, dynamic> sesi, String tipe, double grand) {
+    final kunci = switch (tipe) {
+      'TUNAI' => 'total_tunai',
+      'QRIS' => 'total_qris',
+      _ => 'total_transfer',
+    };
+    sesi[kunci] = ((sesi[kunci] as num) - grand).clamp(0, double.infinity);
+    sesi['total_penjualan'] = ((sesi['total_penjualan'] as num) - grand).clamp(0, double.infinity);
+    sesi['jumlah_transaksi'] = ((sesi['jumlah_transaksi'] as num) - 1).clamp(0, double.infinity);
+    sesi['kas_akhir_sistem'] = (sesi['kas_awal'] as num) + (sesi['total_tunai'] as num);
   }
 
   void _tambahKeSesi(Map<String, dynamic> sesi, String tipe, double grand) {
@@ -363,6 +409,9 @@ class DemoEngine {
       return _ok(_transaksi.where((t) => t['toko_id'] == toko).toList());
     }
     if (path == '/transaksi/checkout' && m == 'POST') return _checkout(toko, data);
+    if (seg.length == 3 && seg[0] == 'transaksi' && seg[2] == 'batal' && m == 'POST') {
+      return _batalTransaksi(toko, Uri.decodeComponent(seg[1]));
+    }
     if (seg.length == 2 && seg[0] == 'transaksi' && m == 'GET') {
       final t = _transaksi.firstWhere(
         (x) => x['id'] == seg[1],
@@ -491,6 +540,21 @@ class DemoEngine {
       p['stok'] = (p['stok'] as num) + ((data['jumlah'] as num?) ?? 0);
       return _ok(null);
     }
+    if (path == '/inventory/opname' && m == 'POST') {
+      final p = _cariProduk(toko, '${data['id_produk']}');
+      if (p == null) return _err(422, 'Produk tidak ditemukan.');
+      if (p['kelola_stok'] != true) {
+        return _err(422, 'Item ini tidak mengelola stok (jasa / tanpa gudang).');
+      }
+      final n = (data['jumlah'] as num?)?.toDouble() ?? 0;
+      if (n <= 0) return _err(422, 'Jumlah rusak/hilang harus lebih dari 0.');
+      final stok = (p['stok'] as num).toDouble();
+      if (n > stok) {
+        return _err(422, 'Stok tidak mencukupi — stok "${p['nama']}" hanya tersisa ${fmtQty(stok)}.');
+      }
+      p['stok'] = stok - n;
+      return _ok({'id_produk': p['id'], 'nama': p['nama'], 'tipe': 'OPNAME', 'jumlah': -n, 'stok_sekarang': p['stok']});
+    }
 
     // --- auto-update: demo tidak pernah menawarkan pembaruan ---
     if (path == '/app/versi') {
@@ -589,6 +653,7 @@ class DemoEngine {
       grand += subtotal;
       totalDiskon += diskon;
       items.add({
+        'id_produk': p['id'],
         'nama': p['nama'],
         'kuantitas': qty,
         'harga': harga,

@@ -49,6 +49,9 @@ class KeranjangMetaNotifier extends Notifier<KeranjangMeta> {
   void aturCatatan(String c) => state = state.salin(catatan: c.trim());
 
   void reset() => state = const KeranjangMeta();
+
+  /// Pulihkan meta utuh (melanjutkan keranjang terparkir).
+  void atur(KeranjangMeta m) => state = m;
 }
 
 final keranjangMetaProvider =

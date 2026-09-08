@@ -5,6 +5,12 @@ sebagai isi Release GitHub (workflow flutter-release.yml), dan empat baris
 pertamanya tampil di banner pembaruan dalam aplikasi. Tulis untuk kasir, bukan
 untuk programmer.
 
+## 2.17.0
+
+- Parkir keranjang di Kasir: belanjaan yang belum dibayar bisa disimpan (ikon P di keranjang) lalu dilanjutkan lewat ikon parkir di bilah atas — lengkap dengan pelanggan, diskon transaksi, dan catatannya. Tersimpan di perangkat per toko, paling banyak 20, tetap ada meski aplikasi ditutup.
+- Batalkan transaksi langsung dari detail Riwayat: stok kembali ke gudang dan penjualannya keluar dari laporan. Butuh internet; transaksi yang belum sinkron dibatalkan lewat Pengaturan → Sinkronisasi.
+- Opname stok di detail produk: catat barang rusak/hilang/selisih hitung dengan keterangan. Bisa saat offline — tersimpan dan dikirim ketika internet kembali.
+
 ## 2.16.0
 
 - Baris "perlu ditinjau" karena server tidak menjawab setelah data terkirim kini dipulihkan otomatis saat online: dicocokkan ke daftar transaksi server pada hari itu (total, metode, waktu ±15 menit). Tepat satu yang cocok → dianggap terkirim dengan nomor resminya; tidak ada → dikirim ulang otomatis; lebih dari satu → tetap ditinjau dengan petunjuk nomor kandidatnya.

@@ -170,7 +170,7 @@ class _Detail extends ConsumerWidget {
                   const SizedBox(width: 12),
                   Expanded(
                     child: FilledButton.tonalIcon(
-                      onPressed: () => _tambahStok(context, ref),
+                      onPressed: () => _mutasiStok(context, ref, masuk: true),
                       icon: const Icon(Icons.add_box_outlined),
                       label: const Text('Tambah Stok'),
                     ),
@@ -178,6 +178,17 @@ class _Detail extends ConsumerWidget {
                 ],
               ],
             ),
+            // Opname: kurangi stok karena rusak/hilang/selisih hitung.
+            if ((product.tipe ?? '').toUpperCase() != 'JASA')
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: TextButton.icon(
+                  onPressed: () => _mutasiStok(context, ref, masuk: false),
+                  style: TextButton.styleFrom(foregroundColor: AppColors.warn),
+                  icon: const Icon(Icons.inventory_outlined, size: 18),
+                  label: const Text('Opname — kurangi stok (rusak / hilang / selisih)'),
+                ),
+              ),
           ],
         ),
       ),
@@ -196,17 +207,43 @@ class _Detail extends ConsumerWidget {
         ),
       );
 
-  Future<void> _tambahStok(BuildContext context, WidgetRef ref) async {
+  /// Stok masuk ([masuk] = true) atau opname/kurangi stok (false). Keduanya
+  /// lewat antrean tulis: offline → disimpan dan stok tampil langsung berubah
+  /// lewat delta tertunda; server menolak opname melebihi stok (422).
+  Future<void> _mutasiStok(BuildContext context, WidgetRef ref, {required bool masuk}) async {
     final ctrl = TextEditingController();
+    final ketCtrl = TextEditingController();
+    final stokKini = product.stok ?? 0;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Tambah Stok — ${product.nama}'),
-        content: TextField(
-          controller: ctrl,
-          keyboardType: TextInputType.number,
-          autofocus: true,
-          decoration: const InputDecoration(labelText: 'Jumlah masuk'),
+        title: Text(masuk ? 'Tambah Stok — ${product.nama}' : 'Opname — ${product.nama}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: ctrl,
+              keyboardType: TextInputType.number,
+              autofocus: true,
+              decoration: InputDecoration(
+                labelText: masuk ? 'Jumlah masuk' : 'Jumlah rusak / hilang',
+                helperText: masuk ? null : 'Stok saat ini ${fmtQty(stokKini)}',
+              ),
+            ),
+            if (!masuk) ...[
+              const SizedBox(height: 10),
+              TextField(
+                controller: ketCtrl,
+                textCapitalization: TextCapitalization.sentences,
+                maxLength: 120,
+                decoration: const InputDecoration(
+                  labelText: 'Keterangan (opsional)',
+                  hintText: 'mis. kemasan rusak, kedaluwarsa',
+                  counterText: '',
+                ),
+              ),
+            ],
+          ],
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
@@ -214,32 +251,49 @@ class _Detail extends ConsumerWidget {
         ],
       ),
     );
-    final jumlah = double.tryParse(ctrl.text.trim()) ?? 0;
+    final jumlah = double.tryParse(ctrl.text.trim().replaceAll(',', '.')) ?? 0;
+    final keterangan = ketCtrl.text.trim();
     ctrl.dispose();
+    ketCtrl.dispose();
     if (confirmed != true || jumlah <= 0) return;
     if (!context.mounted) return;
     final messenger = ScaffoldMessenger.of(context);
+    if (!masuk && jumlah > stokKini) {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(
+            backgroundColor: AppColors.danger,
+            content: Text('Stok tidak mencukupi — stok "${product.nama}" hanya ${fmtQty(stokKini)}.')));
+      return;
+    }
     final navigator = Navigator.of(context);
+    final ds = ref.read(inventoryDataSourceProvider);
     try {
-      // Offline → diantrekan; stok tampil langsung naik lewat delta tertunda.
       final hasil = await ref.read(antreanTulisProvider).jalankan(
-        jenis: 'STOK_MASUK',
-        path: '/inventory/stok-masuk',
-        body: {'id_produk': product.id, 'jumlah': jumlah},
-        kirim: ref.read(inventoryDataSourceProvider).stokMasukBody,
-        deltaStok: {product.id: jumlah},
+        jenis: masuk ? 'STOK_MASUK' : 'OPNAME',
+        path: masuk ? '/inventory/stok-masuk' : '/inventory/opname',
+        body: {
+          'id_produk': product.id,
+          'jumlah': jumlah,
+          if (!masuk && keterangan.isNotEmpty) 'keterangan': keterangan,
+        },
+        kirim: masuk ? ds.stokMasukBody : ds.opnameBody,
+        deltaStok: {product.id: masuk ? jumlah : -jumlah},
       );
       if (hasil.tertunda) ref.read(antreanVersiProvider.notifier).state++;
       ref.invalidate(produkKelolaProvider);
       ref.invalidate(productsProvider);
       navigator.pop();
+      final tanda = masuk ? '+' : '−';
       messenger
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(
             backgroundColor: hasil.tertunda ? AppColors.warn : AppColors.success,
             content: Text(hasil.tertunda
-                ? 'Offline — stok +${jumlah.toInt()} disimpan, dikirim saat internet kembali.'
-                : 'Stok +${jumlah.toInt()} ditambahkan.')));
+                ? 'Offline — stok $tanda${fmtQty(jumlah)} disimpan, dikirim saat internet kembali.'
+                : masuk
+                    ? 'Stok +${fmtQty(jumlah)} ditambahkan.'
+                    : 'Stok −${fmtQty(jumlah)} dicatat sebagai opname.')));
     } on ApiException catch (e) {
       messenger
         ..hideCurrentSnackBar()

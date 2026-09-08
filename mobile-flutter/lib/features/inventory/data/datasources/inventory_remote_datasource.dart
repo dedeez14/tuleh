@@ -14,10 +14,19 @@ class InventoryRemoteDataSource {
       stokMasukBody({'id_produk': idProduk, 'jumlah': jumlah});
 
   /// Kirim badan apa adanya (jalur antrean offline menambah client_ref).
-  Future<void> stokMasukBody(Map<String, dynamic> badan) async {
+  Future<void> stokMasukBody(Map<String, dynamic> badan) =>
+      _kirim('/inventory/stok-masuk', badan);
+
+  /// POST /inventory/opname — kurangi stok (rusak/hilang/selisih).
+  /// Kontrak sama dengan desktop: { id_produk, jumlah (>0), keterangan? }.
+  /// Server menolak 422 bila stok tidak mencukupi.
+  Future<void> opnameBody(Map<String, dynamic> badan) =>
+      _kirim('/inventory/opname', badan);
+
+  Future<void> _kirim(String path, Map<String, dynamic> badan) async {
     late final Response<dynamic> res;
     try {
-      res = await _dio.post<dynamic>('/inventory/stok-masuk', data: badan);
+      res = await _dio.post<dynamic>(path, data: badan);
     } on DioException catch (e) {
       throw ApiErrorMapper.fromDio(e);
     }

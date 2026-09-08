@@ -47,6 +47,12 @@ class RiwayatRemoteDataSource {
     );
   }
 
+  /// POST /transaksi/{id}/batal → batalkan transaksi (stok kembali ke gudang,
+  /// jurnal di-reverse di server). Hanya online — tidak diantrekan.
+  Future<void> batal(String id) async {
+    await _send(() => _dio.post<dynamic>('/transaksi/${Uri.encodeComponent(id)}/batal'));
+  }
+
   // ---- helper ----
   Future<Map<String, dynamic>> _send(Future<Response<dynamic>> Function() call) async {
     late final Response<dynamic> res;

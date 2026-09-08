@@ -20,6 +20,16 @@ class RiwayatRepositoryImpl implements RiwayatRepository {
   }
 
   @override
+  Future<Result<void>> batal(String id) async {
+    try {
+      await remote.batal(id);
+      return const Ok(null);
+    } on ApiException catch (e) {
+      return Err(e);
+    }
+  }
+
+  @override
   Future<Result<TransaksiDetail>> detail(String id) async {
     try {
       return Ok(await remote.detail(id));

@@ -14,9 +14,11 @@ import '../../../products/domain/entities/product.dart';
 import '../../../products/presentation/providers/products_provider.dart';
 import '../../../sesi/presentation/providers/sesi_providers.dart';
 import '../../../sesi/presentation/widgets/buka_sesi_dialog.dart';
+import '../../data/parkir_store.dart';
 import '../controllers/cart_controller.dart';
 import '../controllers/keranjang_meta.dart';
 import '../widgets/cart_sheet.dart';
+import '../widgets/parkir_sheet.dart';
 
 /// Layar Kasir — katalog, pencarian, penyaring kategori, dan keranjang.
 ///
@@ -202,6 +204,7 @@ class _KasirScreenState extends ConsumerState<KasirScreen> {
         appBar: AppBar(
           title: const Text('Kasir'),
           actions: [
+            const _TombolParkir(),
             IconButton(
               tooltip: 'Pindai barcode dengan kamera',
               onPressed: _pindai,
@@ -237,6 +240,7 @@ class _KasirScreenState extends ConsumerState<KasirScreen> {
       appBar: AppBar(
         title: const Text('Kasir'),
         actions: [
+          const _TombolParkir(),
           IconButton(
             tooltip: 'Pindai barcode dengan kamera',
             onPressed: _pindai,
@@ -290,6 +294,27 @@ class _KasirScreenState extends ConsumerState<KasirScreen> {
       ikon: Icons.inventory_2_outlined,
       judul: 'Katalog masih kosong',
       detail: 'Tambahkan produk atau layanan lebih dulu lewat menu Produk.',
+    );
+  }
+}
+
+/// Ikon "Keranjang terparkir" di AppBar dengan lencana jumlah; tersembunyi
+/// saat tidak ada yang terparkir agar bilah tetap lega.
+class _TombolParkir extends ConsumerWidget {
+  const _TombolParkir();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final jumlah = ref.watch(parkirDaftarProvider).valueOrNull?.length ?? 0;
+    if (jumlah == 0) return const SizedBox.shrink();
+    return IconButton(
+      tooltip: 'Keranjang terparkir ($jumlah)',
+      onPressed: () => bukaDaftarParkir(context),
+      icon: Badge.count(
+        count: jumlah,
+        backgroundColor: AppColors.warn,
+        child: const Icon(Icons.local_parking_rounded),
+      ),
     );
   }
 }

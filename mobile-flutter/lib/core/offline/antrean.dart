@@ -56,6 +56,7 @@ class PesanAntrean {
     'CHECKOUT' => 'Transaksi',
     'PENGELUARAN' => 'Pengeluaran',
     'STOK_MASUK' => 'Stok masuk',
+    'OPNAME' => 'Opname stok',
     'SESI_BUKA' => 'Buka sesi',
     'BILL_BUKA' => 'Buka bon',
     'BILL_RONDE' => 'Pesanan bon',
