@@ -354,11 +354,12 @@ class _Judul extends StatelessWidget {
               ],
             ),
           ),
+          // Berlabel: "P" saja tidak terbaca sebagai parkir oleh kasir baru.
           if (!bayar && onParkir != null)
-            IconButton(
-              tooltip: 'Parkir keranjang (lanjutkan nanti)',
+            TextButton.icon(
               onPressed: onParkir,
-              icon: const Icon(Icons.local_parking_rounded),
+              icon: const Icon(Icons.local_parking_rounded, size: 18),
+              label: const Text('Parkir'),
             ),
           if (!bayar && onKosongkan != null)
             IconButton(
