@@ -5,6 +5,10 @@ sebagai isi Release GitHub (workflow flutter-release.yml), dan empat baris
 pertamanya tampil di banner pembaruan dalam aplikasi. Tulis untuk kasir, bukan
 untuk programmer.
 
+## 2.20.1
+
+- Perbaikan: dialog Tambah Stok & Opname di detail produk tidak lagi memakai kotak isian yang sudah dilepas saat dialog menutup. Jumlah dengan koma desimal (mis. "2,5") tetap diterima.
+
 ## 2.20.0
 
 - Bon meja yang dibayar kini mengeluarkan struk: lembar hasil yang sama dengan kasir, lengkap dengan tombol Cetak struk dan Bagikan, serta ikut cetak otomatis bila diatur. Sebelumnya bon ditutup tanpa struk sama sekali.

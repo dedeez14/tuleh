@@ -91,7 +91,7 @@ class _Tile extends StatelessWidget {
           final action = await showModalBottomSheet<String>(
             context: context,
             showDragHandle: true,
-            builder: (_) => _Detail(product: product),
+            builder: (_) => DetailProdukSheet(product: product),
           );
           if (action == 'edit' && context.mounted) {
             showModalBottomSheet<void>(
@@ -128,8 +128,10 @@ class _Tile extends StatelessWidget {
   }
 }
 
-class _Detail extends ConsumerWidget {
-  const _Detail({required this.product});
+/// Lembar detail produk: harga, atribut, dan aksi stok (tambah / opname).
+/// Publik agar bisa diuji langsung tanpa melewati katalog.
+class DetailProdukSheet extends ConsumerWidget {
+  const DetailProdukSheet({super.key, required this.product});
   final Product product;
 
   @override
@@ -211,54 +213,19 @@ class _Detail extends ConsumerWidget {
   /// lewat antrean tulis: offline → disimpan dan stok tampil langsung berubah
   /// lewat delta tertunda; server menolak opname melebihi stok (422).
   Future<void> _mutasiStok(BuildContext context, WidgetRef ref, {required bool masuk}) async {
-    final ctrl = TextEditingController();
-    final ketCtrl = TextEditingController();
     // null = server tidak mengirim stok; jangan diperlakukan sebagai 0.
     final stokKini = product.stok;
-    final confirmed = await showDialog<bool>(
+    final isian = await showDialog<({double jumlah, String keterangan})>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(masuk ? 'Tambah Stok — ${product.nama}' : 'Opname — ${product.nama}'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: ctrl,
-              keyboardType: TextInputType.number,
-              autofocus: true,
-              decoration: InputDecoration(
-                labelText: masuk ? 'Jumlah masuk' : 'Jumlah rusak / hilang',
-                helperText: masuk || stokKini == null
-                    ? null
-                    : 'Stok saat ini ${fmtQty(stokKini)}',
-              ),
-            ),
-            if (!masuk) ...[
-              const SizedBox(height: 10),
-              TextField(
-                controller: ketCtrl,
-                textCapitalization: TextCapitalization.sentences,
-                maxLength: 120,
-                decoration: const InputDecoration(
-                  labelText: 'Keterangan (opsional)',
-                  hintText: 'mis. kemasan rusak, kedaluwarsa',
-                  counterText: '',
-                ),
-              ),
-            ],
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Simpan')),
-        ],
+      builder: (_) => _DialogMutasiStok(
+        namaProduk: product.nama,
+        masuk: masuk,
+        stokKini: stokKini,
       ),
     );
-    final jumlah = double.tryParse(ctrl.text.trim().replaceAll(',', '.')) ?? 0;
-    final keterangan = ketCtrl.text.trim();
-    ctrl.dispose();
-    ketCtrl.dispose();
-    if (confirmed != true || jumlah <= 0) return;
+    if (isian == null || isian.jumlah <= 0) return;
+    final jumlah = isian.jumlah;
+    final keterangan = isian.keterangan;
     if (!context.mounted) return;
     final messenger = ScaffoldMessenger.of(context);
     if (!masuk && stokKini != null && jumlah > stokKini) {
@@ -304,6 +271,90 @@ class _Detail extends ConsumerWidget {
             backgroundColor: AppColors.danger,
             content: Text(e.firstError() ?? e.message)));
     }
+  }
+}
+
+/// Dialog stok masuk / opname. Memiliki TextEditingController-nya sendiri
+/// supaya tidak dibuang selagi dialog masih beranimasi menutup (controller
+/// yang sudah di-dispose lalu dipakai lagi memicu assertion di debug).
+/// Mengembalikan (jumlah, keterangan), atau null bila dibatalkan.
+class _DialogMutasiStok extends StatefulWidget {
+  const _DialogMutasiStok({
+    required this.namaProduk,
+    required this.masuk,
+    required this.stokKini,
+  });
+
+  final String namaProduk;
+  final bool masuk;
+  final double? stokKini;
+
+  @override
+  State<_DialogMutasiStok> createState() => _DialogMutasiStokState();
+}
+
+class _DialogMutasiStokState extends State<_DialogMutasiStok> {
+  final _jumlahCtrl = TextEditingController();
+  final _ketCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _jumlahCtrl.dispose();
+    _ketCtrl.dispose();
+    super.dispose();
+  }
+
+  void _simpan() {
+    // "2,5" (koma desimal Indonesia) ikut diterima.
+    final jumlah = double.tryParse(_jumlahCtrl.text.trim().replaceAll(',', '.')) ?? 0;
+    Navigator.pop(context, (jumlah: jumlah, keterangan: _ketCtrl.text.trim()));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final stok = widget.stokKini;
+    return AlertDialog(
+      title: Text(
+        widget.masuk
+            ? 'Tambah Stok — ${widget.namaProduk}'
+            : 'Opname — ${widget.namaProduk}',
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _jumlahCtrl,
+            keyboardType: TextInputType.number,
+            autofocus: true,
+            onSubmitted: widget.masuk ? (_) => _simpan() : null,
+            decoration: InputDecoration(
+              labelText: widget.masuk ? 'Jumlah masuk' : 'Jumlah rusak / hilang',
+              helperText: widget.masuk || stok == null
+                  ? null
+                  : 'Stok saat ini ${fmtQty(stok)}',
+            ),
+          ),
+          if (!widget.masuk) ...[
+            const SizedBox(height: 10),
+            TextField(
+              controller: _ketCtrl,
+              textCapitalization: TextCapitalization.sentences,
+              maxLength: 120,
+              onSubmitted: (_) => _simpan(),
+              decoration: const InputDecoration(
+                labelText: 'Keterangan (opsional)',
+                hintText: 'mis. kemasan rusak, kedaluwarsa',
+                counterText: '',
+              ),
+            ),
+          ],
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
+        FilledButton(onPressed: _simpan, child: const Text('Simpan')),
+      ],
+    );
   }
 }
 
