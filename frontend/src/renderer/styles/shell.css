@@ -19,6 +19,7 @@
   border-bottom: 1px solid var(--line);
   font-size: var(--text-sm); font-weight: 600;
 }
+.pita-offline[hidden] { display: none; }
 .pita-offline--sinkron { background: var(--mint-100); color: var(--mint-800); }
 .pita-offline--tinjau { background: var(--danger-bg); color: var(--danger-strong); }
 .pita-offline__teks { flex: 1 1 auto; min-width: 0; }

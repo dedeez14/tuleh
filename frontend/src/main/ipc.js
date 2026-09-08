@@ -266,6 +266,7 @@ function registerIpcHandlers(getMainWindow) {
       smokeTheme: process.env.IPOS_SMOKE_THEME || null,
       smokeOpenBill: process.env.IPOS_SMOKE_OPENBILL === '1',
       smokeFlow: process.env.IPOS_SMOKE_FLOW || null,
+      smokeGulir: process.env.IPOS_SMOKE_GULIR || null,
       smokeLogin: process.env.IPOS_SMOKE_LOGIN === '1',
       smokeMasuk: process.env.IPOS_SMOKE_USER ? { user: process.env.IPOS_SMOKE_USER, pass: process.env.IPOS_SMOKE_PASS || '' } : null
     }
@@ -307,16 +308,40 @@ function registerIpcHandlers(getMainWindow) {
     return { ok: true, data: { url } }
   })
 
-  handle('app:print', () => {
+  // Cetak isi #print-root. Bila preferensi "cetak langsung" aktif dan printer
+  // dipilih → tanpa dialog (silent) ke printer itu; selain itu dialog OS.
+  handle('app:print', ({ paksaDialog } = {}) => {
     const win = getMainWindow()
     if (!win || win.isDestroyed()) return fail('Jendela tidak tersedia.')
+    const cetak = settingsStore.getCetak()
+    const langsung = !paksaDialog && cetak.langsung && !!cetak.printer
+    const opsi = { printBackground: true, margins: { marginType: 'printableArea' } }
+    if (langsung) { opsi.silent = true; opsi.deviceName = cetak.printer }
     return new Promise((resolve) => {
-      win.webContents.print(
-        { printBackground: true, margins: { marginType: 'printableArea' } },
-        (success, reason) => resolve(success ? { ok: true, data: null } : fail(reason || 'Cetak dibatalkan.'))
-      )
+      win.webContents.print(opsi, (success, reason) => {
+        if (success) return resolve({ ok: true, data: { langsung } })
+        // Printer pilihan tidak ada (dicabut/diganti nama) → beri tahu jelas.
+        const pesan = langsung && /device|printer|not found|tidak/i.test(String(reason || ''))
+          ? `Printer "${cetak.printer}" tidak ditemukan. Pilih ulang di Pengaturan → Printer struk.`
+          : (reason || 'Cetak dibatalkan.')
+        resolve(fail(pesan))
+      })
     })
   })
+
+  handle('app:printers', async () => {
+    const win = getMainWindow()
+    if (!win || win.isDestroyed()) return fail('Jendela tidak tersedia.')
+    try {
+      const daftar = await win.webContents.getPrintersAsync()
+      return { ok: true, data: daftar.map((p) => ({ nama: p.name, deskripsi: p.description || '', bawaan: !!p.isDefault })) }
+    } catch (err) {
+      return fail(err && err.message ? err.message : 'Gagal membaca daftar printer.')
+    }
+  })
+
+  handle('settings:getCetak', () => ({ ok: true, data: settingsStore.getCetak() }))
+  handle('settings:setCetak', (patch) => ({ ok: true, data: settingsStore.setCetak(patch || {}) }))
 
   // Mode Demo: seluruh data disimulasikan lokal, tidak ada permintaan jaringan.
   // Server pelacakan pelanggan (LAN) ikut dinyalakan agar QR struk berfungsi.

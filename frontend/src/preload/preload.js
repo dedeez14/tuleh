@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('iposAPI', {
   app: {
     info: invoke('app:info'),
     print: invoke('app:print'),
+    printers: invoke('app:printers'),
     openExternal: invoke('app:openExternal'),
     openQueueDisplay: invoke('display:antrian'),
     ensureLanAccess: invoke('firewall:ensure'),
@@ -55,7 +56,9 @@ contextBridge.exposeInMainWorld('iposAPI', {
   },
   settings: {
     get: invoke('settings:get'),
-    setBaseUrl: invoke('settings:setBaseUrl')
+    setBaseUrl: invoke('settings:setBaseUrl'),
+    getCetak: invoke('settings:getCetak'),
+    setCetak: invoke('settings:setCetak')
   },
   demo: {
     start: invoke('demo:start'),

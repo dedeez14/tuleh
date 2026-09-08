@@ -9,7 +9,7 @@ import { bukaBantuanPintasan } from '../components/pintasan.js'
 import { getState, subscribe } from '../state.js'
 import { esc, fmtIDR, fmtNumber, parseAmount, debounce } from '../utils/format.js'
 import { toast, showModal, confirmDialog, emptyStateHTML, loadingHTML, icons } from '../components/ui.js'
-import { buildReceiptHTML, printReceipt, tombolBagikanStruk } from '../components/receipt.js'
+import { buildReceiptHTML, printReceipt, tombolBagikanStruk, cetakOtomatisBilaDiatur } from '../components/receipt.js'
 import { lineTotals, cartTotals, kembalian, shortfall, quickCashOptions, clampQty, diskonGabungan } from '../lib/cart.js'
 import { midtransBoleh, qrisAksi, sisaDetik, formatSisa, harusFallbackStatis } from '../lib/qris-flow.js'
 import { customerViewHTML } from '../components/customer-view.js'
@@ -1126,6 +1126,8 @@ function renderPos(container) {
       footer.querySelector('#pay-print').addEventListener('click', () => printReceipt(struk))
       footer.insertBefore(tombolBagikanStruk(struk), footer.querySelector('#pay-new'))
       footer.querySelector('#pay-new').addEventListener('click', () => modal.close())
+      // Pengaturan → Printer struk → "cetak otomatis": struk langsung keluar.
+      cetakOtomatisBilaDiatur(struk).then((ok) => { if (ok) toast('Struk dicetak.', 'success', 1800) })
     }
 
     // Bersihkan keranjang + segarkan katalog, lalu tampilkan struk sukses.

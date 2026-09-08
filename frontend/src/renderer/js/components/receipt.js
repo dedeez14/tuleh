@@ -128,16 +128,38 @@ export function tombolBagikanStruk(struk) {
   return wrap
 }
 
-/** Cetak struk lewat dialog printer OS. */
-export async function printReceipt(struk) {
+/**
+ * Cetak struk: langsung ke printer pilihan (tanpa dialog) bila diatur di
+ * Pengaturan → Printer struk, selain itu lewat dialog printer OS.
+ * `paksaDialog` = abaikan preferensi (mis. tombol "Cetak lewat dialog").
+ */
+export async function printReceipt(struk, { paksaDialog = false } = {}) {
   const printRoot = document.getElementById('print-root')
-  if (!printRoot) return
+  if (!printRoot) return false
   printRoot.innerHTML = buildReceiptHTML(struk)
-  const result = await api.app.print()
+  const result = await api.app.print({ paksaDialog })
   printRoot.innerHTML = ''
   if (!result.ok && result.message && !/dibatalkan|cancel/i.test(result.message)) {
     toast(`Gagal mencetak: ${result.message}`, 'error')
+    return false
   }
+  return !!result.ok
+}
+
+/** Preferensi cetak (dibaca sekali per sesi; disegarkan setelah disimpan). */
+let cetakPref = null
+export async function preferensiCetak(segarkan = false) {
+  if (cetakPref && !segarkan) return cetakPref
+  const r = await api.settings.getCetak()
+  cetakPref = r.ok && r.data ? r.data : { printer: '', langsung: false, otomatis: false }
+  return cetakPref
+}
+
+/** Setelah transaksi tercatat: cetak otomatis bila diatur begitu. */
+export async function cetakOtomatisBilaDiatur(struk) {
+  const p = await preferensiCetak()
+  if (!p.otomatis) return false
+  return printReceipt(struk)
 }
 
 /** Cetak kartu QR meja (untuk ditempel di meja) — nama toko, nomor meja, QR besar. */

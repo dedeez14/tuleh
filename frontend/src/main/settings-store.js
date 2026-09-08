@@ -154,6 +154,30 @@ function save(settings) {
   fs.writeFileSync(settingsPath(), JSON.stringify(settings, null, 2), 'utf8')
 }
 
+// ---- Preferensi cetak struk ----
+// { printer: nama perangkat | '' (dialog OS), langsung: bool, otomatis: bool }
+function getCetak() {
+  const raw = readRaw().cetak
+  const c = raw && typeof raw === 'object' ? raw : {}
+  return {
+    printer: typeof c.printer === 'string' ? c.printer.slice(0, 200) : '',
+    langsung: !!c.langsung,
+    otomatis: !!c.otomatis
+  }
+}
+
+function setCetak(patch = {}) {
+  const raw = readRaw()
+  const lama = getCetak()
+  const baru = {
+    printer: 'printer' in patch ? String(patch.printer || '').slice(0, 200) : lama.printer,
+    langsung: 'langsung' in patch ? !!patch.langsung : lama.langsung,
+    otomatis: 'otomatis' in patch ? !!patch.otomatis : lama.otomatis
+  }
+  save({ ...raw, cetak: baru })
+  return baru
+}
+
 function setBaseUrl(value) {
   if (typeof value !== 'string' || !isAllowedBaseUrl(value)) {
     return { ok: false, message: 'URL server harus HTTPS (atau http://localhost untuk pengembangan).' }
@@ -164,4 +188,4 @@ function setBaseUrl(value) {
   return { ok: true, baseUrl: next.baseUrl }
 }
 
-module.exports = { load, setBaseUrl, getDemoTrial, getDemoTrialSemua, setDemoTrial, getDemoIdentitasToken, setDemoIdentitasToken, DEFAULT_BASE_URL, isAllowedBaseUrl }
+module.exports = { load, setBaseUrl, getCetak, setCetak, getDemoTrial, getDemoTrialSemua, setDemoTrial, getDemoIdentitasToken, setDemoIdentitasToken, DEFAULT_BASE_URL, isAllowedBaseUrl }

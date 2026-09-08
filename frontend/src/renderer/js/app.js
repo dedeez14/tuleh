@@ -910,14 +910,17 @@ async function boot() {
         } else if (info.data.smokeFlow === 'prabill') {
           kartuTerisi()?.click(); await jeda(450)
           document.querySelector('#bill-cetak')?.click(); await jeda(400)
-        } else if (['kasir-parkir', 'kasir-bayar', 'kasir-diskon'].includes(info.data.smokeFlow)) {
+        } else if (['kasir-parkir', 'kasir-bayar', 'kasir-diskon', 'gulir'].includes(info.data.smokeFlow)) {
           // Kasir: isi keranjang dari dua produk pertama, lalu parkir (F9 → F10
           // buka daftar) atau bayar tunai pas (F4 → Uang Pas → selesaikan).
           await jeda(600)
           const kartu = [...document.querySelectorAll('.pos-card:not([disabled])')]
           kartu[0]?.click(); await jeda(120); kartu[1]?.click(); await jeda(200)
           const tekan = (key) => document.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
-          if (info.data.smokeFlow === 'kasir-diskon') {
+          if (info.data.smokeFlow === 'gulir') {
+            // Gulir ke elemen (#id) untuk tangkapan layar bagian bawah halaman.
+            document.querySelector(info.data.smokeGulir || '')?.scrollIntoView({ block: 'start' }); await jeda(300)
+          } else if (info.data.smokeFlow === 'kasir-diskon') {
             const d = document.querySelector('#pos-diskon-trx')
             if (d) { d.value = '10'; d.dispatchEvent(new Event('input', { bubbles: true })) }
             await jeda(300)

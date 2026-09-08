@@ -8,6 +8,7 @@ import { mulaiPembayaran } from '../langganan-bayar.js'
 import { mountProfilUsaha } from './profil-usaha.js'
 import { mountPembayaran } from './pembayaran-setelan.js'
 import { renderPanelSinkronisasi } from '../components/sinkronisasi.js'
+import { mountPrinterSetelan } from './printer-setelan.js'
 
 const DASH = '<span class="u-faint">—</span>'
 
@@ -179,6 +180,8 @@ export const SettingsScreen = {
 
           <div id="set-pembayaran"></div>
 
+          <div id="set-printer"></div>
+
           ${accountCardHTML()}
 
           ${hakAksesCardHTML()}
@@ -229,6 +232,7 @@ export const SettingsScreen = {
     mountProfilUsaha(container.querySelector('#set-profil-usaha'))
     mountPembayaran(container.querySelector('#set-pembayaran'))
     renderPanelSinkronisasi(container.querySelector('#set-sinkron'))
+    mountPrinterSetelan(container.querySelector('#set-printer'))
 
     // Perpanjang langganan (alur pembayaran Midtrans)
     const perpanjangBtn = container.querySelector('#set-perpanjang')
