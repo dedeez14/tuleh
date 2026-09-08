@@ -5,9 +5,6 @@
 // berkas nyata tidak pernah selesai (zona async palsu). Perilaku berkasnya
 // diuji terpisah di kasir_parkir_batal_opname_test.dart.
 
-import 'dart:io';
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -30,6 +27,7 @@ import 'package:tuleh_pos/features/riwayat/presentation/screens/detail_transaksi
 import 'package:tuleh_pos/features/toko/presentation/providers/toko_providers.dart';
 
 import 'helpers/masa_coba_palsu.dart';
+import 'helpers/parkir_memori.dart';
 
 const _kopi = Product(id: 'P1', nama: 'Kopi Susu', harga: 18000, stok: 9);
 const _roti = Product(id: 'P2', nama: 'Roti Bakar', harga: 15000);
@@ -56,51 +54,6 @@ class _Storage extends SecureStorage {
   }
 }
 
-/// Parkir in-memory dengan aturan yang sama (nomor urut, batas, per toko).
-class _ParkirMemori extends ParkirStore {
-  _ParkirMemori() : super(dir: () async => Directory.systemTemp);
-
-  final Map<String, List<KeranjangParkir>> _data = {};
-  int _urut = 0;
-
-  List<KeranjangParkir> _bucket(String? tokoId) => _data.putIfAbsent(tokoId ?? '', () => []);
-
-  @override
-  Future<List<KeranjangParkir>> daftar(String? tokoId) async => List.of(_bucket(tokoId));
-
-  @override
-  Future<KeranjangParkir> simpan(
-    String? tokoId, {
-    required List<CartItem> items,
-    KeranjangMeta meta = const KeranjangMeta(),
-  }) async {
-    if (items.isEmpty) throw ArgumentError('Keranjang kosong.');
-    final bucket = _bucket(tokoId);
-    if (bucket.length >= maksParkir) throw const ParkirPenuh();
-    final entri = KeranjangParkir(
-      id: 'p${++_urut}',
-      nomor: (bucket.fold<int>(0, (m, p) => max(m, p.nomor)) % 999) + 1,
-      waktu: DateTime(2026, 9, 8, 10, 30),
-      items: List.of(items),
-      meta: meta,
-    );
-    bucket.add(entri);
-    return entri;
-  }
-
-  @override
-  Future<KeranjangParkir?> ambil(String? tokoId, String id) async {
-    final bucket = _bucket(tokoId);
-    final i = bucket.indexWhere((p) => p.id == id);
-    if (i < 0) return null;
-    return bucket.removeAt(i);
-  }
-
-  @override
-  Future<void> hapus(String? tokoId, String id) async =>
-      _bucket(tokoId).removeWhere((p) => p.id == id);
-}
-
 Future<void> _pompa(WidgetTester t, [int kali = 20]) async {
   for (var i = 0; i < kali; i++) {
     await t.pump(const Duration(milliseconds: 50));
@@ -108,9 +61,9 @@ Future<void> _pompa(WidgetTester t, [int kali = 20]) async {
 }
 
 void main() {
-  late _ParkirMemori parkir;
+  late ParkirMemori parkir;
 
-  setUp(() => parkir = _ParkirMemori());
+  setUp(() => parkir = ParkirMemori());
 
   Future<ProviderContainer> buatDemo() async {
     final c = ProviderContainer(

@@ -17,6 +17,9 @@ import 'package:tuleh_pos/core/theme/tema_provider.dart';
 import 'package:tuleh_pos/features/auth/presentation/controllers/auth_controller.dart';
 import 'package:tuleh_pos/features/demo/data/masa_coba_service.dart';
 import 'package:tuleh_pos/features/kasir/presentation/controllers/cart_controller.dart';
+import 'package:tuleh_pos/features/kasir/data/parkir_store.dart';
+import 'package:tuleh_pos/features/kasir/presentation/widgets/parkir_sheet.dart';
+import 'package:tuleh_pos/features/kasir/domain/entities/cart_item.dart';
 import 'package:tuleh_pos/features/cetak/domain/entities/struk.dart';
 import 'package:tuleh_pos/features/kasir/presentation/widgets/cart_sheet.dart';
 import 'package:tuleh_pos/features/kasir/presentation/widgets/hasil_transaksi_sheet.dart';
@@ -32,6 +35,7 @@ import 'package:tuleh_pos/features/products/presentation/providers/products_prov
 import 'package:tuleh_pos/features/toko/presentation/providers/toko_providers.dart';
 
 import 'helpers/masa_coba_palsu.dart';
+import 'helpers/parkir_memori.dart';
 
 /// Tangkapan layar untuk tinjauan UI (bukan uji regresi). Jalankan manual:
 ///
@@ -143,6 +147,7 @@ Future<void> _jalankan(WidgetTester t) async {
       overrides: [
         secureStorageProvider.overrideWithValue(_Storage()),
         masaCobaServiceProvider.overrideWithValue(MasaCobaPalsu()),
+        parkirStoreProvider.overrideWithValue(ParkirMemori()),
         ...overrideOffline(antrean: AntreanMemori()),
       ],
     );
@@ -224,6 +229,33 @@ Future<void> _jalankan(WidgetTester t) async {
       ..aturCatatan('Tanpa es, ambil jam 5');
     await pompa(t, 20);
     await simpan(t, 'keranjang-tambahan');
+    Navigator.of(ctx).pop();
+    await pompa(t, 20);
+
+    // Daftar keranjang terparkir (parkir keranjang, 2.17.0).
+    await c.read(parkirStoreProvider).simpan(
+      c.read(activeTokoIdProvider).valueOrNull,
+      items: [for (final p in produk.take(2)) CartItem(product: p, qty: 2)],
+      meta: const KeranjangMeta(
+        pelanggan: Pelanggan(id: 'C1', nama: 'Budi Santoso'),
+        catatan: 'Diambil sore',
+      ),
+    );
+    await c.read(parkirStoreProvider).simpan(
+      c.read(activeTokoIdProvider).valueOrNull,
+      items: [CartItem(product: produk.first, qty: 1)],
+    );
+    c.read(parkirVersiProvider.notifier).state++;
+    await pompa(t, 10);
+    showModalBottomSheet<void>(
+      context: ctx,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (_) => const ParkirSheet(),
+    );
+    await pompa(t, 40);
+    await simpan(t, 'parkir');
     Navigator.of(ctx).pop();
     await pompa(t, 20);
 
