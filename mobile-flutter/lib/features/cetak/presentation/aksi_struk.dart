@@ -23,13 +23,15 @@ Future<bool> cetakStrukDenganUmpanBalik(
   final messenger = ScaffoldMessenger.of(context);
   // Ditunggu, bukan dicuplik: pada pemakaian pertama tiap sesi preferensi
   // printer masih dibaca dari penyimpanan aman dan cuplikannya null.
-  PrinterTerpilih? terpilih;
-  try {
-    terpilih = await ref.read(printerTerpilihProvider.future);
-  } catch (_) {
-    terpilih = ref.read(printerTerpilihProvider).valueOrNull;
+  var terpilih = ref.read(printerTerpilihProvider).valueOrNull;
+  if (terpilih == null) {
+    try {
+      terpilih = await ref.read(printerTerpilihProvider.future);
+    } catch (_) {
+      terpilih = null;
+    }
+    if (!context.mounted) return false;
   }
-  if (!context.mounted) return false;
   final printer = terpilih?.printer;
 
   if (printer == null) {

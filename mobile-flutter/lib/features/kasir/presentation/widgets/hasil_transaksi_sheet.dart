@@ -51,12 +51,16 @@ class _HasilTransaksiSheetState extends ConsumerState<HasilTransaksiSheet> {
   /// sesi aplikasi providernya masih memuat, dan cuplikan seketika akan
   /// mengembalikan null (dulu: struk pertama diam-diam tidak tercetak).
   Future<void> _cetakOtomatisBilaDiatur() async {
-    try {
-      final pref = await ref.read(printerTerpilihProvider.future);
-      if (!mounted || !pref.cetakOtomatis) return;
-    } catch (_) {
-      return; // penyimpanan bermasalah — kasir masih bisa menekan Cetak
+    var pref = ref.read(printerTerpilihProvider).valueOrNull;
+    if (pref == null) {
+      // Masih dimuat (transaksi pertama sesi ini) — tunggu sampai selesai.
+      try {
+        pref = await ref.read(printerTerpilihProvider.future);
+      } catch (_) {
+        return; // penyimpanan bermasalah — kasir masih bisa menekan Cetak
+      }
     }
+    if (!mounted || pref == null || !pref.cetakOtomatis) return;
     await _cetak();
   }
 

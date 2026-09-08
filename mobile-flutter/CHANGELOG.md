@@ -5,6 +5,10 @@ sebagai isi Release GitHub (workflow flutter-release.yml), dan empat baris
 pertamanya tampil di banner pembaruan dalam aplikasi. Tulis untuk kasir, bukan
 untuk programmer.
 
+## 2.22.2
+
+- Perbaikan lanjutan cetak otomatis 2.22.1: pada sebagian perangkat struk justru tidak tercetak sama sekali. Preferensi printer kini dipakai langsung bila sudah termuat, dan hanya ditunggu saat benar-benar masih dibaca.
+
 ## 2.22.1
 
 - **Struk pertama setiap kali aplikasi dibuka kini ikut tercetak otomatis.** Sebelumnya preferensi printer belum selesai dibaca saat lembar hasil muncul, jadi transaksi pertama selalu terlewat (dan "Cetak ulang" pertama keliru bilang printer belum dipilih).
