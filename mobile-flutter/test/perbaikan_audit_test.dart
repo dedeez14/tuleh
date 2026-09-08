@@ -30,6 +30,8 @@ import 'package:tuleh_pos/features/meja/domain/repositories/meja_repository.dart
 import 'package:tuleh_pos/features/meja/presentation/providers/meja_providers.dart';
 import 'package:tuleh_pos/features/meja/presentation/screens/bill_detail_screen.dart';
 import 'package:tuleh_pos/features/products/domain/entities/product.dart';
+import 'package:tuleh_pos/features/riwayat/presentation/providers/riwayat_providers.dart';
+import 'package:tuleh_pos/features/riwayat/presentation/screens/riwayat_screen.dart';
 import 'package:tuleh_pos/features/toko/presentation/providers/toko_providers.dart';
 
 import 'helpers/masa_coba_palsu.dart';
@@ -592,6 +594,36 @@ void main() {
       expect(isi.single.product.id, 'P1', reason: 'belanjaan tidak boleh menguap');
       expect(isi.single.qty, 3);
       expect(await parkir.daftar('TOKO-1'), isEmpty);
+    });
+  });
+
+  group('Riwayat: subtotal tersaring diberi keterangan', () {
+    testWidgets('menyaring memunculkan catatan "menampilkan N dari M"', (t) async {
+      late final ProviderContainer c;
+      await t.runAsync(() async {
+        c = ProviderContainer(
+          overrides: [
+            secureStorageProvider.overrideWithValue(_Storage()),
+            masaCobaServiceProvider.overrideWithValue(MasaCobaPalsu()),
+            ...overrideOffline(antrean: AntreanMemori()),
+          ],
+        );
+        await c.read(authControllerProvider.notifier).startDemo();
+        await c.read(activeTokoIdProvider.notifier).select('TOKO-1');
+        await c.read(riwayatListProvider.future);
+      });
+      addTearDown(c.dispose);
+
+      await t.pumpWidget(UncontrolledProviderScope(
+        container: c,
+        child: MaterialApp(theme: AppTheme.light(), home: const RiwayatScreen()),
+      ));
+      await _pompa(t, 40);
+      expect(find.textContaining('Menampilkan'), findsNothing, reason: 'belum menyaring');
+
+      await t.enterText(find.byType(TextField).first, 'QRIS');
+      await _pompa(t, 20);
+      expect(find.textContaining('subtotal per hari mengikuti hasil saringan'), findsOneWidget);
     });
   });
 }

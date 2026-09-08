@@ -118,6 +118,12 @@ class _RiwayatScreenState extends ConsumerState<RiwayatScreen> {
                 list: tersaring,
                 terpilihId: lebar ? _terpilihId : null,
                 onBuka: (t) => _buka(context, t),
+                // Subtotal per hari ikut menyusut saat menyaring; sebutkan itu
+                // supaya angkanya tidak dikira penjualan hari itu seutuhnya.
+                catatanSaringan: tersaring.length == list.length
+                    ? null
+                    : 'Menampilkan ${tersaring.length} dari ${list.length} transaksi — '
+                          'subtotal per hari mengikuti hasil saringan.',
               );
             },
           ),
@@ -264,10 +270,18 @@ class _BilahSaring extends StatelessWidget {
 }
 
 class _DaftarPerHari extends StatelessWidget {
-  const _DaftarPerHari({required this.list, required this.onBuka, this.terpilihId});
+  const _DaftarPerHari({
+    required this.list,
+    required this.onBuka,
+    this.terpilihId,
+    this.catatanSaringan,
+  });
   final List<Transaksi> list;
   final ValueChanged<Transaksi> onBuka;
   final String? terpilihId;
+
+  /// Keterangan bahwa daftar (dan subtotalnya) sedang disaring.
+  final String? catatanSaringan;
 
   @override
   Widget build(BuildContext context) {
@@ -284,6 +298,33 @@ class _DaftarPerHari extends StatelessWidget {
 
     final anak = <Widget>[];
     var urut = 0;
+    final catatan = catatanSaringan;
+    if (catatan != null) {
+      anak.add(
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+          child: Row(
+            children: [
+              Icon(
+                Icons.filter_alt_outlined,
+                size: 15,
+                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  catatan,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.65),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     kelompok.forEach((tgl, trx) {
       final total = trx
           .where((t) => !_dibatalkan(t))
