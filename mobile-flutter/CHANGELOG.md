@@ -5,6 +5,10 @@ sebagai isi Release GitHub (workflow flutter-release.yml), dan empat baris
 pertamanya tampil di banner pembaruan dalam aplikasi. Tulis untuk kasir, bukan
 untuk programmer.
 
+## 2.22.3
+
+- Keranjang terparkir lebih aman: bila daftar tersimpan gagal dibaca (berkas terkunci/izin), aplikasi memberi tahu dan menolak menyimpan alih-alih menimpanya dengan daftar kosong. Berkas yang isinya rusak disisihkan sebagai `.rusak` supaya masih bisa diselamatkan, dan memarkir keranjang tetap bisa dilakukan.
+
 ## 2.22.2
 
 - Perbaikan lanjutan cetak otomatis 2.22.1: pada sebagian perangkat struk justru tidak tercetak sama sekali. Preferensi printer kini dipakai langsung bila sudah termuat, dan hanya ditunggu saat benar-benar masih dibaca.

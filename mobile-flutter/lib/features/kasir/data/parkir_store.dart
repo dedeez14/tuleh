@@ -152,6 +152,18 @@ class ParkirPenuh implements Exception {
   String toString() => pesan;
 }
 
+/// Berkas parkir ada tetapi tidak bisa dibaca — pemanggil harus memberi tahu
+/// pengguna, BUKAN memperlakukannya sebagai daftar kosong.
+class ParkirTidakTerbaca implements Exception {
+  const ParkirTidakTerbaca(this.sebab);
+  final Object sebab;
+  String get pesan =>
+      'Daftar keranjang terparkir tidak bisa dibaca di perangkat ini. '
+      'Coba lagi; jangan memarkir keranjang baru dulu agar yang lama tidak tertimpa.';
+  @override
+  String toString() => '$pesan ($sebab)';
+}
+
 /// Penyimpan parkir per toko: `<dir>/parkir/<tokoId>.json`.
 class ParkirStore {
   ParkirStore({Future<Directory> Function()? dir, DateTime Function()? jam})
@@ -171,11 +183,20 @@ class ParkirStore {
   }
 
   Future<List<KeranjangParkir>> daftar(String? tokoId) async {
+    final f = await _berkas(tokoId);
+    if (!await f.exists()) return const [];
+    String isi;
     try {
-      final f = await _berkas(tokoId);
-      if (!await f.exists()) return const [];
-      final raw = jsonDecode(await f.readAsString());
-      if (raw is! List) return const [];
+      isi = await f.readAsString();
+    } catch (e) {
+      // Berkas ADA tapi tidak terbaca (sedang terkunci, izin, disk bermasalah).
+      // Jangan balas "kosong": pemanggil berikutnya akan menulis ulang daftar
+      // dan keranjang yang sudah diparkir ikut terhapus. Lebih baik gagal jelas.
+      throw ParkirTidakTerbaca(e);
+    }
+    try {
+      final raw = jsonDecode(isi);
+      if (raw is! List) throw const FormatException('bukan daftar');
       final hasil = <KeranjangParkir>[];
       for (final e in raw) {
         if (e is! Map) continue;
@@ -184,7 +205,15 @@ class ParkirStore {
       }
       return hasil;
     } catch (_) {
-      return const []; // berkas rusak → anggap kosong, jangan hentikan kasir
+      // Isinya rusak dan tidak akan pulih sendiri. Sisihkan berkasnya (masih
+      // bisa diselamatkan manual) lalu mulai dari kosong supaya kasir tetap
+      // bisa memarkir keranjang.
+      try {
+        await f.rename('${f.path}.rusak');
+      } catch (_) {
+        // gagal menyisihkan → biarkan; penulisan berikutnya menimpanya
+      }
+      return const [];
     }
   }
 

@@ -46,6 +46,14 @@ ResponseBody _json(Map<String, dynamic> body, [int status = 200]) => ResponseBod
 Dio _dio(_Server s) =>
     Dio(BaseOptions(baseUrl: 'https://x.test/api', validateStatus: (_) => true))..httpClientAdapter = s;
 
+/// Penyimpan yang pembacaannya selalu gagal — meniru berkas terkunci/izin.
+class _StoreBacaGagal extends ParkirStore {
+  _StoreBacaGagal(Directory dir) : super(dir: (() async => dir));
+  @override
+  Future<List<KeranjangParkir>> daftar(String? tokoId) async =>
+      throw const ParkirTidakTerbaca('uji');
+}
+
 void main() {
   late Directory tmp;
   setUp(() async {
@@ -126,12 +134,18 @@ void main() {
       expect((await s.daftar('TOKO-1')).length, maksParkir);
     });
 
-    test('berkas rusak / entri tanpa item diabaikan, tidak melempar', () async {
+    test('berkas rusak disisihkan (.rusak) lalu mulai kosong', () async {
       final s = store();
       final f = File('${tmp.path}/parkir/TOKO-1.json');
       await f.parent.create(recursive: true);
       await f.writeAsString('{bukan json');
       expect(await s.daftar('TOKO-1'), isEmpty);
+      // Isinya tidak dibuang diam-diam: masih bisa diselamatkan manual.
+      expect(await File('${f.path}.rusak').exists(), isTrue);
+      expect(await File('${f.path}.rusak').readAsString(), '{bukan json');
+      // Memarkir lagi setelah itu tetap bisa.
+      final baru = await s.simpan('TOKO-1', items: const [CartItem(product: _kopi, qty: 1)]);
+      expect((await s.daftar('TOKO-1')).single.id, baru.id);
       await f.writeAsString(jsonEncode([
         {'id': 'kosong', 'nomor': 1, 'items': []},
         {'id': 'tanpa-harga', 'nomor': 2, 'items': [{'qty': 1, 'produk': {'id': 'P9', 'nama': 'X'}}]},
@@ -140,6 +154,24 @@ void main() {
       final daftar = await s.daftar('TOKO-1');
       expect(daftar.map((p) => p.id), ['sah']);
       expect(daftar.single.total, 2000);
+    });
+
+    test('baca gagal → simpan menolak, berkas lama tidak tertimpa', () async {
+      // Isi berkas dengan satu keranjang yang sah lebih dulu.
+      final asli = store();
+      await asli.simpan('TOKO-1', items: const [CartItem(product: _kopi, qty: 2)]);
+      final f = File('${tmp.path}/parkir/TOKO-1.json');
+      final sebelum = await f.readAsString();
+
+      // Penyimpan yang pembacaannya gagal (mis. berkas terkunci proses lain).
+      final rusak = _StoreBacaGagal(tmp);
+      await expectLater(rusak.daftar('TOKO-1'), throwsA(isA<ParkirTidakTerbaca>()));
+      await expectLater(
+        rusak.simpan('TOKO-1', items: const [CartItem(product: _roti, qty: 1)]),
+        throwsA(isA<ParkirTidakTerbaca>()),
+        reason: 'menulis daftar kosong akan menghapus keranjang yang sudah ada',
+      );
+      expect(await f.readAsString(), sebelum, reason: 'berkas lama utuh');
     });
 
     test('id toko terenkripsi panjang menghasilkan nama berkas wajar & tetap', () async {

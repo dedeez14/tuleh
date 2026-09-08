@@ -36,6 +36,12 @@ Future<bool> parkirKeranjang(BuildContext context, WidgetRef ref) async {
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(backgroundColor: AppColors.danger, content: Text(e.pesan)));
     return false;
+  } on ParkirTidakTerbaca catch (e) {
+    // Keranjang TIDAK dikosongkan: yang lama belum tentu selamat.
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(backgroundColor: AppColors.danger, content: Text(e.pesan)));
+    return false;
   } catch (_) {
     messenger
       ..hideCurrentSnackBar()
