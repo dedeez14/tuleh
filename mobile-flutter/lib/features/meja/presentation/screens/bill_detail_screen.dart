@@ -7,6 +7,10 @@ import '../../../../core/offline/pengurai.dart';
 import '../../../../core/offline/rujukan_lokal.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/format.dart';
+import '../../../cetak/domain/entities/struk.dart';
+import '../../../demo/demo_session.dart';
+import '../../../kasir/presentation/widgets/hasil_transaksi_sheet.dart';
+import '../../../pengaturan/presentation/providers/pengaturan_providers.dart';
 import '../../../products/domain/entities/product.dart';
 import '../../../products/presentation/providers/products_provider.dart';
 import '../../domain/entities/bill_detail.dart';
@@ -142,48 +146,39 @@ class _Body extends ConsumerWidget {
   }
 
   Future<void> _bayar(BuildContext context, WidgetRef ref, double total) async {
-    final ctrl = TextEditingController(text: total.toInt().toString());
-    final ok = await showDialog<bool>(
+    final dibayar = await showDialog<double>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Bayar Tunai'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Total ${fmtIDR(total)}'),
-            const SizedBox(height: 12),
-            TextField(
-              controller: ctrl,
-              keyboardType: TextInputType.number,
-              inputFormatters: const [RupiahInputFormatter()],
-              autofocus: true,
-              decoration: const InputDecoration(labelText: 'Uang diterima', prefixText: 'Rp '),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Bayar')),
-        ],
-      ),
+      builder: (_) => _DialogBayarTunai(total: total),
     );
-    final dibayar = ctrl.text.trim().isEmpty ? total : parseRupiah(ctrl.text);
-    ctrl.dispose();
-    if (ok != true || !context.mounted) return;
+    if (dibayar == null || !context.mounted) return;
+    final struk = _struk(ref, dibayar: dibayar, total: total);
     final r = await ref.read(mejaRepositoryProvider).bayar(billId, tipe: 'TUNAI', dibayar: dibayar);
     if (!context.mounted) return;
     r.when(
       ok: (h) {
         if (h.tertunda) ref.read(antreanVersiProvider.notifier).state++;
         ref.invalidate(mejaPetaProvider);
-        Navigator.of(context).pop(); // kembali ke peta
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(SnackBar(
-              backgroundColor: h.tertunda ? AppColors.warn : AppColors.success,
-              content: Text(h.tertunda
-                  ? 'Bon ditutup offline — pembayaran dikirim saat online.'
-                  : 'Bon dibayar & ditutup.')));
+        final navigator = Navigator.of(context);
+        navigator.pop(); // kembali ke peta
+        // Struk bon meja: sama seperti kasir — bisa dicetak, dibagikan, dan
+        // ikut cetak otomatis bila diatur di Pengaturan → Printer Struk.
+        showModalBottomSheet<void>(
+          context: navigator.context,
+          useRootNavigator: true,
+          isScrollControlled: true,
+          useSafeArea: true,
+          showDragHandle: true,
+          builder: (_) => HasilTransaksiSheet(
+            struk: h.tertunda
+                ? struk.salinDengan(
+                    catatanKaki: 'Belum tersinkron — nomor resmi menyusul setelah online.',
+                  )
+                : struk,
+            kembalian: struk.kembalian ?? 0,
+            tertunda: h.tertunda,
+            perluTinjau: h.perluTinjau,
+          ),
+        );
       },
       err: (e) => ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
@@ -191,6 +186,91 @@ class _Body extends ConsumerWidget {
             backgroundColor: AppColors.danger, content: Text(e.firstError() ?? e.message))),
     );
   }
+
+  /// Struk bon meja dari item yang tampil di layar + profil usaha.
+  // (helper struk di bawah)
+  Struk _struk(WidgetRef ref, {required double dibayar, required double total}) {
+    final usaha = ref.read(profilUsahaProvider).valueOrNull;
+    final kembalian = dibayar - total;
+    return Struk(
+      namaToko: usaha?.nama ?? 'Tuléh POS',
+      alamat: usaha?.alamat,
+      telepon: usaha?.telepon,
+      nomor: bill.nomor,
+      waktu: DateTime.now(),
+      baris: [
+        for (final it in bill.items)
+          StrukBaris(
+            nama: it.nama,
+            kuantitas: it.kuantitas,
+            harga: it.harga ?? (it.kuantitas > 0 ? it.subtotal / it.kuantitas : it.subtotal),
+          ),
+      ],
+      total: total,
+      metode: 'TUNAI',
+      dibayar: dibayar,
+      kembalian: kembalian > 0 ? kembalian : 0,
+      catatanKaki: usaha?.strukFooter,
+      barcode: bill.nomor,
+      logoUrl: (usaha?.strukTampilLogo ?? false) ? usaha?.logo : null,
+      demo: ref.read(demoSessionProvider).active,
+      pelanggan: bill.label,
+    );
+  }
+}
+
+/// Dialog "Bayar Tunai" — memiliki TextEditingController-nya sendiri supaya
+/// tidak dibuang selagi dialog masih beranimasi menutup (controller yang sudah
+/// di-dispose lalu dipakai lagi = assertion di debug, perilaku tak menentu di
+/// rilis). Mengembalikan nominal yang dibayar, atau null bila dibatalkan.
+class _DialogBayarTunai extends StatefulWidget {
+  const _DialogBayarTunai({required this.total});
+
+  final double total;
+
+  @override
+  State<_DialogBayarTunai> createState() => _DialogBayarTunaiState();
+}
+
+class _DialogBayarTunaiState extends State<_DialogBayarTunai> {
+  late final TextEditingController _ctrl = TextEditingController(
+    text: widget.total.toInt().toString(),
+  );
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _kirim() {
+    final teks = _ctrl.text.trim();
+    Navigator.pop(context, teks.isEmpty ? widget.total : parseRupiah(teks));
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Bayar Tunai'),
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text('Total ${fmtIDR(widget.total)}'),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _ctrl,
+          keyboardType: TextInputType.number,
+          inputFormatters: const [RupiahInputFormatter()],
+          autofocus: true,
+          onSubmitted: (_) => _kirim(),
+          decoration: const InputDecoration(labelText: 'Uang diterima', prefixText: 'Rp '),
+        ),
+      ],
+    ),
+    actions: [
+      TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
+      FilledButton(onPressed: _kirim, child: const Text('Bayar')),
+    ],
+  );
 }
 
 /// Sheet pilih produk → kirim sebagai ronde ke bon.

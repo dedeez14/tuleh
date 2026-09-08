@@ -5,6 +5,11 @@ sebagai isi Release GitHub (workflow flutter-release.yml), dan empat baris
 pertamanya tampil di banner pembaruan dalam aplikasi. Tulis untuk kasir, bukan
 untuk programmer.
 
+## 2.20.0
+
+- Bon meja yang dibayar kini mengeluarkan struk: lembar hasil yang sama dengan kasir, lengkap dengan tombol Cetak struk dan Bagikan, serta ikut cetak otomatis bila diatur. Sebelumnya bon ditutup tanpa struk sama sekali.
+- Perbaikan: dialog "Bayar Tunai" tidak lagi memakai kotak isian yang sudah dilepas saat dialog menutup (penyebab kedipan/galat di sebagian perangkat).
+
 ## 2.19.0
 
 - Riwayat bisa dicari dan disaring: ketik nomor nota, nominal (mis. "25000" atau "Rp 25.000"), atau metode pembayaran; pilih status (Semua / Selesai / Dibatalkan / Belum sinkron) dan rentang (Hari ini / 7 hari / 30 hari). Penyaringan berjalan di HP sehingga tetap bekerja saat offline, termasuk untuk struk yang belum terkirim.
