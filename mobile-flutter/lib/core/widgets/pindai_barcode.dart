@@ -9,8 +9,14 @@ import '../theme/app_colors.dart';
 /// Pemindai barcode/QR dengan kamera. Dua mode:
 /// - sekali: pindaian pertama langsung dikembalikan (mis. isi kolom barcode);
 /// - beruntun: tiap pindaian diserahkan ke [onKode] (kasir menambah item),
-///   layar tetap terbuka sampai pengguna menekan Selesai. Kode yang sama tak
-///   diproses dua kali dalam 1,5 detik agar satu barcode tak dobel masuk.
+///   layar tetap terbuka sampai pengguna menekan Selesai.
+///
+/// Dua aturan yang membuat pemindaian bisa dipercaya di meja kasir:
+/// 1. HANYA yang berada di dalam bingkai bidik yang dibaca ([scanWindow]),
+///    sehingga barcode tetangga di rak/kemasan lain tidak ikut masuk.
+/// 2. Satu barcode baru bisa masuk lagi setelah BENAR-BENAR menghilang dari
+///    kamera selama [jedaAbsen] — bukan sekadar lewat tenggat waktu. Menahan
+///    ponsel di depan satu barcode karena itu tidak menambah item berulang.
 class PindaiBarcodeScreen extends StatefulWidget {
   const PindaiBarcodeScreen({
     super.key,
@@ -60,8 +66,12 @@ class _PindaiBarcodeScreenState extends State<PindaiBarcodeScreen> {
       BarcodeFormat.qrCode,
     ],
   );
-  String? _terakhir;
-  DateTime _terakhirPada = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// Kode → kapan terakhir TERLIHAT kamera (diperbarui tiap frame).
+  final Map<String, DateTime> _terlihat = {};
+
+  /// Sedang memproses satu kode — detektor lain diabaikan dulu.
+  bool _sibuk = false;
   String? _umpan;
   bool _umpanGagal = false;
   bool _selesai = false;
@@ -77,12 +87,22 @@ class _PindaiBarcodeScreenState extends State<PindaiBarcodeScreen> {
 
   Future<void> _terdeteksi(BarcodeCapture c) async {
     if (_selesai) return;
-    final kode = c.barcodes.map((b) => b.rawValue).whereType<String>().map((s) => s.trim()).where((s) => s.isNotEmpty).firstOrNull;
-    if (kode == null) return;
     final kini = DateTime.now();
-    if (kode == _terakhir && kini.difference(_terakhirPada) < const Duration(milliseconds: 1500)) return;
-    _terakhir = kode;
-    _terakhirPada = kini;
+    // Catat SEMUA kode yang terlihat frame ini, supaya yang sedang ditahan di
+    // depan kamera tidak dianggap "hilang" hanya karena kode lain diproses.
+    final semua = c.barcodes
+        .map((b) => b.rawValue)
+        .whereType<String>()
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+    if (semua.isEmpty) return;
+    String? kode;
+    for (final k in semua) {
+      final boleh = bolehDiprosesBarcode(kode: k, kini: kini, terlihat: _terlihat);
+      if (boleh && kode == null) kode = k;
+    }
+    if (kode == null || _sibuk) return;
 
     if (widget.onKode == null) {
       _selesai = true;
@@ -90,7 +110,16 @@ class _PindaiBarcodeScreenState extends State<PindaiBarcodeScreen> {
       if (mounted) Navigator.of(context).pop(kode);
       return;
     }
-    final hasil = await widget.onKode!(kode);
+    _sibuk = true;
+    final String? hasil;
+    try {
+      hasil = await widget.onKode!(kode);
+    } finally {
+      _sibuk = false;
+      // Kode baru saja diproses: hitung ulang absennya dari SEKARANG, bukan
+      // dari frame pertama, supaya proses yang lambat tidak membuka celah.
+      _terlihat[kode] = DateTime.now();
+    }
     if (!mounted) return;
     if (hasil != null) {
       HapticFeedback.mediumImpact();
@@ -130,30 +159,61 @@ class _PindaiBarcodeScreenState extends State<PindaiBarcodeScreen> {
           ),
         ],
       ),
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          MobileScanner(
-            controller: _ctrl,
-            onDetect: _terdeteksi,
-            errorBuilder: (_, e) => _Galat(pesan: switch (e.errorCode) {
-              MobileScannerErrorCode.permissionDenied =>
-                'Izin kamera ditolak. Buka Pengaturan HP → Aplikasi → Tuléh → Izin → Kamera.',
-              MobileScannerErrorCode.unsupported => 'Perangkat ini tidak mendukung kamera.',
-              _ => 'Kamera tidak bisa dibuka (${e.errorCode.name}).',
-            }),
-          ),
-          // Bingkai bidik.
-          Center(
-            child: Container(
-              width: 260,
-              height: 170,
-              decoration: BoxDecoration(
-                border: Border.all(color: AppColors.mint400, width: 3),
-                borderRadius: BorderRadius.circular(18),
+      body: LayoutBuilder(
+        builder: (context, batas) {
+          // Bingkai bidik = jendela pemindaian. Keduanya memakai persegi yang
+          // SAMA, jadi apa yang di luar bingkai memang tidak dibaca.
+          final bidik = kotakBidikBarcode(batas.biggest);
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              MobileScanner(
+                controller: _ctrl,
+                onDetect: _terdeteksi,
+                scanWindow: bidik,
+                errorBuilder: (_, e) => _Galat(pesan: switch (e.errorCode) {
+                  MobileScannerErrorCode.permissionDenied =>
+                    'Izin kamera ditolak. Buka Pengaturan HP → Aplikasi → Tuléh → Izin → Kamera.',
+                  MobileScannerErrorCode.unsupported => 'Perangkat ini tidak mendukung kamera.',
+                  _ => 'Kamera tidak bisa dibuka (${e.errorCode.name}).',
+                }),
               ),
-            ),
-          ),
+              // Gelapkan luar bingkai supaya kasir tahu area yang dibaca.
+              IgnorePointer(
+                child: ColorFiltered(
+                  colorFilter: const ColorFilter.mode(Colors.black54, BlendMode.srcOut),
+                  child: Stack(
+                    children: [
+                      Container(
+                        decoration: const BoxDecoration(
+                          color: Colors.black,
+                          backgroundBlendMode: BlendMode.dstOut,
+                        ),
+                      ),
+                      Positioned.fromRect(
+                        rect: bidik,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.black,
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Positioned.fromRect(
+                rect: bidik,
+                child: IgnorePointer(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColors.mint400, width: 3),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                  ),
+                ),
+              ),
           Positioned(
             left: 0,
             right: 0,
@@ -205,11 +265,14 @@ class _PindaiBarcodeScreenState extends State<PindaiBarcodeScreen> {
                   label: Text(_jumlah == 0 ? 'Selesai' : 'Selesai ($_jumlah item masuk)'),
                 ),
               ),
-            ),
-        ],
+                ),
+            ],
+          );
+        },
       ),
     );
   }
+
 }
 
 class _Galat extends StatelessWidget {
@@ -229,5 +292,43 @@ class _Galat extends StatelessWidget {
         ],
       ),
     ),
+  );
+}
+
+// ---------------------------------------------------------------- aturan
+
+/// Barcode harus hilang dari kamera selama ini sebelum boleh masuk lagi.
+const jedaAbsenBarcode = Duration(milliseconds: 1200);
+
+/// Boleh diproses? Sekaligus mencatat bahwa [kode] sedang terlihat.
+///
+/// Kamera mengirim frame terus-menerus selama barcode ada di depan lensa, jadi
+/// "sudah pernah terlihat baru saja" = masih barcode yang sama, bukan pindaian
+/// baru. Aturan ini yang mencegah satu item masuk berulang kali saat kasir
+/// menahan ponsel di depan label.
+bool bolehDiprosesBarcode({
+  required String kode,
+  required DateTime kini,
+  required Map<String, DateTime> terlihat,
+}) {
+  final sebelumnya = terlihat[kode];
+  terlihat[kode] = kini;
+  if (sebelumnya != null && kini.difference(sebelumnya) < jedaAbsenBarcode) return false;
+  // Buang catatan lama agar peta tidak tumbuh selama sesi pemindaian panjang.
+  if (terlihat.length > 64) {
+    terlihat.removeWhere((_, t) => kini.difference(t) > const Duration(minutes: 2));
+  }
+  return true;
+}
+
+/// Persegi bidik di tengah layar — dipakai SEKALIGUS sebagai jendela
+/// pemindaian, sehingga barcode di luar bingkai memang tidak dibaca.
+Rect kotakBidikBarcode(Size layar) {
+  final lebar = layar.width * 0.78 > 300 ? 300.0 : layar.width * 0.78;
+  final tinggi = lebar * 0.62;
+  return Rect.fromCenter(
+    center: Offset(layar.width / 2, layar.height / 2),
+    width: lebar,
+    height: tinggi,
   );
 }

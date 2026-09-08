@@ -5,6 +5,14 @@ sebagai isi Release GitHub (workflow flutter-release.yml), dan empat baris
 pertamanya tampil di banner pembaruan dalam aplikasi. Tulis untuk kasir, bukan
 untuk programmer.
 
+## 2.23.1
+
+Perbaikan pemindai barcode kasir (dilaporkan dari pemakaian nyata):
+
+- **Item tidak lagi masuk berulang.** Dulu satu barcode masuk lagi setiap 1,5 detik selama ponsel ditahan di depannya. Sekarang barcode harus benar-benar hilang dari kamera dulu (± 1 detik) sebelum bisa masuk lagi — memindai dua barang yang sama tetap bisa, cukup angkat lalu arahkan lagi.
+- **Barcode di luar kotak bidik tidak ikut terbaca.** Kotak di tengah layar dulu hanya hiasan; pemindaian memakai seluruh layar sehingga barcode tetangga di rak atau kemasan lain ikut masuk. Kini yang dibaca hanya yang di dalam kotak, dan area luar digelapkan supaya jelas.
+- Satu pindaian diproses sampai selesai sebelum pindaian berikutnya diterima.
+
 ## 2.23.0
 
 - Riwayat memberi keterangan saat sedang disaring: "Menampilkan N dari M transaksi — subtotal per hari mengikuti hasil saringan", supaya total harian yang menyusut tidak dikira penjualan hari itu seutuhnya.
