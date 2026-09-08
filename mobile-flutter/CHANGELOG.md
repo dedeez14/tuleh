@@ -5,6 +5,10 @@ sebagai isi Release GitHub (workflow flutter-release.yml), dan empat baris
 pertamanya tampil di banner pembaruan dalam aplikasi. Tulis untuk kasir, bukan
 untuk programmer.
 
+## 2.21.1
+
+- Bagian Produk terlaris tidak lagi menampilkan kartu galat pada server yang belum menyediakan datanya; bagian itu hanya dikosongkan dan sisa laporan tetap tampil.
+
 ## 2.21.0
 
 - Laporan punya bagian **Produk terlaris**: lima teratas menurut nilai penjualan, lengkap dengan jumlah terjual dan bilah perbandingan terhadap produk teratas. Ikut terbawa saat ringkasan laporan dibagikan.

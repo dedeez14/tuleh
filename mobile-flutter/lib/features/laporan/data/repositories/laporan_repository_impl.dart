@@ -30,11 +30,17 @@ class LaporanRepositoryImpl implements LaporanRepository {
     }
   }
 
+  /// Produk terlaris adalah bagian pelengkap laporan: bila server ini belum
+  /// mengenal endpointnya (404 / 405), balas daftar kosong supaya layar
+  /// Laporan tetap utuh. Galat lain (401, 5xx) tetap diteruskan.
   @override
   Future<Result<List<PenjualanProduk>>> penjualanProduk() async {
     try {
       return Ok(await remote.penjualanProduk());
     } on ApiException catch (e) {
+      if (e.statusCode == 404 || e.statusCode == 405) {
+        return const Ok(<PenjualanProduk>[]);
+      }
       return Err(e);
     }
   }

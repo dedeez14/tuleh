@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tuleh_pos/core/network/api_exception.dart';
 import 'package:tuleh_pos/features/demo/data/demo_engine.dart';
 import 'package:tuleh_pos/features/laporan/data/datasources/laporan_remote_datasource.dart';
+import 'package:tuleh_pos/features/laporan/data/repositories/laporan_repository_impl.dart';
 
 class _Server implements HttpClientAdapter {
   _Server(this.jawab);
@@ -35,6 +36,8 @@ Dio _dio(_Server s) =>
       ..httpClientAdapter = s;
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('LaporanRemoteDataSource.penjualanProduk', () {
     test('membaca list langsung dan mengurutkan menurun menurut nilai', () async {
       final server = _Server((_) => _json({
@@ -137,6 +140,29 @@ void main() {
       final id = '${(bayar.body['data'] as Map)['id']}';
       e.handle(method: 'POST', path: '/transaksi/$id/batal', query: toko);
       expect(nilai('${produk['nama']}'), sebelum);
+    });
+  });
+
+  group('LaporanRepositoryImpl.penjualanProduk', () {
+    LaporanRepositoryImpl repo(int status) => LaporanRepositoryImpl(
+      LaporanRemoteDataSource(
+        _dio(_Server((_) => _json({'success': false, 'message': 'x'}, status))),
+      ),
+    );
+
+    test('server tanpa endpoint (404/405) → daftar kosong, laporan tetap utuh', () async {
+      for (final status in [404, 405]) {
+        final r = await repo(status).penjualanProduk();
+        expect(r.isOk, isTrue, reason: 'status $status');
+        expect(r.valueOrNull, isEmpty);
+      }
+    });
+
+    test('galat lain tetap dilaporkan sebagai Err', () async {
+      for (final status in [401, 403, 500]) {
+        final r = await repo(status).penjualanProduk();
+        expect(r.isOk, isFalse, reason: 'status $status');
+      }
     });
   });
 }

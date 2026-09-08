@@ -26,6 +26,8 @@ final penjualanHarianProvider = FutureProvider<List<PenjualanHari>>((ref) async 
   return r.when(ok: (v) => v, err: (e) => throw e);
 });
 
+/// Produk terlaris (bagian pelengkap; repository menoleransi server yang
+/// belum mengenal endpointnya).
 final penjualanProdukProvider = FutureProvider<List<PenjualanProduk>>((ref) async {
   ref.watch(activeTokoIdProvider);
   final r = await ref.watch(laporanRepositoryProvider).penjualanProduk();
