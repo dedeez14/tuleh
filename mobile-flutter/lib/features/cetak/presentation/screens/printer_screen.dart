@@ -153,6 +153,15 @@ class _PrinterScreenState extends ConsumerState<PrinterScreen> {
                   ref.read(printerTerpilihProvider.notifier).aturLebar(l),
             ),
             const SizedBox(height: 22),
+            const _Judul(teks: 'Setelah pembayaran'),
+            const SizedBox(height: 10),
+            _SaklarOtomatis(
+              nyala: terpilih?.otomatis ?? false,
+              aktif: terpilih?.ada ?? false,
+              onUbah: (v) =>
+                  ref.read(printerTerpilihProvider.notifier).aturOtomatis(v),
+            ),
+            const SizedBox(height: 22),
             const _Judul(
               teks: 'Pratinjau struk',
               catatan: 'Perkiraan hasil cetak sesuai lebar kertas yang dipilih.',
@@ -186,6 +195,45 @@ class _PrinterScreenState extends ConsumerState<PrinterScreen> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Saklar "cetak struk otomatis setelah pembayaran". Mati & tidak bisa
+/// diubah selama belum ada printer terpilih — supaya kasir tidak menunggu
+/// struk yang tak akan pernah keluar.
+class _SaklarOtomatis extends StatelessWidget {
+  const _SaklarOtomatis({
+    required this.nyala,
+    required this.aktif,
+    required this.onUbah,
+  });
+
+  final bool nyala;
+  final bool aktif;
+  final ValueChanged<bool> onUbah;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: cs.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(14),
+      child: SwitchListTile(
+        value: aktif && nyala,
+        onChanged: aktif ? onUbah : null,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: const Text(
+          'Cetak struk otomatis',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
+        subtitle: Text(
+          aktif
+              ? 'Struk langsung dicetak begitu pembayaran tercatat.'
+              : 'Pilih printer lebih dulu untuk memakai cetak otomatis.',
+          style: TextStyle(fontSize: 12.5, color: cs.onSurface.withValues(alpha: 0.65)),
         ),
       ),
     );

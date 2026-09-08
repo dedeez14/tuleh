@@ -8,6 +8,7 @@ untuk programmer.
 ## 2.18.0
 
 - Bagikan ringkasan laporan dari layar Laporan (ikon bagikan di bilah atas): omzet, jumlah transaksi, pengeluaran, laba, rata-rata per transaksi, omzet 8 hari terakhir, dan rekap kasir — siap dikirim lewat WhatsApp atau disimpan sebagai catatan. Tidak tersedia di Mode Demo, sama seperti ekspor laporan di aplikasi Windows.
+- Cetak struk otomatis: nyalakan di Pengaturan → Printer Struk, lalu setiap pembayaran yang berhasil langsung dikirim ke printer thermal tanpa menekan tombol Cetak. Mati sendiri bila printer belum dipilih.
 - Opname untuk produk yang stoknya belum diketahui tidak lagi ditolak sebagai "stok 0"; server yang memutuskan.
 
 ## 2.17.0

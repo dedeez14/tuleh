@@ -11,24 +11,39 @@ final printerServiceProvider = Provider<PrinterService>(
 /// Printer terpilih + lebar kertas, disimpan agar tidak perlu dipilih ulang
 /// tiap transaksi.
 class PrinterTerpilih {
-  const PrinterTerpilih({this.printer, this.lebar = PaperSize.mm58});
+  const PrinterTerpilih({
+    this.printer,
+    this.lebar = PaperSize.mm58,
+    this.otomatis = false,
+  });
 
   final PrinterTersimpan? printer;
   final PaperSize lebar;
 
+  /// Cetak struk sendiri begitu pembayaran tercatat (padanan desktop 0.9.22).
+  final bool otomatis;
+
   bool get ada => printer != null;
 
-  PrinterTerpilih copyWith({PrinterTersimpan? printer, PaperSize? lebar}) =>
-      PrinterTerpilih(
-        printer: printer ?? this.printer,
-        lebar: lebar ?? this.lebar,
-      );
+  /// Hanya berlaku bila printer sudah dipilih.
+  bool get cetakOtomatis => otomatis && printer != null;
+
+  PrinterTerpilih copyWith({
+    PrinterTersimpan? printer,
+    PaperSize? lebar,
+    bool? otomatis,
+  }) => PrinterTerpilih(
+    printer: printer ?? this.printer,
+    lebar: lebar ?? this.lebar,
+    otomatis: otomatis ?? this.otomatis,
+  );
 }
 
 class PrinterTerpilihNotifier extends AsyncNotifier<PrinterTerpilih> {
   static const _kMac = 'printer_mac';
   static const _kNama = 'printer_nama';
   static const _kLebar = 'printer_lebar';
+  static const _kOtomatis = 'printer_otomatis';
 
   @override
   Future<PrinterTerpilih> build() async {
@@ -36,11 +51,13 @@ class PrinterTerpilihNotifier extends AsyncNotifier<PrinterTerpilih> {
     final mac = await s.bacaNilai(_kMac);
     final nama = await s.bacaNilai(_kNama);
     final lebar = await s.bacaNilai(_kLebar);
+    final otomatis = await s.bacaNilai(_kOtomatis);
     return PrinterTerpilih(
       printer: (mac == null || mac.isEmpty)
           ? null
           : PrinterTersimpan(nama: nama ?? mac, mac: mac),
       lebar: lebar == '80' ? PaperSize.mm80 : PaperSize.mm58,
+      otomatis: otomatis == '1',
     );
   }
 
@@ -59,6 +76,13 @@ class PrinterTerpilihNotifier extends AsyncNotifier<PrinterTerpilih> {
         .tulisNilai(_kLebar, lebar == PaperSize.mm80 ? '80' : '58');
     state = AsyncData(
       (state.valueOrNull ?? const PrinterTerpilih()).copyWith(lebar: lebar),
+    );
+  }
+
+  Future<void> aturOtomatis(bool nyala) async {
+    await ref.read(secureStorageProvider).tulisNilai(_kOtomatis, nyala ? '1' : '0');
+    state = AsyncData(
+      (state.valueOrNull ?? const PrinterTerpilih()).copyWith(otomatis: nyala),
     );
   }
 

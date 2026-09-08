@@ -7,6 +7,7 @@ import '../../../../core/utils/format.dart';
 import '../../../cetak/data/struk_teks.dart';
 import '../../../cetak/domain/entities/struk.dart';
 import '../../../cetak/presentation/aksi_struk.dart';
+import '../../../cetak/presentation/providers/printer_providers.dart';
 
 /// Lembar hasil transaksi — kembalian besar, ringkasan, dan cetak struk.
 ///
@@ -37,6 +38,19 @@ class HasilTransaksiSheet extends ConsumerStatefulWidget {
 
 class _HasilTransaksiSheetState extends ConsumerState<HasilTransaksiSheet> {
   bool _mencetak = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Pengaturan → Printer Struk → "Cetak struk otomatis": struk keluar
+    // sendiri begitu lembar hasil tampil, tanpa kasir menekan apa pun.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (ref.read(printerTerpilihProvider).valueOrNull?.cetakOtomatis ?? false) {
+        _cetak();
+      }
+    });
+  }
 
   Future<void> _cetak() async {
     setState(() => _mencetak = true);
