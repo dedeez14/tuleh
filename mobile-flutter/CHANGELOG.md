@@ -5,6 +5,10 @@ sebagai isi Release GitHub (workflow flutter-release.yml), dan empat baris
 pertamanya tampil di banner pembaruan dalam aplikasi. Tulis untuk kasir, bukan
 untuk programmer.
 
+## 2.19.0
+
+- Riwayat bisa dicari dan disaring: ketik nomor nota, nominal (mis. "25000" atau "Rp 25.000"), atau metode pembayaran; pilih status (Semua / Selesai / Dibatalkan / Belum sinkron) dan rentang (Hari ini / 7 hari / 30 hari). Penyaringan berjalan di HP sehingga tetap bekerja saat offline, termasuk untuk struk yang belum terkirim.
+
 ## 2.18.0
 
 - Bagikan ringkasan laporan dari layar Laporan (ikon bagikan di bilah atas): omzet, jumlah transaksi, pengeluaran, laba, rata-rata per transaksi, omzet 8 hari terakhir, dan rekap kasir — siap dikirim lewat WhatsApp atau disimpan sebagai catatan. Tidak tersedia di Mode Demo, sama seperti ekspor laporan di aplikasi Windows.

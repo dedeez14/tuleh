@@ -8,6 +8,7 @@ import '../../../../core/widgets/app_background.dart';
 import '../../../../core/widgets/motion.dart';
 import '../../../../core/widgets/states.dart';
 import '../../domain/entities/transaksi.dart';
+import '../../domain/saring_riwayat.dart';
 import '../providers/riwayat_providers.dart';
 import 'detail_transaksi_screen.dart';
 
@@ -25,6 +26,31 @@ class _RiwayatScreenState extends ConsumerState<RiwayatScreen> {
   /// Transaksi yang dibuka di panel kanan (tablet). Di ponsel detail dibuka
   /// sebagai layar sendiri.
   String? _terpilihId;
+
+  final _cariCtrl = TextEditingController();
+  String _kueri = '';
+  SaringStatus _status = SaringStatus.semua;
+  SaringRentang _rentang = SaringRentang.semua;
+
+  bool get _adaSaringan =>
+      _kueri.trim().isNotEmpty ||
+      _status != SaringStatus.semua ||
+      _rentang != SaringRentang.semua;
+
+  void _bersihkanSaringan() {
+    _cariCtrl.clear();
+    setState(() {
+      _kueri = '';
+      _status = SaringStatus.semua;
+      _rentang = SaringRentang.semua;
+    });
+  }
+
+  @override
+  void dispose() {
+    _cariCtrl.dispose();
+    super.dispose();
+  }
 
   void _buka(BuildContext context, Transaksi trx) {
     if (layarLebar(context)) {
@@ -53,24 +79,66 @@ class _RiwayatScreenState extends ConsumerState<RiwayatScreen> {
                 ),
               ],
             ),
-            data: (list) => list.isEmpty
-                ? ListView(
-                    children: const [
-                      SizedBox(height: 60),
-                      KeadaanKosong(
-                        ikon: Icons.receipt_long_outlined,
-                        judul: 'Belum ada transaksi',
-                        detail: 'Transaksi dari kasir akan tercatat di sini.',
+            data: (list) {
+              if (list.isEmpty) {
+                return ListView(
+                  children: const [
+                    SizedBox(height: 60),
+                    KeadaanKosong(
+                      ikon: Icons.receipt_long_outlined,
+                      judul: 'Belum ada transaksi',
+                      detail: 'Transaksi dari kasir akan tercatat di sini.',
+                    ),
+                  ],
+                );
+              }
+              final tersaring = saringRiwayat(
+                list,
+                kueri: _kueri,
+                status: _status,
+                rentang: _rentang,
+              );
+              if (tersaring.isEmpty) {
+                return ListView(
+                  children: [
+                    const SizedBox(height: 40),
+                    KeadaanKosong(
+                      ikon: Icons.search_off_rounded,
+                      judul: 'Tidak ada transaksi yang cocok',
+                      detail: 'Ubah kata kunci, status, atau rentang tanggalnya.',
+                      aksi: OutlinedButton(
+                        onPressed: _bersihkanSaringan,
+                        child: const Text('Hapus saringan'),
                       ),
-                    ],
-                  )
-                : _DaftarPerHari(
-                    list: list,
-                    terpilihId: lebar ? _terpilihId : null,
-                    onBuka: (t) => _buka(context, t),
-                  ),
+                    ),
+                  ],
+                );
+              }
+              return _DaftarPerHari(
+                list: tersaring,
+                terpilihId: lebar ? _terpilihId : null,
+                onBuka: (t) => _buka(context, t),
+              );
+            },
           ),
         );
+
+    final panelKiri = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _BilahSaring(
+          ctrl: _cariCtrl,
+          status: _status,
+          rentang: _rentang,
+          adaSaringan: _adaSaringan,
+          onKueri: (v) => setState(() => _kueri = v),
+          onStatus: (v) => setState(() => _status = v),
+          onRentang: (v) => setState(() => _rentang = v),
+          onBersihkan: _bersihkanSaringan,
+        ),
+        Expanded(child: daftar),
+      ],
+    );
 
     return Scaffold(
       appBar: AppBar(title: const Text('Riwayat')),
@@ -81,7 +149,7 @@ class _RiwayatScreenState extends ConsumerState<RiwayatScreen> {
             ? Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  SizedBox(width: 420, child: daftar),
+                  SizedBox(width: 420, child: panelKiri),
                   const VerticalDivider(width: 1),
                   Expanded(
                     child: _terpilihId == null
@@ -98,7 +166,98 @@ class _RiwayatScreenState extends ConsumerState<RiwayatScreen> {
                   ),
                 ],
               )
-            : daftar,
+            : panelKiri,
+      ),
+    );
+  }
+}
+
+/// Bilah pencarian + penyaring status & rentang tanggal. Penyaringan
+/// dilakukan di perangkat atas daftar yang sudah dimuat, sehingga tetap
+/// bekerja saat offline (termasuk untuk transaksi yang belum sinkron).
+class _BilahSaring extends StatelessWidget {
+  const _BilahSaring({
+    required this.ctrl,
+    required this.status,
+    required this.rentang,
+    required this.adaSaringan,
+    required this.onKueri,
+    required this.onStatus,
+    required this.onRentang,
+    required this.onBersihkan,
+  });
+
+  final TextEditingController ctrl;
+  final SaringStatus status;
+  final SaringRentang rentang;
+  final bool adaSaringan;
+  final ValueChanged<String> onKueri;
+  final ValueChanged<SaringStatus> onStatus;
+  final ValueChanged<SaringRentang> onRentang;
+  final VoidCallback onBersihkan;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            controller: ctrl,
+            onChanged: onKueri,
+            textInputAction: TextInputAction.search,
+            decoration: InputDecoration(
+              isDense: true,
+              hintText: 'Cari nomor, nominal, atau metode…',
+              prefixIcon: const Icon(Icons.search_rounded, size: 20),
+              suffixIcon: ctrl.text.isEmpty
+                  ? null
+                  : IconButton(
+                      tooltip: 'Hapus pencarian',
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                      onPressed: () {
+                        ctrl.clear();
+                        onKueri('');
+                      },
+                    ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 36,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                for (final s in SaringStatus.values) ...[
+                  ChoiceChip(
+                    label: Text(s.label),
+                    selected: status == s,
+                    onSelected: (_) => onStatus(s),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                Container(width: 1, height: 20, color: cs.outlineVariant, margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8)),
+                const SizedBox(width: 8),
+                for (final r in SaringRentang.values) ...[
+                  ChoiceChip(
+                    label: Text(r.label),
+                    selected: rentang == r,
+                    onSelected: (_) => onRentang(r),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                if (adaSaringan)
+                  TextButton.icon(
+                    onPressed: onBersihkan,
+                    icon: const Icon(Icons.filter_alt_off_outlined, size: 18),
+                    label: const Text('Hapus'),
+                  ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
