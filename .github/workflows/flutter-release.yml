@@ -120,15 +120,36 @@ jobs:
         with:
           path: artifacts
       - name: Ambil catatan rilis dari CHANGELOG
-        # Bagian "## <versi>" di mobile-flutter/CHANGELOG.md → isi Release. Empat
-        # baris pertamanya tampil di banner pembaruan dalam aplikasi, jadi tulis
-        # untuk kasir. Bila bagian tak ada, Release tetap terbit (catatan otomatis).
+        # Isi Release = SEMUA bagian "## X.Y.Z" sejak rilis terakhir yang terbit,
+        # bukan hanya versi ini. Push beruntun membuat sebagian run rilis
+        # dibatalkan saat masih antre (aturan concurrency GitHub), jadi versi di
+        # tengah tak pernah punya Release sendiri — catatannya tetap harus sampai
+        # ke pengguna. Empat baris pertama tampil di banner pembaruan aplikasi.
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           VER="${{ needs.version-check.outputs.version }}"
-          awk -v v="$VER" '
-            /^## /{ aktif = ($2 == v); next }
+          # Versi rilis Flutter terakhir yang sudah terbit (kosong bila belum ada).
+          TERAKHIR=$(gh release list -R "${{ github.repository }}" --limit 60 \
+            --json tagName --jq '[.[] | select(.tagName | startswith("flutter-v"))][0].tagName' 2>/dev/null || true)
+          TERAKHIR="${TERAKHIR#flutter-v}"
+          echo "Rilis terakhir: ${TERAKHIR:-(belum ada)} — sekarang: $VER"
+          awk -v v="$VER" -v sejak="$TERAKHIR" '
+            # Kumpulkan bagian dari versi ini ke bawah sampai bertemu versi yang
+            # sudah pernah terbit.
+            /^## /{
+              if ($2 == v) { aktif = 1; print; next }
+              if (aktif && sejak != "" && $2 == sejak) { aktif = 0; next }
+              if (aktif) { print; next }
+              next
+            }
             aktif { print }
           ' mobile-flutter/CHANGELOG.md | sed -e '/./,$!d' > catatan.md
+          # Satu versi saja: judulnya mubazir (nama Release sudah memuat versi).
+          if [ "$(grep -c '^## ' catatan.md || echo 0)" = "1" ]; then
+            sed -i '1{/^## /d}' catatan.md
+            sed -i -e '/./,$!d' catatan.md
+          fi
           if [ -s catatan.md ]; then echo "Catatan rilis $VER:"; cat catatan.md; else echo "::warning::CHANGELOG tak punya bagian $VER"; fi
       - name: Terbitkan Release
         uses: softprops/action-gh-release@v2
