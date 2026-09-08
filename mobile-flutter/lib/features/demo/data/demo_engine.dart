@@ -214,6 +214,31 @@ class DemoEngine {
     return _ok(t);
   }
 
+  /// Produk terlaris toko: akumulasi item dari transaksi SELESAI, terurut
+  /// nilai terbesar — bentuk sama dengan desktop (produk, qty_terjual,
+  /// total_nilai).
+  List<Map<String, dynamic>> _penjualanProduk(String toko) {
+    final per = <String, Map<String, dynamic>>{};
+    for (final t in _transaksi) {
+      if (t['toko_id'] != toko) continue;
+      if ('${t['status']}'.toUpperCase() != 'SELESAI') continue;
+      for (final it in (t['items'] as List? ?? const []).cast<Map>()) {
+        final nama = '${it['nama']}';
+        final baris = per.putIfAbsent(
+          nama,
+          () => {'produk': nama, 'qty_terjual': 0.0, 'total_nilai': 0.0},
+        );
+        baris['qty_terjual'] =
+            (baris['qty_terjual'] as double) + ((it['kuantitas'] as num?)?.toDouble() ?? 0);
+        baris['total_nilai'] =
+            (baris['total_nilai'] as double) + ((it['subtotal'] as num?)?.toDouble() ?? 0);
+      }
+    }
+    final out = per.values.toList()
+      ..sort((a, b) => (b['total_nilai'] as double).compareTo(a['total_nilai'] as double));
+    return out;
+  }
+
   void _kurangiDariSesi(Map<String, dynamic> sesi, String tipe, double grand) {
     final kunci = switch (tipe) {
       'TUNAI' => 'total_tunai',
@@ -438,6 +463,9 @@ class DemoEngine {
     if (path == '/laporan/keuangan') return _ok(_laporanKeuangan(toko));
     if (path == '/laporan/penjualan-harian') {
       return _ok({'rows': _penjualanHarian(toko)}); // kontrak: {rows: []}
+    }
+    if (path == '/laporan/penjualan-produk') {
+      return _ok(_penjualanProduk(toko));
     }
     if (path == '/laporan/rekap-kasir') {
       return _ok(_sesi.where((s) => s['toko_id'] == toko).toList());

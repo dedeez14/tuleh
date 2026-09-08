@@ -7,6 +7,7 @@ import '../../data/datasources/laporan_remote_datasource.dart';
 import '../../data/repositories/laporan_repository_impl.dart';
 import '../../domain/entities/laporan_keuangan.dart';
 import '../../domain/entities/penjualan_hari.dart';
+import '../../domain/entities/penjualan_produk.dart';
 import '../../domain/repositories/laporan_repository.dart';
 
 final laporanRepositoryProvider = Provider<LaporanRepository>(
@@ -22,6 +23,12 @@ final laporanKeuanganProvider = FutureProvider<LaporanKeuangan>((ref) async {
 final penjualanHarianProvider = FutureProvider<List<PenjualanHari>>((ref) async {
   ref.watch(activeTokoIdProvider);
   final r = await ref.watch(laporanRepositoryProvider).penjualanHarian();
+  return r.when(ok: (v) => v, err: (e) => throw e);
+});
+
+final penjualanProdukProvider = FutureProvider<List<PenjualanProduk>>((ref) async {
+  ref.watch(activeTokoIdProvider);
+  final r = await ref.watch(laporanRepositoryProvider).penjualanProduk();
   return r.when(ok: (v) => v, err: (e) => throw e);
 });
 

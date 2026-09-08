@@ -5,6 +5,10 @@ sebagai isi Release GitHub (workflow flutter-release.yml), dan empat baris
 pertamanya tampil di banner pembaruan dalam aplikasi. Tulis untuk kasir, bukan
 untuk programmer.
 
+## 2.21.0
+
+- Laporan punya bagian **Produk terlaris**: lima teratas menurut nilai penjualan, lengkap dengan jumlah terjual dan bilah perbandingan terhadap produk teratas. Ikut terbawa saat ringkasan laporan dibagikan.
+
 ## 2.20.1
 
 - Perbaikan: dialog Tambah Stok & Opname di detail produk tidak lagi memakai kotak isian yang sudah dilepas saat dialog menutup. Jumlah dengan koma desimal (mis. "2,5") tetap diterima.

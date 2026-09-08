@@ -13,6 +13,7 @@ import '../../../pengaturan/presentation/providers/pengaturan_providers.dart';
 import '../../../sesi/domain/entities/sesi_rekap.dart';
 import '../../domain/entities/laporan_keuangan.dart';
 import '../../domain/entities/penjualan_hari.dart';
+import '../../domain/entities/penjualan_produk.dart';
 import '../../domain/laporan_teks.dart';
 import '../providers/laporan_providers.dart';
 import '../widgets/grafik_penjualan.dart';
@@ -29,6 +30,7 @@ class LaporanScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final keuangan = ref.watch(laporanKeuanganProvider);
     final harian = ref.watch(penjualanHarianProvider);
+    final terlaris = ref.watch(penjualanProdukProvider);
     final rekap = ref.watch(rekapKasirProvider);
 
     return Scaffold(
@@ -52,6 +54,7 @@ class LaporanScreen extends ConsumerWidget {
           onRefresh: () async {
             ref.invalidate(laporanKeuanganProvider);
             ref.invalidate(penjualanHarianProvider);
+            ref.invalidate(penjualanProdukProvider);
             ref.invalidate(rekapKasirProvider);
           },
           child: ListView(
@@ -114,6 +117,29 @@ class LaporanScreen extends ConsumerWidget {
               const SizedBox(height: 24),
               const MunculBertahap(
                 urutan: 5,
+                child: _JudulBagian(
+                  teks: 'Produk terlaris',
+                  catatan: 'Lima teratas menurut nilai penjualan.',
+                ),
+              ),
+              const SizedBox(height: 10),
+              terlaris.when(
+                loading: () => const _KerangkaKotak(tinggi: 140),
+                error: (e, _) => KeadaanGagal(
+                  error: e,
+                  onUlangi: () => ref.invalidate(penjualanProdukProvider),
+                ),
+                data: (rows) => rows.isEmpty
+                    ? const KeadaanKosong(
+                        ikon: Icons.local_fire_department_outlined,
+                        judul: 'Belum ada produk terjual',
+                        detail: 'Peringkat muncul setelah ada transaksi.',
+                      )
+                    : _KartuTerlaris(rows: rows.take(5).toList()),
+              ),
+              const SizedBox(height: 24),
+              const MunculBertahap(
+                urutan: 6,
                 child: _JudulBagian(teks: 'Rekap kasir'),
               ),
               const SizedBox(height: 10),
@@ -165,6 +191,7 @@ Future<void> _bagikan(BuildContext context, WidgetRef ref, LaporanKeuangan k) as
     namaToko: nama,
     keuangan: k,
     harian: ref.read(penjualanHarianProvider).valueOrNull ?? const [],
+    terlaris: ref.read(penjualanProdukProvider).valueOrNull ?? const [],
     rekap: ref.read(rekapKasirProvider).valueOrNull ?? const [],
   );
   await SharePlus.instance.share(
@@ -280,6 +307,118 @@ class _RingkasanKeuangan extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Peringkat produk terlaris: nomor, nama, kuantitas, dan nilai penjualan,
+/// dengan bilah proporsi terhadap produk teratas agar bedanya terbaca sekilas.
+class _KartuTerlaris extends StatelessWidget {
+  const _KartuTerlaris({required this.rows});
+
+  final List<PenjualanProduk> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tertinggi = rows.first.totalNilai;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.5)),
+      ),
+      child: Column(
+        children: [
+          for (var i = 0; i < rows.length; i++)
+            Padding(
+              padding: EdgeInsets.only(bottom: i == rows.length - 1 ? 6 : 14),
+              child: _BarisTerlaris(
+                peringkat: i + 1,
+                baris: rows[i],
+                proporsi: tertinggi > 0 ? rows[i].totalNilai / tertinggi : 0,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BarisTerlaris extends StatelessWidget {
+  const _BarisTerlaris({
+    required this.peringkat,
+    required this.baris,
+    required this.proporsi,
+  });
+
+  final int peringkat;
+  final PenjualanProduk baris;
+  final double proporsi;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 22,
+              height: 22,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: peringkat == 1
+                    ? AppColors.mint400.withValues(alpha: 0.35)
+                    : cs.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(7),
+              ),
+              child: Text(
+                '$peringkat',
+                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                baris.produk,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              fmtIDR(baris.totalNilai),
+              style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.mint600),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            const SizedBox(width: 32),
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(999),
+                child: LinearProgressIndicator(
+                  value: proporsi.clamp(0, 1),
+                  minHeight: 6,
+                  backgroundColor: cs.surfaceContainerHighest,
+                  valueColor: const AlwaysStoppedAnimation(AppColors.mint400),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              '${fmtQty(baris.qtyTerjual)} terjual',
+              style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.6)),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

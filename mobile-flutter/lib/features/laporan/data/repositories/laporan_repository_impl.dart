@@ -3,6 +3,7 @@ import '../../../../core/network/api_result.dart';
 import '../../../sesi/domain/entities/sesi_rekap.dart';
 import '../../domain/entities/laporan_keuangan.dart';
 import '../../domain/entities/penjualan_hari.dart';
+import '../../domain/entities/penjualan_produk.dart';
 import '../../domain/repositories/laporan_repository.dart';
 import '../datasources/laporan_remote_datasource.dart';
 
@@ -24,6 +25,15 @@ class LaporanRepositoryImpl implements LaporanRepository {
   Future<Result<List<PenjualanHari>>> penjualanHarian() async {
     try {
       return Ok(await remote.penjualanHarian());
+    } on ApiException catch (e) {
+      return Err(e);
+    }
+  }
+
+  @override
+  Future<Result<List<PenjualanProduk>>> penjualanProduk() async {
+    try {
+      return Ok(await remote.penjualanProduk());
     } on ApiException catch (e) {
       return Err(e);
     }

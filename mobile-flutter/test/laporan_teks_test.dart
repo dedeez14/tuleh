@@ -4,6 +4,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tuleh_pos/features/laporan/domain/entities/laporan_keuangan.dart';
 import 'package:tuleh_pos/features/laporan/domain/entities/penjualan_hari.dart';
+import 'package:tuleh_pos/features/laporan/domain/entities/penjualan_produk.dart';
 import 'package:tuleh_pos/features/laporan/domain/laporan_teks.dart';
 import 'package:tuleh_pos/features/sesi/domain/entities/sesi_rekap.dart';
 
@@ -117,6 +118,28 @@ void main() {
     );
     expect(belumHitung, contains('SK-00008 · Kasir Demo: Rp 750.000\n'));
     expect(belumHitung, isNot(contains('kas ')));
+  });
+
+  test('produk terlaris: bernomor, dibatasi maksTerlaris, ikut kuantitas', () {
+    final teks = laporanTeks(
+      namaToko: 'X',
+      keuangan: _keuangan,
+      terlaris: const [
+        PenjualanProduk(produk: 'Kopi Susu', qtyTerjual: 120, totalNilai: 2160000),
+        PenjualanProduk(produk: 'Roti Bakar', qtyTerjual: 45, totalNilai: 675000),
+        PenjualanProduk(produk: 'Es Teh', qtyTerjual: 200, totalNilai: 600000),
+      ],
+      maksTerlaris: 2,
+    );
+    expect(teks, contains('*Produk terlaris*'));
+    expect(teks, contains('1. Kopi Susu: Rp 2.160.000 (120 terjual)'));
+    expect(teks, contains('2. Roti Bakar: Rp 675.000 (45 terjual)'));
+    expect(teks, isNot(contains('Es Teh')), reason: 'dibatasi maksTerlaris');
+  });
+
+  test('tanpa data terlaris, bagiannya tidak dicetak', () {
+    final teks = laporanTeks(namaToko: 'X', keuangan: _keuangan);
+    expect(teks, isNot(contains('Produk terlaris')));
   });
 
   test('jumlah sesi dibatasi maksSesi (yang terbaru saja)', () {

@@ -5,6 +5,7 @@ import '../../../../core/network/api_exception.dart';
 import '../../../sesi/domain/entities/sesi_rekap.dart';
 import '../../domain/entities/laporan_keuangan.dart';
 import '../../domain/entities/penjualan_hari.dart';
+import '../../domain/entities/penjualan_produk.dart';
 
 class LaporanRemoteDataSource {
   LaporanRemoteDataSource(this._dio);
@@ -38,6 +39,30 @@ class LaporanRemoteDataSource {
             totalOmzet: _double(Map<String, dynamic>.from(e)['total_omzet']),
           ),
     ];
+  }
+
+  /// GET /laporan/penjualan-produk → produk terlaris, terurut nilai terbesar.
+  /// Server bisa membalas list langsung atau {rows: []} seperti laporan lain.
+  Future<List<PenjualanProduk>> penjualanProduk() async {
+    final body = await _send(() => _dio.get<dynamic>('/laporan/penjualan-produk'));
+    final data = body['data'];
+    final rows = data is List
+        ? data
+        : (data is Map && data['rows'] is List ? data['rows'] as List : const []);
+    final hasil = [
+      for (final e in rows)
+        if (e is Map)
+          PenjualanProduk(
+            produk: (Map<String, dynamic>.from(e)['produk'] ??
+                    Map<String, dynamic>.from(e)['nama'] ??
+                    '-')
+                .toString(),
+            qtyTerjual: _double(Map<String, dynamic>.from(e)['qty_terjual']),
+            totalNilai: _double(Map<String, dynamic>.from(e)['total_nilai']),
+          ),
+    ];
+    hasil.sort((a, b) => b.totalNilai.compareTo(a.totalNilai));
+    return hasil;
   }
 
   /// GET /laporan/rekap-kasir → daftar sesi kasir + total (bentuk = SesiRekap).

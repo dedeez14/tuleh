@@ -197,6 +197,13 @@ Future<void> _jalankan(WidgetTester t) async {
       await simpan(t, nama);
     }
 
+    // Laporan bagian bawah: peringkat produk terlaris (di bawah lipatan).
+    router.go('/laporan');
+    await pompa(t, 40);
+    await t.drag(find.byType(ListView).first, const Offset(0, -1150));
+    await pompa(t, 20);
+    await simpan(t, 'laporan-terlaris');
+
     // Keranjang terisi + lembar bayar.
     router.go('/kasir');
     await pompa(t, 30);

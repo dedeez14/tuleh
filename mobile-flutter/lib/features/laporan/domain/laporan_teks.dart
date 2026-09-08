@@ -2,6 +2,7 @@ import '../../../core/utils/format.dart';
 import '../../sesi/domain/entities/sesi_rekap.dart';
 import 'entities/laporan_keuangan.dart';
 import 'entities/penjualan_hari.dart';
+import 'entities/penjualan_produk.dart';
 
 /// Ringkasan laporan sebagai teks siap kirim (WhatsApp/catatan).
 ///
@@ -12,9 +13,11 @@ String laporanTeks({
   required String namaToko,
   required LaporanKeuangan keuangan,
   List<PenjualanHari> harian = const [],
+  List<PenjualanProduk> terlaris = const [],
   List<SesiRekap> rekap = const [],
   int maksHari = 8,
   int maksSesi = 3,
+  int maksTerlaris = 5,
 }) {
   final b = StringBuffer()
     ..writeln('*Laporan $namaToko*')
@@ -41,6 +44,20 @@ String laporanTeks({
       b.writeln(
         '${fmtTanggalPendek(h.tanggal)}: ${fmtIDR(h.totalOmzet)}'
         ' (${fmtQty(h.jumlahTransaksi)} trx)',
+      );
+    }
+  }
+
+  final produk = terlaris.take(maksTerlaris).toList();
+  if (produk.isNotEmpty) {
+    b
+      ..writeln()
+      ..writeln('*Produk terlaris*');
+    for (var i = 0; i < produk.length; i++) {
+      final p = produk[i];
+      b.writeln(
+        '${i + 1}. ${p.produk}: ${fmtIDR(p.totalNilai)}'
+        ' (${fmtQty(p.qtyTerjual)} terjual)',
       );
     }
   }
