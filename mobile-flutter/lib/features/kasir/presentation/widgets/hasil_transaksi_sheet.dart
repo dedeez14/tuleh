@@ -44,12 +44,20 @@ class _HasilTransaksiSheetState extends ConsumerState<HasilTransaksiSheet> {
     super.initState();
     // Pengaturan → Printer Struk → "Cetak struk otomatis": struk keluar
     // sendiri begitu lembar hasil tampil, tanpa kasir menekan apa pun.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      if (ref.read(printerTerpilihProvider).valueOrNull?.cetakOtomatis ?? false) {
-        _cetak();
-      }
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _cetakOtomatisBilaDiatur());
+  }
+
+  /// Tunggu preferensi selesai dibaca dulu — pada transaksi pertama setiap
+  /// sesi aplikasi providernya masih memuat, dan cuplikan seketika akan
+  /// mengembalikan null (dulu: struk pertama diam-diam tidak tercetak).
+  Future<void> _cetakOtomatisBilaDiatur() async {
+    try {
+      final pref = await ref.read(printerTerpilihProvider.future);
+      if (!mounted || !pref.cetakOtomatis) return;
+    } catch (_) {
+      return; // penyimpanan bermasalah — kasir masih bisa menekan Cetak
+    }
+    await _cetak();
   }
 
   Future<void> _cetak() async {

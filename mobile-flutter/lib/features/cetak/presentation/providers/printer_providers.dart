@@ -90,6 +90,9 @@ class PrinterTerpilihNotifier extends AsyncNotifier<PrinterTerpilih> {
     final s = ref.read(secureStorageProvider);
     await s.tulisNilai(_kMac, null);
     await s.tulisNilai(_kNama, null);
+    // Cetak otomatis ikut dimatikan: kalau tidak, memilih printer baru nanti
+    // langsung menyalakannya lagi tanpa pengguna pernah memintanya.
+    await s.tulisNilai(_kOtomatis, '0');
     await ref.read(printerServiceProvider).putuskan();
     state = AsyncData(PrinterTerpilih(lebar: state.valueOrNull?.lebar ?? PaperSize.mm58));
   }

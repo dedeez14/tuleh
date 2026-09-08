@@ -5,6 +5,12 @@ sebagai isi Release GitHub (workflow flutter-release.yml), dan empat baris
 pertamanya tampil di banner pembaruan dalam aplikasi. Tulis untuk kasir, bukan
 untuk programmer.
 
+## 2.22.1
+
+- **Struk pertama setiap kali aplikasi dibuka kini ikut tercetak otomatis.** Sebelumnya preferensi printer belum selesai dibaca saat lembar hasil muncul, jadi transaksi pertama selalu terlewat (dan "Cetak ulang" pertama keliru bilang printer belum dipilih).
+- Keranjang terparkir tidak lagi bisa hilang: isinya langsung dipindahkan ke keranjang begitu diambil dari penyimpanan, meski layar keburu tertutup.
+- "Lupakan printer" sekaligus mematikan cetak otomatis, supaya tidak menyala sendiri saat printer berikutnya dipilih.
+
 ## 2.22.0
 
 Perbaikan dari pemeriksaan menyeluruh kode rilis terakhir:

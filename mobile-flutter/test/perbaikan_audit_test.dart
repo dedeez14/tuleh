@@ -19,7 +19,11 @@ import 'package:tuleh_pos/features/demo/data/demo_engine.dart';
 import 'package:tuleh_pos/features/demo/data/masa_coba_service.dart';
 import 'package:tuleh_pos/features/kasir/presentation/controllers/cart_controller.dart';
 import 'package:tuleh_pos/features/kasir/presentation/controllers/keranjang_meta.dart';
+import 'package:tuleh_pos/features/kasir/data/parkir_store.dart';
+import 'package:tuleh_pos/features/kasir/domain/entities/cart_item.dart';
 import 'package:tuleh_pos/features/kasir/presentation/widgets/cart_sheet.dart';
+import 'package:tuleh_pos/features/kasir/presentation/widgets/hasil_transaksi_sheet.dart';
+import 'package:tuleh_pos/features/kasir/presentation/widgets/parkir_sheet.dart';
 import 'package:tuleh_pos/features/kasir/presentation/widgets/keranjang_kartu_tambahan.dart';
 import 'package:tuleh_pos/features/meja/domain/entities/bill_detail.dart';
 import 'package:tuleh_pos/features/meja/domain/repositories/meja_repository.dart';
@@ -29,6 +33,7 @@ import 'package:tuleh_pos/features/products/domain/entities/product.dart';
 import 'package:tuleh_pos/features/toko/presentation/providers/toko_providers.dart';
 
 import 'helpers/masa_coba_palsu.dart';
+import 'helpers/parkir_memori.dart';
 
 class _Storage extends SecureStorage {
   _Storage([Map<String, String>? awal]) : super(const FlutterSecureStorage()) {
@@ -486,6 +491,107 @@ void main() {
           .first;
       e.handle(method: 'POST', path: '/transaksi/${trx['id']}/batal', query: tokoBakso);
       expect(stokBakso(), stokAwal, reason: 'batal mengembalikan tepat yang dipotong');
+    });
+  });
+
+  group('cetak otomatis pada transaksi pertama sesi', () {
+    // Bug: preferensi printer dibaca async; cuplikan seketika di lembar hasil
+    // selalu null pada pemakaian pertama, jadi struk pertama tiap sesi tidak
+    // pernah tercetak meski saklarnya nyala.
+    testWidgets('provider belum sempat dimuat pun struk tetap tercetak', (t) async {
+      final printer = _PrinterPalsu();
+      late final ProviderContainer c;
+      await t.runAsync(() async {
+        c = ProviderContainer(
+          overrides: [
+            secureStorageProvider.overrideWithValue(
+              _Storage({
+                'printer_mac': '00:11:22:33:44:55',
+                'printer_nama': 'RPP02',
+                'printer_otomatis': '1',
+              }),
+            ),
+            masaCobaServiceProvider.overrideWithValue(MasaCobaPalsu()),
+            printerServiceProvider.overrideWithValue(printer),
+            ...overrideOffline(antrean: AntreanMemori()),
+          ],
+        );
+      });
+      addTearDown(c.dispose);
+      // Sengaja TIDAK memanaskan printerTerpilihProvider lebih dulu.
+
+      await t.pumpWidget(UncontrolledProviderScope(
+        container: c,
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          home: Scaffold(
+            body: HasilTransaksiSheet(
+              struk: Struk(
+                namaToko: 'X',
+                nomor: 'TRX/0001',
+                waktu: DateTime(2026, 9, 9),
+                baris: const [StrukBaris(nama: 'Kopi', kuantitas: 1, harga: 18000)],
+                total: 18000,
+                metode: 'TUNAI',
+              ),
+              kembalian: 0,
+            ),
+          ),
+        ),
+      ));
+      await _pompa(t, 40);
+
+      expect(printer.dicetak.single.nomor, 'TRX/0001');
+    });
+  });
+
+  group('keranjang terparkir tidak boleh hilang', () {
+    testWidgets('isi dipindahkan ke keranjang walau layar keburu tertutup', (t) async {
+      final parkir = ParkirMemori();
+      late final ProviderContainer c;
+      await t.runAsync(() async {
+        c = ProviderContainer(
+          overrides: [
+            secureStorageProvider.overrideWithValue(_Storage()),
+            masaCobaServiceProvider.overrideWithValue(MasaCobaPalsu()),
+            parkirStoreProvider.overrideWithValue(parkir),
+            ...overrideOffline(antrean: AntreanMemori()),
+          ],
+        );
+        await c.read(activeTokoIdProvider.notifier).select('TOKO-1');
+      });
+      addTearDown(c.dispose);
+
+      final entri = await parkir.simpan(
+        'TOKO-1',
+        items: const [CartItem(product: Product(id: 'P1', nama: 'Kopi', harga: 18000), qty: 3)],
+      );
+
+      late BuildContext ctx;
+      late WidgetRef wref;
+      await t.pumpWidget(UncontrolledProviderScope(
+        container: c,
+        child: MaterialApp(
+          home: Scaffold(
+            body: Consumer(builder: (context, ref, _) {
+              ctx = context;
+              wref = ref;
+              return const SizedBox.expand();
+            }),
+          ),
+        ),
+      ));
+
+      final aksi = lanjutkanParkir(ctx, wref, entri);
+      // Layar diganti selagi entri sedang diambil dari penyimpanan.
+      await t.pumpWidget(const MaterialApp(home: Scaffold(body: Text('layar lain'))));
+      await _pompa(t, 20);
+      await aksi;
+
+      final isi = c.read(cartControllerProvider);
+      expect(isi.single.product.id, 'P1', reason: 'belanjaan tidak boleh menguap');
+      expect(isi.single.qty, 3);
+      expect(await parkir.daftar('TOKO-1'), isEmpty);
     });
   });
 }

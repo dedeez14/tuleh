@@ -82,15 +82,20 @@ Future<bool> lanjutkanParkir(BuildContext context, WidgetRef ref, KeranjangParki
   final tokoId = ref.read(activeTokoIdProvider).valueOrNull;
   final entri = await ref.read(parkirStoreProvider).ambil(tokoId, p.id);
   ref.read(parkirVersiProvider.notifier).state++;
-  if (!context.mounted) return false;
+  // PENTING: entri sudah dihapus dari penyimpanan, jadi isinya harus segera
+  // dipindahkan ke keranjang. Pemeriksaan context ditunda sampai setelah itu —
+  // kalau tidak, layar yang keburu tertutup membuat belanjaan hilang permanen.
+  if (entri != null) {
+    ref.read(cartControllerProvider.notifier).ganti(entri.items);
+    ref.read(keranjangMetaProvider.notifier).atur(entri.meta);
+  }
+  if (!context.mounted) return entri != null;
   if (entri == null) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(const SnackBar(content: Text('Keranjang itu sudah tidak ada.')));
     return false;
   }
-  ref.read(cartControllerProvider.notifier).ganti(entri.items);
-  ref.read(keranjangMetaProvider.notifier).atur(entri.meta);
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
     ..showSnackBar(SnackBar(content: Text('Keranjang #${entri.nomor} dilanjutkan.')));
