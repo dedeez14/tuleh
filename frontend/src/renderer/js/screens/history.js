@@ -5,6 +5,7 @@ import { api, firstError } from '../api.js'
 import { esc, fmtIDR, fmtNumber, fmtDateTime, toISODate, daysAgo } from '../utils/format.js'
 import { toast, showModal, confirmDialog, emptyStateHTML, loadingHTML, icons } from '../components/ui.js'
 import { buildReceiptHTML, printReceipt, tombolBagikanStruk } from '../components/receipt.js'
+import { cariRiwayat } from '../lib/cari-riwayat.js'
 
 const DEFAULT_RANGE_DAYS = 6
 
@@ -55,6 +56,10 @@ export const HistoryScreen = {
             <label class="hst-filter__label" for="hst-sampai">Sampai</label>
             <input class="input" type="date" id="hst-sampai" value="${toISODate(new Date())}" />
           </div>
+          <div class="hst-filter__group hst-filter__group--cari">
+            <label class="hst-filter__label" for="hst-cari">Cari</label>
+            <input class="input" type="search" id="hst-cari" placeholder="Nomor, nominal, atau metode…" autocomplete="off" />
+          </div>
           <div class="hst-filter__group">
             <label class="hst-filter__label" for="hst-status">Status</label>
             <select class="select" id="hst-status">
@@ -85,6 +90,7 @@ export const HistoryScreen = {
     const elDari = container.querySelector('#hst-dari')
     const elSampai = container.querySelector('#hst-sampai')
     const elStatus = container.querySelector('#hst-status')
+    const elCari = container.querySelector('#hst-cari')
     const tableArea = container.querySelector('#hst-table-area')
     const kpiCount = container.querySelector('#hst-kpi-count')
     const kpiTotal = container.querySelector('#hst-kpi-total')
@@ -117,12 +123,15 @@ export const HistoryScreen = {
 
     function renderRows(rows) {
       if (rows.length === 0) {
+        const mencari = elCari.value.trim().length > 0
         tableArea.innerHTML = `
           <div class="table-wrap">
             ${emptyStateHTML({
-              icon: icons.history,
-              title: 'Tidak ada transaksi',
-              desc: 'Belum ada transaksi pada rentang ini. Coba perlebar rentang tanggal atau ubah filter status.'
+              icon: mencari ? icons.search : icons.history,
+              title: mencari ? 'Tidak ada yang cocok' : 'Tidak ada transaksi',
+              desc: mencari
+                ? `Tidak ada transaksi yang cocok dengan "${esc(elCari.value.trim())}" pada rentang ini.`
+                : 'Belum ada transaksi pada rentang ini. Coba perlebar rentang tanggal atau ubah filter status.'
             })}
           </div>`
         return
@@ -181,7 +190,14 @@ export const HistoryScreen = {
       if (elStatus.value === 'OK') loadedRows = loadedRows.filter((trx) => !isVoided(trx.status))
       else if (elStatus.value === 'DIBATALKAN') loadedRows = loadedRows.filter((trx) => isVoided(trx.status))
       updateKpis(loadedRows)
-      renderRows(loadedRows)
+      terapkanPencarian()
+    }
+
+    // Pencarian berjalan atas baris yang sudah dimuat: tidak memanggil server
+    // lagi, jadi tetap bekerja saat offline. KPI tetap menghitung seluruh
+    // rentang agar angka "hari ini" tidak berubah saat kasir mengetik.
+    function terapkanPencarian() {
+      renderRows(cariRiwayat(loadedRows, elCari.value))
     }
 
     // ---------- Detail transaksi (modal struk) ----------
@@ -284,6 +300,13 @@ export const HistoryScreen = {
     // ---------- Event ----------
 
     container.querySelector('#hst-apply').addEventListener('click', loadData)
+    // Ketik = saring langsung (tanpa tombol Terapkan); Esc mengosongkan.
+    elCari.addEventListener('input', terapkanPencarian)
+    elCari.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape' || !elCari.value) return
+      elCari.value = ''
+      terapkanPencarian()
+    })
     container.querySelector('#hst-refresh').addEventListener('click', loadData)
     tableArea.addEventListener('click', onRowActivate)
     tableArea.addEventListener('keydown', (event) => {

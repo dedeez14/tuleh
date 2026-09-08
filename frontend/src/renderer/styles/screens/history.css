@@ -36,6 +36,17 @@
   width: 184px;
 }
 
+/* Kotak cari melebar mengisi sisa baris filter, tetapi tidak menekan
+   kolom tanggal/status di jendela sempit. */
+.hst-filter__group--cari {
+  flex: 1 1 220px;
+  min-width: 200px;
+}
+
+.hst-filter__group--cari .input {
+  width: 100%;
+}
+
 /* ---------- Baris KPI ---------- */
 
 .hst-kpis {
