@@ -1,0 +1,502 @@
+[
+  {
+    "tag_name": "v0.9.23",
+    "draft": false,
+    "prerelease": false,
+    "body": "**Full Changelog**: https://github.com/dedeez14/tuleh/compare/v0.9.22...v0.9.23",
+    "assets": [
+      {
+        "name": "latest.yml",
+        "size": 341,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/v0.9.23/latest.yml"
+      },
+      {
+        "name": "Tuleh-0.9.23-android.apk",
+        "size": 12387416,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/v0.9.23/Tuleh-0.9.23-android.apk"
+      },
+      {
+        "name": "Tuleh-Setup-0.9.23.exe",
+        "size": 90987536,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/v0.9.23/Tuleh-Setup-0.9.23.exe"
+      },
+      {
+        "name": "Tuleh-Setup-0.9.23.exe.blockmap",
+        "size": 96444,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/v0.9.23/Tuleh-Setup-0.9.23.exe.blockmap"
+      }
+    ]
+  },
+  {
+    "tag_name": "v0.9.22",
+    "draft": false,
+    "prerelease": false,
+    "body": "**Full Changelog**: https://github.com/dedeez14/tuleh/compare/v0.9.21...v0.9.22",
+    "assets": [
+      {
+        "name": "latest.yml",
+        "size": 341,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/v0.9.22/latest.yml"
+      },
+      {
+        "name": "Tuleh-0.9.22-android.apk",
+        "size": 12386482,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/v0.9.22/Tuleh-0.9.22-android.apk"
+      },
+      {
+        "name": "Tuleh-Setup-0.9.22.exe",
+        "size": 90987016,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/v0.9.22/Tuleh-Setup-0.9.22.exe"
+      },
+      {
+        "name": "Tuleh-Setup-0.9.22.exe.blockmap",
+        "size": 96221,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/v0.9.22/Tuleh-Setup-0.9.22.exe.blockmap"
+      }
+    ]
+  },
+  {
+    "tag_name": "flutter-v2.19.0",
+    "draft": false,
+    "prerelease": false,
+    "body": "- Riwayat bisa dicari dan disaring: ketik nomor nota, nominal (mis. \"25000\" atau \"Rp 25.000\"), atau metode pembayaran; pilih status (Semua / Selesai / Dibatalkan / Belum sinkron) dan rentang (Hari ini / 7 hari / 30 hari). Penyaringan berjalan di HP sehingga tetap bekerja saat offline, termasuk untuk struk yang belum terkirim.\n\n\n\n**Full Changelog**: https://github.com/dedeez14/tuleh/compare/flutter-v2.18.0...flutter-v2.19.0",
+    "assets": [
+      {
+        "name": "Tuleh-2.19.0-arm64-v8a.apk",
+        "size": 36092018,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/flutter-v2.19.0/Tuleh-2.19.0-arm64-v8a.apk"
+      },
+      {
+        "name": "Tuleh-2.19.0-armeabi-v7a.apk",
+        "size": 32322278,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/flutter-v2.19.0/Tuleh-2.19.0-armeabi-v7a.apk"
+      },
+      {
+        "name": "Tuleh-2.19.0-x86_64.apk",
+        "size": 38598762,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/flutter-v2.19.0/Tuleh-2.19.0-x86_64.apk"
+      }
+    ]
+  },
+  {
+    "tag_name": "flutter-v2.18.0",
+    "draft": false,
+    "prerelease": false,
+    "body": "- Bagikan ringkasan laporan dari layar Laporan (ikon bagikan di bilah atas): omzet, jumlah transaksi, pengeluaran, laba, rata-rata per transaksi, omzet 8 hari terakhir, dan rekap kasir — siap dikirim lewat WhatsApp atau disimpan sebagai catatan. Tidak tersedia di Mode Demo, sama seperti ekspor laporan di aplikasi Windows.\n- Cetak struk otomatis: nyalakan di Pengaturan → Printer Struk, lalu setiap pembayaran yang berhasil langsung dikirim ke printer thermal tanpa menekan tombol Cetak. Mati sendiri bila printer belum dipilih.\n- Opname untuk produk yang stoknya belum diketahui tidak lagi ditolak ",
+    "assets": [
+      {
+        "name": "Tuleh-2.18.0-arm64-v8a.apk",
+        "size": 36092018,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/flutter-v2.18.0/Tuleh-2.18.0-arm64-v8a.apk"
+      },
+      {
+        "name": "Tuleh-2.18.0-armeabi-v7a.apk",
+        "size": 32305894,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/flutter-v2.18.0/Tuleh-2.18.0-armeabi-v7a.apk"
+      },
+      {
+        "name": "Tuleh-2.18.0-x86_64.apk",
+        "size": 38533226,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/flutter-v2.18.0/Tuleh-2.18.0-x86_64.apk"
+      }
+    ]
+  },
+  {
+    "tag_name": "flutter-v2.17.0",
+    "draft": false,
+    "prerelease": false,
+    "body": "- Parkir keranjang di Kasir: belanjaan yang belum dibayar bisa disimpan (ikon P di keranjang) lalu dilanjutkan lewat ikon parkir di bilah atas — lengkap dengan pelanggan, diskon transaksi, dan catatannya. Tersimpan di perangkat per toko, paling banyak 20, tetap ada meski aplikasi ditutup.\n- Batalkan transaksi langsung dari detail Riwayat: stok kembali ke gudang dan penjualannya keluar dari laporan. Butuh internet; transaksi yang belum sinkron dibatalkan lewat Pengaturan → Sinkronisasi.\n- Opname stok di detail produk: catat barang rusak/hilang/selisih hitung dengan keterangan. Bisa saat offline",
+    "assets": [
+      {
+        "name": "Tuleh-2.17.0-arm64-v8a.apk",
+        "size": 36026482,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/flutter-v2.17.0/Tuleh-2.17.0-arm64-v8a.apk"
+      },
+      {
+        "name": "Tuleh-2.17.0-armeabi-v7a.apk",
+        "size": 32305894,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/flutter-v2.17.0/Tuleh-2.17.0-armeabi-v7a.apk"
+      },
+      {
+        "name": "Tuleh-2.17.0-x86_64.apk",
+        "size": 38533226,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/flutter-v2.17.0/Tuleh-2.17.0-x86_64.apk"
+      }
+    ]
+  },
+  {
+    "tag_name": "v0.9.21",
+    "draft": false,
+    "prerelease": false,
+    "body": "**Full Changelog**: https://github.com/dedeez14/tuleh/compare/v0.9.20...v0.9.21",
+    "assets": [
+      {
+        "name": "latest.yml",
+        "size": 341,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/v0.9.21/latest.yml"
+      },
+      {
+        "name": "Tuleh-0.9.21-android.apk",
+        "size": 12384637,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/v0.9.21/Tuleh-0.9.21-android.apk"
+      },
+      {
+        "name": "Tuleh-Setup-0.9.21.exe",
+        "size": 90985530,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/v0.9.21/Tuleh-Setup-0.9.21.exe"
+      },
+      {
+        "name": "Tuleh-Setup-0.9.21.exe.blockmap",
+        "size": 96490,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/v0.9.21/Tuleh-Setup-0.9.21.exe.blockmap"
+      }
+    ]
+  },
+  {
+    "tag_name": "v0.9.20",
+    "draft": false,
+    "prerelease": false,
+    "body": "**Full Changelog**: https://github.com/dedeez14/tuleh/compare/v0.9.19...v0.9.20",
+    "assets": [
+      {
+        "name": "latest.yml",
+        "size": 341,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/v0.9.20/latest.yml"
+      },
+      {
+        "name": "Tuleh-0.9.20-android.apk",
+        "size": 12384637,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/v0.9.20/Tuleh-0.9.20-android.apk"
+      },
+      {
+        "name": "Tuleh-Setup-0.9.20.exe",
+        "size": 90983323,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/v0.9.20/Tuleh-Setup-0.9.20.exe"
+      },
+      {
+        "name": "Tuleh-Setup-0.9.20.exe.blockmap",
+        "size": 96067,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/v0.9.20/Tuleh-Setup-0.9.20.exe.blockmap"
+      }
+    ]
+  },
+  {
+    "tag_name": "v0.9.19",
+    "draft": false,
+    "prerelease": false,
+    "body": "**Full Changelog**: https://github.com/dedeez14/tuleh/compare/v0.9.18...v0.9.19",
+    "assets": [
+      {
+        "name": "latest.yml",
+        "size": 341,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/v0.9.19/latest.yml"
+      },
+      {
+        "name": "Tuleh-0.9.19-android.apk",
+        "size": 12383997,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/v0.9.19/Tuleh-0.9.19-android.apk"
+      },
+      {
+        "name": "Tuleh-Setup-0.9.19.exe",
+        "size": 90982589,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/v0.9.19/Tuleh-Setup-0.9.19.exe"
+      },
+      {
+        "name": "Tuleh-Setup-0.9.19.exe.blockmap",
+        "size": 96498,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/v0.9.19/Tuleh-Setup-0.9.19.exe.blockmap"
+      }
+    ]
+  },
+  {
+    "tag_name": "v0.9.18",
+    "draft": false,
+    "prerelease": false,
+    "body": "**Full Changelog**: https://github.com/dedeez14/tuleh/compare/v0.9.17...v0.9.18",
+    "assets": [
+      {
+        "name": "latest.yml",
+        "size": 341,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/v0.9.18/latest.yml"
+      },
+      {
+        "name": "Tuleh-0.9.18-android.apk",
+        "size": 12379924,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/v0.9.18/Tuleh-0.9.18-android.apk"
+      },
+      {
+        "name": "Tuleh-Setup-0.9.18.exe",
+        "size": 90972374,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/v0.9.18/Tuleh-Setup-0.9.18.exe"
+      },
+      {
+        "name": "Tuleh-Setup-0.9.18.exe.blockmap",
+        "size": 96194,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/v0.9.18/Tuleh-Setup-0.9.18.exe.blockmap"
+      }
+    ]
+  },
+  {
+    "tag_name": "flutter-v2.16.0",
+    "draft": false,
+    "prerelease": false,
+    "body": "- Baris \"perlu ditinjau\" karena server tidak menjawab setelah data terkirim kini dipulihkan otomatis saat online: dicocokkan ke daftar transaksi server pada hari itu (total, metode, waktu ±15 menit). Tepat satu yang cocok → dianggap terkirim dengan nomor resminya; tidak ada → dikirim ulang otomatis; lebih dari satu → tetap ditinjau dengan petunjuk nomor kandidatnya.\n- Stok lokal ikut berkurang saat bon meja dibayar (dari pesanan yang dibuat offline), mengikuti aturan server yang memotong stok saat bon dilunasi.\n\n\n\n**Full Changelog**: https://github.com/dedeez14/tuleh/compare/flutter-v2.15.0...",
+    "assets": [
+      {
+        "name": "Tuleh-2.16.0-arm64-v8a.apk",
+        "size": 35960806,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/flutter-v2.16.0/Tuleh-2.16.0-arm64-v8a.apk"
+      },
+      {
+        "name": "Tuleh-2.16.0-armeabi-v7a.apk",
+        "size": 32240222,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/flutter-v2.16.0/Tuleh-2.16.0-armeabi-v7a.apk"
+      },
+      {
+        "name": "Tuleh-2.16.0-x86_64.apk",
+        "size": 38533086,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/flutter-v2.16.0/Tuleh-2.16.0-x86_64.apk"
+      }
+    ]
+  },
+  {
+    "tag_name": "flutter-v2.15.0",
+    "draft": false,
+    "prerelease": false,
+    "body": "- Sinkronisasi latar belakang: transaksi/pengeluaran/stok/sesi/bon yang diantrekan saat offline kini dikirim juga ketika aplikasi ditutup, begitu jaringan tersedia (WorkManager: tugas sekali jalan tiap ada antrean baru + berkala 15 menit). Kunci bersama mencegah kiriman ganda dengan pengurai di aplikasi.\n- Pengurai mengirim atas nama toko saat data dibuat, bukan toko yang sedang aktif.\n\n\n\n**Full Changelog**: https://github.com/dedeez14/tuleh/compare/v0.9.20...flutter-v2.15.0",
+    "assets": [
+      {
+        "name": "Tuleh-2.15.0-arm64-v8a.apk",
+        "size": 35960806,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/flutter-v2.15.0/Tuleh-2.15.0-arm64-v8a.apk"
+      },
+      {
+        "name": "Tuleh-2.15.0-armeabi-v7a.apk",
+        "size": 32207450,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/flutter-v2.15.0/Tuleh-2.15.0-armeabi-v7a.apk"
+      },
+      {
+        "name": "Tuleh-2.15.0-x86_64.apk",
+        "size": 38467550,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/flutter-v2.15.0/Tuleh-2.15.0-x86_64.apk"
+      }
+    ]
+  },
+  {
+    "tag_name": "flutter-v2.14.0",
+    "draft": false,
+    "prerelease": false,
+    "body": "- Pemindai barcode kamera di Kasir (ikon pindai di bilah atas): pindai beruntun, tiap barcode yang dikenal langsung masuk keranjang dengan umpan balik nama produk dan jumlah; barcode yang tidak dikenal diberi tahu. Ada tombol lampu dan ganti kamera. Cocok dengan katalog yang sudah termuat sehingga bekerja saat offline.\n- Form produk: tombol pindai untuk mengisi kolom barcode dari kamera.\n- Ukuran APK bertambah sekitar 16 MB karena model pembaca barcode disertakan (tidak bergantung layanan Google).\n\n\n\n**Full Changelog**: https://github.com/dedeez14/tuleh/compare/v0.9.19...flutter-v2.14.0",
+    "assets": [
+      {
+        "name": "Tuleh-2.14.0-arm64-v8a.apk",
+        "size": 35594717,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/flutter-v2.14.0/Tuleh-2.14.0-arm64-v8a.apk"
+      },
+      {
+        "name": "Tuleh-2.14.0-armeabi-v7a.apk",
+        "size": 31841361,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/flutter-v2.14.0/Tuleh-2.14.0-armeabi-v7a.apk"
+      },
+      {
+        "name": "Tuleh-2.14.0-x86_64.apk",
+        "size": 38167001,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/flutter-v2.14.0/Tuleh-2.14.0-x86_64.apk"
+      }
+    ]
+  },
+  {
+    "tag_name": "flutter-v2.13.1",
+    "draft": false,
+    "prerelease": false,
+    "body": "- Pembaruan aplikasi lebih andal: APK diunduh langsung oleh aplikasi (bukan lewat DownloadManager sistem yang dibatasi di sebagian HP), mengikuti pengalihan GitHub, memverifikasi ukuran berkas, dan mendeteksi unduhan macet; DownloadManager tinggal cadangan.\n- Sebelum pemasang dibuka, berkas diperiksa: paket, versi lebih baru, dan tanda tangan sama dengan yang terpasang. Bila tidak cocok (misalnya aplikasi terpasang dari build lokal), pesannya menjelaskan langkah yang harus dilakukan alih-alih \"Aplikasi tidak terpasang\" dari sistem.\n- Pesan galat unduhan menyebut sebabnya (HTTP, jaringan, macet",
+    "assets": [
+      {
+        "name": "Tuleh-2.13.1-arm64-v8a.apk",
+        "size": 27723153,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/flutter-v2.13.1/Tuleh-2.13.1-arm64-v8a.apk"
+      },
+      {
+        "name": "Tuleh-2.13.1-armeabi-v7a.apk",
+        "size": 25640155,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/flutter-v2.13.1/Tuleh-2.13.1-armeabi-v7a.apk"
+      },
+      {
+        "name": "Tuleh-2.13.1-x86_64.apk",
+        "size": 29224034,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/flutter-v2.13.1/Tuleh-2.13.1-x86_64.apk"
+      }
+    ]
+  },
+  {
+    "tag_name": "flutter-v2.13.0",
+    "draft": false,
+    "prerelease": false,
+    "body": "- Tablet (layar ≥ 720 dp) kini tampil ala desktop: kasir dua panel (katalog grid di kiri, keranjang menetap di kanan dengan langkah bayar di panel yang sama), riwayat master-detail (daftar di kiri, struk di kanan dengan Bagikan/Cetak ulang), beranda dua kolom, dan daftar Produk/Stok/Pengeluaran/Pelanggan/Sesi/Pengaturan/Laporan dibatasi lebarnya agar nyaman dibaca. Ponsel tetap memakai tata letak sebelumnya.\n- Hasil transaksi, pilih pelanggan, dan menu Lainnya tampil sebagai dialog di tablet, bukan lembar selebar layar.\n- Perbaikan: label saran nominal uang (Uang pas, Rp 20.000, …) sebelumnya ",
+    "assets": [
+      {
+        "name": "Tuleh-2.13.0-arm64-v8a.apk",
+        "size": 27657617,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/flutter-v2.13.0/Tuleh-2.13.0-arm64-v8a.apk"
+      },
+      {
+        "name": "Tuleh-2.13.0-armeabi-v7a.apk",
+        "size": 25591007,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/flutter-v2.13.0/Tuleh-2.13.0-armeabi-v7a.apk"
+      },
+      {
+        "name": "Tuleh-2.13.0-x86_64.apk",
+        "size": 29224034,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/flutter-v2.13.0/Tuleh-2.13.0-x86_64.apk"
+      }
+    ]
+  },
+  {
+    "tag_name": "flutter-v2.12.0",
+    "draft": false,
+    "prerelease": false,
+    "body": "- Kasir lebih ringkas: harga, satuan, dan stok dalam satu baris, tombol tambah bulat; sekitar delapan produk terlihat sekali pandang (sebelumnya lima). Pengatur jumlah tetap muncul untuk item yang sudah di keranjang.\n- Beranda menyapa sesuai waktu (pagi/siang/sore/malam).\n- Detail transaksi punya tombol Bagikan dan Cetak ulang yang jelas di bawah struk.\n- Daftar produk tidak lagi tertutup tombol Tambah Produk di baris terakhir.\n\n\n\n**Full Changelog**: https://github.com/dedeez14/tuleh/compare/v0.9.18...flutter-v2.12.0",
+    "assets": [
+      {
+        "name": "Tuleh-2.12.0-arm64-v8a.apk",
+        "size": 27657617,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/flutter-v2.12.0/Tuleh-2.12.0-arm64-v8a.apk"
+      },
+      {
+        "name": "Tuleh-2.12.0-armeabi-v7a.apk",
+        "size": 25591003,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/flutter-v2.12.0/Tuleh-2.12.0-armeabi-v7a.apk"
+      },
+      {
+        "name": "Tuleh-2.12.0-x86_64.apk",
+        "size": 29224034,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/flutter-v2.12.0/Tuleh-2.12.0-x86_64.apk"
+      }
+    ]
+  },
+  {
+    "tag_name": "flutter-v2.11.0",
+    "draft": false,
+    "prerelease": false,
+    "body": "- Keranjang: pilih pelanggan (cari nama/telepon, tambah cepat), diskon transaksi dalam persen, dan catatan. Total di kasir dan lembar bayar sudah setelah diskon; dikirim ke server dengan kontrak yang sama seperti desktop (diskon per item, id pelanggan, catatan).\n- Struk cetak, teks bagikan, dan lembar hasil menampilkan pelanggan, subtotal, dan potongan diskon; cetak ulang dari Riwayat ikut memuatnya.\n- Mode Demo menghitung diskon dan pelanggan seperti server.\n\n\n\n**Full Changelog**: https://github.com/dedeez14/tuleh/compare/flutter-v2.10.0...flutter-v2.11.0",
+    "assets": [
+      {
+        "name": "Tuleh-2.11.0-arm64-v8a.apk",
+        "size": 27657621,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/flutter-v2.11.0/Tuleh-2.11.0-arm64-v8a.apk"
+      },
+      {
+        "name": "Tuleh-2.11.0-armeabi-v7a.apk",
+        "size": 25591007,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/flutter-v2.11.0/Tuleh-2.11.0-armeabi-v7a.apk"
+      },
+      {
+        "name": "Tuleh-2.11.0-x86_64.apk",
+        "size": 29158498,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/flutter-v2.11.0/Tuleh-2.11.0-x86_64.apk"
+      }
+    ]
+  },
+  {
+    "tag_name": "v0.9.17",
+    "draft": false,
+    "prerelease": false,
+    "body": "**Full Changelog**: https://github.com/dedeez14/tuleh/compare/v0.9.16...v0.9.17",
+    "assets": [
+      {
+        "name": "latest.yml",
+        "size": 341,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/v0.9.17/latest.yml"
+      },
+      {
+        "name": "Tuleh-0.9.17-android.apk",
+        "size": 12379308,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/v0.9.17/Tuleh-0.9.17-android.apk"
+      },
+      {
+        "name": "Tuleh-Setup-0.9.17.exe",
+        "size": 90970976,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/v0.9.17/Tuleh-Setup-0.9.17.exe"
+      },
+      {
+        "name": "Tuleh-Setup-0.9.17.exe.blockmap",
+        "size": 96424,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/v0.9.17/Tuleh-Setup-0.9.17.exe.blockmap"
+      }
+    ]
+  },
+  {
+    "tag_name": "v0.9.16",
+    "draft": false,
+    "prerelease": false,
+    "body": "**Full Changelog**: https://github.com/dedeez14/tuleh/compare/v0.9.15...v0.9.16",
+    "assets": [
+      {
+        "name": "latest.yml",
+        "size": 341,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/v0.9.16/latest.yml"
+      },
+      {
+        "name": "Tuleh-0.9.16-android.apk",
+        "size": 12373780,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/v0.9.16/Tuleh-0.9.16-android.apk"
+      },
+      {
+        "name": "Tuleh-Setup-0.9.16.exe",
+        "size": 90966877,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/v0.9.16/Tuleh-Setup-0.9.16.exe"
+      },
+      {
+        "name": "Tuleh-Setup-0.9.16.exe.blockmap",
+        "size": 96429,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/v0.9.16/Tuleh-Setup-0.9.16.exe.blockmap"
+      }
+    ]
+  },
+  {
+    "tag_name": "flutter-v2.9.0",
+    "draft": false,
+    "prerelease": false,
+    "body": "- Mode offline tahap ketiga: sesi kasir bisa dibuka saat internet mati. Sesi tercatat di ponsel, dikirim ke server lebih dulu sebelum transaksi yang dibuat di dalamnya, dan menutup sesi ditahan sampai semua data terkirim agar rekap kas benar.\n- Bon meja saat offline: buka bon, tambah pesanan ke dapur, dan bayar bon disimpan di ponsel lalu dikirim berurutan begitu online. Peta meja dan detail bon langsung menampilkan pesanan yang belum terkirim (tanda \"Offline\" di meja).\n- Sinkronisasi: baris yang bergantung pada bon lain dijelaskan sebabnya bila perlu ditinjau; Kirim ulang bon induk otomatis m",
+    "assets": [
+      {
+        "name": "Tuleh-2.9.0-arm64-v8a.apk",
+        "size": 27521392,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/flutter-v2.9.0/Tuleh-2.9.0-arm64-v8a.apk"
+      },
+      {
+        "name": "Tuleh-2.9.0-armeabi-v7a.apk",
+        "size": 25454778,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/flutter-v2.9.0/Tuleh-2.9.0-armeabi-v7a.apk"
+      },
+      {
+        "name": "Tuleh-2.9.0-x86_64.apk",
+        "size": 29022273,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/flutter-v2.9.0/Tuleh-2.9.0-x86_64.apk"
+      }
+    ]
+  },
+  {
+    "tag_name": "flutter-v2.8.0",
+    "draft": false,
+    "prerelease": false,
+    "body": "- Mode offline tahap kedua: transaksi, pengeluaran, dan stok masuk saat internet mati disimpan di ponsel lalu dikirim otomatis berurutan begitu server terjangkau. Struk offline memakai nomor sementara L-…, stok di katalog langsung berkurang, dan riwayat menampilkan transaksi yang belum terkirim dengan tanda.\n- Baru: Pengaturan → Sinkronisasi menampilkan antrean, tombol Sinkron sekarang, dan pilihan Kirim ulang / Batalkan untuk transaksi yang perlu ditinjau (server tidak menjawab setelah data dikirim, atau server menolak).\n- Keluar akun ditahan bila masih ada transaksi yang belum terkirim, agar",
+    "assets": [
+      {
+        "name": "Tuleh-2.8.0-arm64-v8a.apk",
+        "size": 27521392,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/flutter-v2.8.0/Tuleh-2.8.0-arm64-v8a.apk"
+      },
+      {
+        "name": "Tuleh-2.8.0-armeabi-v7a.apk",
+        "size": 25422010,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/flutter-v2.8.0/Tuleh-2.8.0-armeabi-v7a.apk"
+      },
+      {
+        "name": "Tuleh-2.8.0-x86_64.apk",
+        "size": 29022273,
+        "browser_download_url": "https://github.com/dedeez14/tuleh/releases/download/flutter-v2.8.0/Tuleh-2.8.0-x86_64.apk"
+      }
+    ]
+  }
+]
