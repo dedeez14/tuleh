@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../../core/layout/lebar.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -7,9 +8,12 @@ import '../../../../core/utils/format.dart';
 import '../../../../core/widgets/app_background.dart';
 import '../../../../core/widgets/motion.dart';
 import '../../../../core/widgets/states.dart';
+import '../../../demo/demo_session.dart';
+import '../../../pengaturan/presentation/providers/pengaturan_providers.dart';
 import '../../../sesi/domain/entities/sesi_rekap.dart';
 import '../../domain/entities/laporan_keuangan.dart';
 import '../../domain/entities/penjualan_hari.dart';
+import '../../domain/laporan_teks.dart';
 import '../providers/laporan_providers.dart';
 import '../widgets/grafik_penjualan.dart';
 
@@ -28,7 +32,19 @@ class LaporanScreen extends ConsumerWidget {
     final rekap = ref.watch(rekapKasirProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Laporan')),
+      appBar: AppBar(
+        title: const Text('Laporan'),
+        actions: [
+          IconButton(
+            tooltip: 'Bagikan ringkasan laporan',
+            onPressed: keuangan.hasValue
+                ? () => _bagikan(context, ref, keuangan.requireValue)
+                : null,
+            icon: const Icon(Icons.share_outlined),
+          ),
+          const SizedBox(width: 4),
+        ],
+      ),
       body: AppBackground(
         ombak: false,
         intensitas: 0.5,
@@ -129,6 +145,31 @@ class LaporanScreen extends ConsumerWidget {
       )),
     );
   }
+}
+
+/// Bagikan ringkasan laporan sebagai teks (WhatsApp, catatan, e-mail).
+/// Ditutup selama Mode Demo — sama dengan ekspor laporan di desktop, agar
+/// angka contoh tidak beredar sebagai laporan sungguhan.
+Future<void> _bagikan(BuildContext context, WidgetRef ref, LaporanKeuangan k) async {
+  final messenger = ScaffoldMessenger.of(context);
+  if (ref.read(demoSessionProvider).active) {
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(
+        content: Text('Bagikan laporan tidak tersedia di Mode Demo.'),
+      ));
+    return;
+  }
+  final nama = ref.read(profilUsahaProvider).valueOrNull?.nama ?? 'Tuléh POS';
+  final teks = laporanTeks(
+    namaToko: nama,
+    keuangan: k,
+    harian: ref.read(penjualanHarianProvider).valueOrNull ?? const [],
+    rekap: ref.read(rekapKasirProvider).valueOrNull ?? const [],
+  );
+  await SharePlus.instance.share(
+    ShareParams(text: teks, subject: 'Laporan $nama · ${k.bulan}'),
+  );
 }
 
 class _JudulBagian extends StatelessWidget {

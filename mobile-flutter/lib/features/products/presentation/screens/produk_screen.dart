@@ -213,7 +213,8 @@ class _Detail extends ConsumerWidget {
   Future<void> _mutasiStok(BuildContext context, WidgetRef ref, {required bool masuk}) async {
     final ctrl = TextEditingController();
     final ketCtrl = TextEditingController();
-    final stokKini = product.stok ?? 0;
+    // null = server tidak mengirim stok; jangan diperlakukan sebagai 0.
+    final stokKini = product.stok;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -227,7 +228,9 @@ class _Detail extends ConsumerWidget {
               autofocus: true,
               decoration: InputDecoration(
                 labelText: masuk ? 'Jumlah masuk' : 'Jumlah rusak / hilang',
-                helperText: masuk ? null : 'Stok saat ini ${fmtQty(stokKini)}',
+                helperText: masuk || stokKini == null
+                    ? null
+                    : 'Stok saat ini ${fmtQty(stokKini)}',
               ),
             ),
             if (!masuk) ...[
@@ -258,7 +261,7 @@ class _Detail extends ConsumerWidget {
     if (confirmed != true || jumlah <= 0) return;
     if (!context.mounted) return;
     final messenger = ScaffoldMessenger.of(context);
-    if (!masuk && jumlah > stokKini) {
+    if (!masuk && stokKini != null && jumlah > stokKini) {
       messenger
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(

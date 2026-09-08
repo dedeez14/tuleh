@@ -5,6 +5,11 @@ sebagai isi Release GitHub (workflow flutter-release.yml), dan empat baris
 pertamanya tampil di banner pembaruan dalam aplikasi. Tulis untuk kasir, bukan
 untuk programmer.
 
+## 2.18.0
+
+- Bagikan ringkasan laporan dari layar Laporan (ikon bagikan di bilah atas): omzet, jumlah transaksi, pengeluaran, laba, rata-rata per transaksi, omzet 8 hari terakhir, dan rekap kasir — siap dikirim lewat WhatsApp atau disimpan sebagai catatan. Tidak tersedia di Mode Demo, sama seperti ekspor laporan di aplikasi Windows.
+- Opname untuk produk yang stoknya belum diketahui tidak lagi ditolak sebagai "stok 0"; server yang memutuskan.
+
 ## 2.17.0
 
 - Parkir keranjang di Kasir: belanjaan yang belum dibayar bisa disimpan (ikon P di keranjang) lalu dilanjutkan lewat ikon parkir di bilah atas — lengkap dengan pelanggan, diskon transaksi, dan catatannya. Tersimpan di perangkat per toko, paling banyak 20, tetap ada meski aplikasi ditutup.
