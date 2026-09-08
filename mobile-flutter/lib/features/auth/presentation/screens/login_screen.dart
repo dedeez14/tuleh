@@ -122,10 +122,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
             : e is MasaCobaException
             ? e.pesan
             : 'Gagal masuk.';
+        // Masuk memang tidak bisa tanpa server. Katakan apa adanya beserta
+        // langkah yang menolong, bukan sekadar "gagal terhubung".
+        final jaringan = e is ApiException && e.isJaringan;
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
           ..showSnackBar(
-            SnackBar(content: Text(msg), backgroundColor: AppColors.danger),
+            SnackBar(
+              backgroundColor: AppColors.danger,
+              duration: Duration(seconds: jaringan ? 8 : 4),
+              content: Text(
+                jaringan
+                    ? 'Tidak ada sambungan ke server. Masuk pertama kali memerlukan '
+                          'internet — nyalakan data/Wi-Fi lalu coba lagi. Setelah berhasil '
+                          'masuk sekali, aplikasi bisa dipakai lagi meski sinyal hilang.'
+                    : msg,
+              ),
+            ),
           );
       }
     });

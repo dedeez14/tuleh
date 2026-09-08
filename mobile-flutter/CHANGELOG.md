@@ -5,6 +5,13 @@ sebagai isi Release GitHub (workflow flutter-release.yml), dan empat baris
 pertamanya tampil di banner pembaruan dalam aplikasi. Tulis untuk kasir, bukan
 untuk programmer.
 
+## 2.24.0
+
+- **Tidak lagi terkunci setelah menekan Keluar tanpa sinyal.** Keluar akun menghapus sesi DAN seluruh data yang tersimpan untuk dipakai offline, padahal masuk kembali memerlukan server — kasir yang menekan Keluar saat offline jadi tidak bisa memakai aplikasi sama sekali. Sekarang aplikasi memperingatkan lebih dulu, dengan pilihan utama Batal; "Tetap keluar" tetap ada bila memang disengaja.
+- Pesan di layar masuk saat tidak ada sambungan kini menjelaskan bahwa masuk memerlukan internet sekali saja, dan sesudah itu aplikasi tetap bisa dipakai meski sinyal hilang.
+
+Catatan: membuka aplikasi kembali tanpa sinyal (tanpa menekan Keluar) memang sudah bisa sejak dulu — identitas pengguna diambil dari salinan. Perilaku itu kini dikunci uji supaya tidak rusak diam-diam.
+
 ## 2.23.1
 
 Perbaikan pemindai barcode kasir (dilaporkan dari pemakaian nyata):

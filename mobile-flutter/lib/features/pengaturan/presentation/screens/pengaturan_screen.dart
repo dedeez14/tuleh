@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/layout/lebar.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/offline/antrean.dart';
+import '../../../../core/offline/koneksi.dart';
 import '../../../../core/offline/pengurai.dart';
 import '../../../../core/offline/sinkronisasi_screen.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -179,9 +180,39 @@ class PengaturanScreen extends ConsumerWidget {
   }
 }
 
+/// Peringatan keluar saat tidak ada sinyal. Bawaan: batal — pilihan keluar
+/// sengaja dibuat sekunder karena akibatnya tidak bisa diurungkan tanpa
+/// internet.
+Future<bool?> _konfirmasiKeluarOffline(BuildContext context) => showDialog<bool>(
+  context: context,
+  builder: (ctx) => AlertDialog(
+    title: const Text('Sedang offline — jangan keluar dulu'),
+    content: const Text(
+      'Masuk kembali memerlukan sambungan ke server, dan keluar juga menghapus '
+      'data yang tersimpan untuk dipakai offline (katalog, riwayat, pengaturan).\n\n'
+      'Kalau tetap keluar sekarang, aplikasi tidak bisa dipakai sampai ada internet.',
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(ctx, true),
+        style: TextButton.styleFrom(foregroundColor: AppColors.danger),
+        child: const Text('Tetap keluar'),
+      ),
+      FilledButton(
+        onPressed: () => Navigator.pop(ctx, false),
+        child: const Text('Batal'),
+      ),
+    ],
+  ),
+);
+
 /// Keluar akun ditahan bila masih ada transaksi yang belum terkirim: antrean
 /// milik akun ini tidak boleh dikirim dengan token akun lain, dan
 /// menghapusnya berarti menghapus penjualan yang sudah terjadi.
+///
+/// Ditahan juga saat OFFLINE: masuk kembali memerlukan server, dan keluar
+/// menghapus salinan data offline. Kasir yang menekan Keluar tanpa sinyal
+/// akan terkunci di layar masuk sampai ada internet.
 Future<void> keluarDenganPenjagaAntrean(BuildContext context, WidgetRef ref) async {
   RingkasAntrean ringkas;
   try {
@@ -191,6 +222,11 @@ Future<void> keluarDenganPenjagaAntrean(BuildContext context, WidgetRef ref) asy
   }
   if (!context.mounted) return;
   if (ringkas.total == 0) {
+    if (!ref.read(koneksiProvider).online) {
+      final tetap = await _konfirmasiKeluarOffline(context);
+      if (tetap != true) return;
+      if (!context.mounted) return;
+    }
     await ref.read(authControllerProvider.notifier).logout();
     return;
   }
