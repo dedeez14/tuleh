@@ -433,7 +433,9 @@ function buatProdukBakso() {
     p(8, 'MIN-002', 'Es Jeruk', 7000, 'Cup', 'Minuman'),
     p(9, 'MIN-003', 'Teh Hangat', 4000, 'Cup', 'Minuman'),
     p(10, 'TMB-001', 'Kerupuk', 3000, 'Bungkus', 'Tambahan', true, 40),
-    p(11, 'TMB-002', 'Nasi Putih', 5000, 'Porsi', 'Tambahan')
+    p(11, 'TMB-002', 'Nasi Putih', 5000, 'Porsi', 'Tambahan'),
+    // Dijual per kilo (bawa pulang) — contoh barang timbang di bon meja.
+    p(12, 'TMB-003', 'Bakso Mentah Bawa Pulang', 85000, 'Kg', 'Tambahan', true, 12.5)
   ]
 }
 

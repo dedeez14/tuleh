@@ -15,7 +15,7 @@ import { midtransBoleh, qrisAksi, sisaDetik, formatSisa, harusFallbackStatis } f
 import { customerViewHTML } from '../components/customer-view.js'
 import { bacaParkir, simpanParkir, tambahParkir, hapusParkir, pulihkanBaris, ringkasParkir } from '../lib/parkir.js'
 import { tanyaUkuran } from '../components/dialog-ukuran.js'
-import { apakahTerukur } from '../lib/satuan-terukur.js'
+import { apakahTerukur, labelKuantitas } from '../lib/satuan-terukur.js'
 
 const QRIS_POLL_MS = 4000 // interval cek status tagihan QRIS (kontrak: 3–5s)
 
@@ -357,7 +357,7 @@ function renderPos(container) {
         <div class="pos-card__media">${media}${badge}</div>
         <div class="pos-card__name">${esc(p.nama)}</div>
         <div class="pos-card__code mono">${esc(p.kode)}</div>
-        <div class="pos-card__price num">${fmtIDR(hargaJual(p))}${hargaNormalSaatPromo(p) != null ? ` <s class="pos-card__price-old">${fmtIDR(hargaNormalSaatPromo(p))}</s>` : ''}</div>
+        <div class="pos-card__price num">${fmtIDR(hargaJual(p))}${apakahTerukur(p.satuan) ? ` <span class="pos-card__unit">/ ${esc(p.satuan)}</span>` : ''}${hargaNormalSaatPromo(p) != null ? ` <s class="pos-card__price-old">${fmtIDR(hargaNormalSaatPromo(p))}</s>` : ''}</div>
       </button>`
   }
 
@@ -524,7 +524,12 @@ function renderPos(container) {
         ${l.nominalDiminta > 0 && Math.round(l.nominalDiminta) !== Math.round(line.total)
           ? `<div class="pos-line__diminta num">diminta ${fmtIDR(l.nominalDiminta)}</div>` : ''}
         <div class="pos-line__ctrl">
-          <div class="pos-step">
+          ${apakahTerukur(p.satuan)
+            // Barang timbang: "+1" berarti +1 kg — hampir tidak pernah yang
+            // dimaksud. Ketuk untuk menimbang ulang lewat dialog ukuran.
+            ? `<button type="button" class="btn btn--outline btn--sm num" data-act="ukur"
+                       aria-label="Ubah ukuran ${esc(p.nama)}">${esc(labelKuantitas(l.kuantitas, p.satuan))}</button>`
+            : `<div class="pos-step">
             <button type="button" class="icon-btn pos-step__btn" data-act="minus" aria-label="Kurangi jumlah">
               ${icons.minus}
             </button>
@@ -533,7 +538,7 @@ function renderPos(container) {
             <button type="button" class="icon-btn pos-step__btn" data-act="plus" aria-label="Tambah jumlah">
               ${icons.plus}
             </button>
-          </div>
+          </div>`}
           <label class="pos-line__disc" title="Diskon baris (%)">
             <span class="pos-line__disc-label">Disk.</span>
             <input class="pos-line__disc-input num" data-act="disc" type="number" min="0" max="100" step="any"
@@ -607,8 +612,12 @@ function renderPos(container) {
   function renderCart() {
     if (disposed) return
     const totals = cartTotals(cartLines())
+    // "qty" hanya bermakna untuk barang hitungan: "0,74 qty" pada mangga
+    // timbang bukan informasi, cukup "1 item".
+    const qtyHitung = cart.reduce(
+      (n, l) => n + (apakahTerukur(l.produk.satuan) ? 0 : Number(l.kuantitas) || 0), 0)
     countEl.textContent = cart.length
-      ? `${cart.length} item • ${fmtNumber(totals.qtyCount)} qty`
+      ? `${cart.length} item${qtyHitung > 0 ? ` • ${fmtNumber(qtyHitung)} qty` : ''}`
       : '0 item'
     renderCustomer()
     itemsEl.innerHTML = cart.length
@@ -666,7 +675,7 @@ function renderPos(container) {
           <div class="parkir__no">#${p.nomor}</div>
           <div class="parkir__main">
             <div class="parkir__title">${p.pelanggan ? esc(p.pelanggan.nama) : 'Tanpa pelanggan'} <span class="parkir__time">· ${jam}</span></div>
-            <div class="parkir__desc">${r.baris} item · ${fmtNumber(r.qty)} qty — ${nama}</div>
+            <div class="parkir__desc">${r.baris} item${r.qty > 0 ? ` · ${fmtNumber(r.qty)} qty` : ''} — ${nama}</div>
           </div>
           <div class="parkir__total num">${fmtIDR(r.total)}</div>
           <div class="parkir__act">
@@ -1453,6 +1462,7 @@ function renderPos(container) {
     const line = cart.find((l) => String(l.produk.id) === row.dataset.id)
     if (!line) return
     if (e.target.closest('[data-act="del"]')) setQty(line, 0)
+    else if (e.target.closest('[data-act="ukur"]')) bukaInputUkuran(line.produk, { qtyAwal: line.kuantitas })
     else if (e.target.closest('[data-act="minus"]')) setQty(line, Number(line.kuantitas) - 1)
     else if (e.target.closest('[data-act="plus"]')) setQty(line, Number(line.kuantitas) + 1)
   })

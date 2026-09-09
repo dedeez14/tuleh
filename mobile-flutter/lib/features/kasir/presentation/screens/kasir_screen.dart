@@ -106,13 +106,23 @@ class _KasirScreenState extends ConsumerState<KasirScreen> {
   /// saat offline; bila tak ada, dicari ke server berdasarkan kode.
   Future<void> _pindai() async {
     FocusScope.of(context).unfocus();
+    // Barang timbang tidak bisa masuk "×1" begitu saja: pemindaian dihentikan
+    // dan ukurannya ditanyakan setelah layar pindai ditutup.
+    Product? perluUkuran;
     await PindaiBarcodeScreen.beruntun(context, onKode: (kode) async {
       final produk = await _cariBarcode(kode);
       if (produk == null) return null;
+      if (apakahTerukur(produk.satuan)) {
+        perluUkuran = produk;
+        if (mounted) Navigator.of(context, rootNavigator: true).pop();
+        return '${produk.nama} · isi ukurannya';
+      }
       ref.read(cartControllerProvider.notifier).add(produk);
       final qty = ref.read(cartControllerProvider).firstWhere((e) => e.product.id == produk.id).qty;
-      return '${produk.nama} · ×$qty';
+      return '${produk.nama} · ×${fmtQtyRingkas(qty)}';
     });
+    final p = perluUkuran;
+    if (p != null && mounted) await _tambah(p);
   }
 
   Future<Product?> _cariBarcode(String kode) async {

@@ -514,6 +514,9 @@ Map<String, Map<String, List<Map<String, dynamic>>>> buatKatalogDemo() {
     _item('BSO', 'TMB-001', 'Kerupuk', 3000, 'Bungkus', 'Tambahan',
         stok: true, jumlah: 40),
     _item('BSO', 'TMB-002', 'Nasi Putih', 5000, 'Porsi', 'Tambahan'),
+    // Dijual per kilo (bawa pulang) — contoh barang timbang di bon meja.
+    _item('BSO', 'TMB-003', 'Bakso Mentah Bawa Pulang', 85000, 'Kg', 'Tambahan',
+        stok: true, jumlah: 12.5),
   ];
 
   _prd = 0;

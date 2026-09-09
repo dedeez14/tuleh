@@ -2,6 +2,7 @@
 // masih mengambil barang / antre bergantian) lalu melanjutkannya nanti.
 // Logika murni & tak bergantung DOM; disimpan per toko di localStorage.
 
+import { apakahTerukur } from './satuan-terukur.js'
 import { hargaJual } from '../utils/harga.js'
 
 export const MAKS_PARKIR = 20
@@ -81,7 +82,9 @@ export function ringkasParkir(entri) {
   for (const l of entri.items) {
     const harga = hargaJual(l.produk)
     const q = Number(l.kuantitas) || 0
-    qty += q
+    // "qty" hanya dijumlahkan untuk barang hitungan: menambahkan 0,74 kg
+    // mangga ke jumlah butir tidak berarti apa-apa.
+    if (!apakahTerukur(l.produk && l.produk.satuan)) qty += q
     total += harga * q * (1 - (Number(l.diskonPersen) || 0) / 100)
   }
   return { baris: entri.items.length, qty, total }

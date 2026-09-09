@@ -88,3 +88,16 @@ test('nominal yang diminta pelanggan ikut terparkir dan pulih', () => {
   assert.equal(baris[0].nominalDiminta, 20000)
   assert.equal(baris[1].nominalDiminta, null)
 })
+
+test('ringkasParkir: qty hanya menghitung barang hitungan', () => {
+  const mangga = { id: 'P4', nama: 'Mangga', harga_jual: 27000, satuan: 'Kg' }
+  const r = P.ringkasParkir({
+    items: [
+      { produk: mangga, kuantitas: 0.74, diskonPersen: 0 },
+      { produk: roti, kuantitas: 2, diskonPersen: 0 }
+    ]
+  })
+  assert.equal(r.baris, 2)
+  assert.equal(r.qty, 2, '0,74 kg tidak ditambahkan ke jumlah butir')
+  assert.equal(r.total, 27000 * 0.74 + 15000 * 2)
+})
