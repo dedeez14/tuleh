@@ -910,6 +910,20 @@ async function boot() {
         } else if (info.data.smokeFlow === 'prabill') {
           kartuTerisi()?.click(); await jeda(450)
           document.querySelector('#bill-cetak')?.click(); await jeda(400)
+        } else if (info.data.smokeFlow === 'kasir-ukur') {
+          // Barang per kilo: buka dialog ukuran lewat kartu produknya, isi
+          // berat, lalu tambahkan — bukti tampilan untuk penjualan terukur.
+          await jeda(600)
+          const cari = document.querySelector('#pos-search')
+          if (cari) { cari.value = 'Mangga'; cari.dispatchEvent(new Event('input', { bubbles: true })) }
+          await jeda(400)
+          document.querySelector('.pos-card:not([disabled])')?.click(); await jeda(400)
+          const isi = document.querySelector('#ukur-in')
+          if (isi) { isi.value = '0,74'; isi.dispatchEvent(new Event('input', { bubbles: true })) }
+          await jeda(300)
+          if (info.data.smokeGulir !== 'dialog') {
+            document.querySelector('#ukur-ok')?.click(); await jeda(400)
+          }
         } else if (['kasir-parkir', 'kasir-bayar', 'kasir-diskon', 'gulir'].includes(info.data.smokeFlow)) {
           // Kasir: isi keranjang dari dua produk pertama, lalu parkir (F9 → F10
           // buka daftar) atau bayar tunai pas (F4 → Uang Pas → selesaikan).

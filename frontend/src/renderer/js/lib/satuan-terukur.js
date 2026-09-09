@@ -70,3 +70,16 @@ export function minimalNominal(harga, satuan) {
 export function totalBaris(kuantitas, harga) {
   return Math.round(Number(kuantitas) * Number(harga))
 }
+
+/**
+ * "0,74 kg" untuk barang terukur, "2" untuk barang hitungan.
+ *
+ * Satuan hanya ikut dicetak bila barangnya memang dijual per ukuran: pada
+ * barang hitungan "2 pcs" tidak menambah informasi apa pun.
+ */
+export function labelKuantitas(kuantitas, satuan) {
+  const q = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 3 }).format(
+    Number(kuantitas) || 0,
+  )
+  return apakahTerukur(satuan) ? `${q} ${String(satuan).trim()}` : q
+}

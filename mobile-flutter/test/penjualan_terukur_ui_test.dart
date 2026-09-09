@@ -137,6 +137,47 @@ void main() {
       expect(tombol.onPressed, isNull, reason: 'tidak bisa menambah baris nol');
     });
 
+    testWidgets('sisa stok tampil dan ukuran di atasnya ditahan', (t) async {
+      // Desktop menahan lewat toast; Android harus konsisten — kasir jangan
+      // sampai menimbang 1,2 kg lalu keranjang diam-diam berisi 0,8 kg.
+      const menipis = Product(
+        id: 'P-SALAK',
+        nama: 'Salak Pondoh',
+        harga: 20000,
+        satuan: 'kg',
+        stok: 0.8,
+      );
+      await buka(t, produk: menipis);
+      expect(find.text('Sisa stok 0,8 kg'), findsOneWidget);
+
+      await t.enterText(find.byType(TextField).first, '1,2');
+      await _pompa(t);
+      expect(find.textContaining('Sisa stok hanya 0,8 kg'), findsOneWidget);
+      expect(
+        t.widget<FilledButton>(find.widgetWithText(FilledButton, 'Tambah ke keranjang')).onPressed,
+        isNull,
+      );
+
+      await t.enterText(find.byType(TextField).first, '0,8');
+      await _pompa(t);
+      expect(
+        t.widget<FilledButton>(find.widgetWithText(FilledButton, 'Tambah ke keranjang')).onPressed,
+        isNotNull,
+        reason: 'menjual tepat sisa stok tetap boleh',
+      );
+    });
+
+    testWidgets('produk tanpa kelola stok: tak ada batas', (t) async {
+      await buka(t, produk: const Product(id: 'J', nama: 'Kain Meteran', harga: 15000, satuan: 'meter'));
+      expect(find.textContaining('Sisa stok'), findsNothing);
+      await t.enterText(find.byType(TextField).first, '99');
+      await _pompa(t);
+      expect(
+        t.widget<FilledButton>(find.widgetWithText(FilledButton, 'Tambah ke keranjang')).onPressed,
+        isNotNull,
+      );
+    });
+
     testWidgets('harga 0: tab Nominal dimatikan', (t) async {
       await buka(t, produk: const Product(id: 'X', nama: 'Sayur', harga: 0, satuan: 'kg'));
       final segmen = t.widget<SegmentedButton<bool>>(find.byType(SegmentedButton<bool>));

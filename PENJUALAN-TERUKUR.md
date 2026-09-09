@@ -156,8 +156,9 @@ Mangga Harum Manis
   0,74 kg x 27.000            19.980
 ```
 
-Bila baris berasal dari nominal dan hasilnya berbeda, struk menambah keterangan
-kecil: `(diminta Rp 20.000)`.
+Struk sengaja hanya memuat ukuran & harga: kertas 32 kolom, dan pelanggan sudah
+melihat totalnya. Nominal yang diminta ditampilkan di **keranjang** saja
+(`diminta Rp 20.000` di bawah baris) — untuk kasir, saat menyebutkan selisihnya.
 
 ---
 
@@ -167,7 +168,8 @@ kecil: `(diminta Rp 20.000)`.
 |---|---|
 | Harga 0 / kosong | Tab nominal dimatikan (tidak bisa membagi) dengan penjelasan |
 | Nominal < satu langkah | Ditolak: *"Minimal belanja untuk Mangga adalah Rp 270 (0,01 kg)."* |
-| Stok kurang dari berat yang diminta | Sama seperti sekarang: ditolak dengan menyebut sisa stok (stok pecahan) |
+| Stok kurang dari berat yang diminta | Lembar/dialog menampilkan *"Sisa stok 0,8 kg"* dan menahan tombol simpan — **tidak** memotong diam-diam ke sisa stok |
+| Produk tanpa kelola stok (jasa, meteran) | Tanpa batas atas |
 | Diskon transaksi | Tetap berlaku sebagai persen per baris — tidak bertabrakan dengan pembulatan berat |
 | Barang tak terukur | Perilaku lama: ketuk = +1, tombol +/− tetap |
 

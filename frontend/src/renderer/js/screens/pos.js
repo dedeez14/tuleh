@@ -28,7 +28,7 @@ const BARCODE_RE = /^\d{5,}$/
 
 // ---------- State keranjang (module-level, bertahan antar layar) ----------
 
-let cart = [] // [{ produk, kuantitas, diskonPersen }]
+let cart = [] // [{ produk, kuantitas, diskonPersen, nominalDiminta }]
 let pelanggan = null // { id, nama, kode?, telepon? } | null
 // Diskon transaksi (persen) — diterapkan ke semua baris, digabung dengan
 // diskon baris menjadi satu diskon_persen per item (kontrak sama dengan Android).
@@ -437,7 +437,10 @@ function renderPos(container) {
 
   // ---------- Keranjang ----------
 
-  function tambahJumlah(produk, jumlah) {
+  // `nominalDiminta`: pelanggan menyebut rupiah ("beli Rp 20.000"), bukan
+  // ukuran. Disimpan hanya untuk ditampilkan; yang ditagih tetap ukuran × harga.
+  // Mengubah jumlah lewat cara lain menghapusnya — nominal lama jadi bohong.
+  function tambahJumlah(produk, jumlah, { nominalDiminta = null } = {}) {
     const { kelolaStok, stok } = stokInfo(produk)
     const existing = cart.find((l) => String(l.produk.id) === String(produk.id))
     const current = existing ? Number(existing.kuantitas) : 0
@@ -447,15 +450,14 @@ function renderPos(container) {
       return false
     }
     cart = existing
-      ? cart.map((l) => (l === existing ? { ...l, kuantitas: next } : l))
-      : [...cart, { produk, kuantitas: next, diskonPersen: 0 }]
+      ? cart.map((l) => (l === existing ? { ...l, kuantitas: next, nominalDiminta } : l))
+      : [...cart, { produk, kuantitas: next, diskonPersen: 0, nominalDiminta }]
     renderCart()
     // Baris baru: gulir keranjang ke bawah agar kasir melihat item masuk
     if (!existing) itemsEl.scrollTop = itemsEl.scrollHeight
     return true
   }
 
-  // Layanan kiloan (satuan Kg): tanya berat hasil timbangan, bukan langsung 1
   // Barang terukur (kilo/liter/meter): tanya ukurannya, atau berapa rupiah
   // yang diminta pelanggan. Nominal diterjemahkan ke ukuran lebih dulu supaya
   // uang yang ditagih tetap `ukuran × harga` — lihat PENJUALAN-TERUKUR.md.
@@ -463,6 +465,10 @@ function renderPos(container) {
     const satuan = String(produk.satuan || '').toLowerCase()
     const harga = hargaJual(produk)
     const hargaSah = harga > 0
+    // Baris terukur selalu MENGGANTI isi baris, jadi batas atasnya stok penuh
+    // (bukan stok dikurangi isi keranjang).
+    const { kelolaStok, stok } = stokInfo(produk)
+    const adaBatas = kelolaStok && Number.isFinite(stok)
 
     const body = document.createElement('div')
     body.innerHTML = `
@@ -488,7 +494,8 @@ function renderPos(container) {
             <button type="button" class="btn btn--outline btn--sm" data-rp="${n}">${fmtIDR(n)}</button>`).join('')}
         </div>
       </div>
-      <div class="ukur-ringkas num" id="ukur-view">${fmtIDR(harga)} / ${esc(satuan)}</div>`
+      <div class="ukur-ringkas num" id="ukur-view">${fmtIDR(harga)} / ${esc(satuan)}</div>
+      ${adaBatas ? `<div class="ukur-sisa num">Sisa stok ${fmtNumber(stok)} ${esc(satuan)}</div>` : ''}`
 
     const footer = document.createElement('div')
     footer.innerHTML = `<button type="button" class="btn btn--primary" id="ukur-ok">${qtyAwal ? 'Simpan perubahan' : 'Tambah ke Keranjang'}</button>`
@@ -509,7 +516,14 @@ function renderPos(container) {
     function render() {
       const qty = qtySekarang()
       const nominal = mode === 'nominal' ? parseAmount(inNominal.value) : 0
-      tombolOk.disabled = !(qty > 0)
+      const lebihStok = adaBatas && qty > stok
+      // Dulu submit diam-diam memotong ke sisa stok: kasir menimbang 5 kg, yang
+      // masuk keranjang 0,8 kg tanpa pemberitahuan. Sekarang ditahan di sini.
+      tombolOk.disabled = !(qty > 0) || lebihStok
+      if (lebihStok) {
+        view.innerHTML = `<span class="ukur-ringkas__galat">Sisa stok hanya ${fmtNumber(stok)} ${esc(satuan)}.</span>`
+        return
+      }
       if (mode === 'nominal' && nominal > 0 && qty <= 0) {
         view.innerHTML = `<span class="ukur-ringkas__galat">Minimal ${fmtIDR(minimalNominal(harga, satuan))} (${String(langkahSatuan(satuan)).replace('.', ',')} ${esc(satuan)}).</span>`
         return
@@ -549,16 +563,17 @@ function renderPos(container) {
 
     const submit = () => {
       const qty = qtySekarang()
-      if (!(qty > 0)) return
+      if (!(qty > 0) || (adaBatas && qty > stok)) return
       // Timbang ulang MENGGANTI isi baris, bukan menambah: menjumlahkan dua
       // penimbangan diam-diam akan menagih lebih.
+      const nominalDiminta = mode === 'nominal' ? parseAmount(inNominal.value) || null : null
       const baris = cart.find((l) => l.produk.id === produk.id)
       if (baris) {
-        setQty(baris, qty)
+        setQty(baris, qty, { nominalDiminta })
         close()
         return
       }
-      if (tambahJumlah(produk, qty)) close()
+      if (tambahJumlah(produk, qty, { nominalDiminta })) close()
     }
     tombolOk.addEventListener('click', submit)
     for (const el of [inUkuran, inNominal]) {
@@ -581,7 +596,7 @@ function renderPos(container) {
     return tambahJumlah(produk, 1)
   }
 
-  function setQty(line, rawQty) {
+  function setQty(line, rawQty, { nominalDiminta = null } = {}) {
     const { kelolaStok, stok } = stokInfo(line.produk)
     const qty = clampQty(rawQty, { kelolaStok, stok })
     if (kelolaStok && Number(rawQty) > qty) {
@@ -589,7 +604,7 @@ function renderPos(container) {
     }
     cart = qty <= 0
       ? cart.filter((l) => l !== line)
-      : cart.map((l) => (l === line ? { ...l, kuantitas: qty } : l))
+      : cart.map((l) => (l === line ? { ...l, kuantitas: qty, nominalDiminta } : l))
     renderCart()
   }
 
@@ -620,6 +635,8 @@ function renderPos(container) {
         <div class="pos-line__price num">
           ${fmtIDR(hargaJual(p))}${p.satuan ? ` <span class="pos-line__unit">/ ${esc(p.satuan)}</span>` : ''}
         </div>
+        ${l.nominalDiminta > 0 && Math.round(l.nominalDiminta) !== Math.round(line.total)
+          ? `<div class="pos-line__diminta num">diminta ${fmtIDR(l.nominalDiminta)}</div>` : ''}
         <div class="pos-line__ctrl">
           <div class="pos-step">
             <button type="button" class="icon-btn pos-step__btn" data-act="minus" aria-label="Kurangi jumlah">

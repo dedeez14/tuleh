@@ -412,6 +412,12 @@
   color: var(--text-3);
 }
 
+/* "diminta Rp 20.000": alasan tagihan berbeda tipis dari yang disebut pelanggan. */
+.pos-line__diminta {
+  font-size: var(--text-xs);
+  color: var(--text-3);
+}
+
 .pos-line__ctrl {
   display: flex;
   align-items: center;
@@ -893,6 +899,14 @@
 
 .ukur-ringkas__galat {
   color: var(--danger);
+}
+
+/* Sisa stok: informasi pendukung, jangan menyaingi ringkasan hitungan. */
+.ukur-sisa {
+  margin-top: var(--sp-2);
+  font-size: var(--text-sm);
+  color: var(--text-2);
+  text-align: center;
 }
 
 .tabs--sm {

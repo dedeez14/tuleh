@@ -36,7 +36,7 @@ class StrukTeks {
     garis();
     for (final r in s.baris) {
       b.addAll(StrukEscPos.bungkus(r.nama, kolom));
-      b.add(_duaKolom('  ${fmtQty(r.kuantitas)} x ${fmtIDR(r.harga)}', fmtIDR(r.subtotal)));
+      b.add(_duaKolom('  ${r.labelKuantitas} x ${fmtIDR(r.harga)}', fmtIDR(r.subtotal)));
     }
     garis();
     if ((s.diskon ?? 0) > 0) {

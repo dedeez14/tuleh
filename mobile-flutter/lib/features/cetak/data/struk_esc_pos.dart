@@ -82,7 +82,7 @@ class StrukEscPos {
       b.addAll(
         _duaKolom(
           g,
-          '  ${fmtQty(baris.kuantitas)} x ${fmtIDR(baris.harga)}',
+          '  ${baris.labelKuantitas} x ${fmtIDR(baris.harga)}',
           fmtIDR(baris.subtotal),
         ),
       );
@@ -214,7 +214,7 @@ class StrukEscPos {
       for (final b in s.baris) ...[
         ...bungkus(b.nama, _kolom),
         _pasangan(
-          '  ${fmtQty(b.kuantitas)} x ${fmtIDR(b.harga)}',
+          '  ${b.labelKuantitas} x ${fmtIDR(b.harga)}',
           fmtIDR(b.subtotal),
         ),
       ],

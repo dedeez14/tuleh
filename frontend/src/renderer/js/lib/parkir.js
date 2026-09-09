@@ -29,7 +29,7 @@ export function simpanParkir(storage, tokoId, daftar) {
 
 /**
  * Tambahkan satu keranjang ke daftar (tidak mengubah daftar asal).
- * items: [{ produk, kuantitas, diskonPersen }] — produk disalin seperlunya.
+ * items: [{ produk, kuantitas, diskonPersen, nominalDiminta }] — produk disalin seperlunya.
  * Mengembalikan { daftar, entri } atau { daftar, entri: null, alasan } bila penuh.
  */
 export function tambahParkir(daftar, { items, pelanggan = null, catatan = '', diskonTransaksi = 0 }, now = Date.now()) {
@@ -48,7 +48,8 @@ export function tambahParkir(daftar, { items, pelanggan = null, catatan = '', di
     items: items.map((l) => ({
       produk: salinProduk(l.produk),
       kuantitas: Number(l.kuantitas) || 0,
-      diskonPersen: Number(l.diskonPersen) || 0
+      diskonPersen: Number(l.diskonPersen) || 0,
+      nominalDiminta: Number(l.nominalDiminta) || null
     }))
   }
   return { daftar: [...daftar, entri], entri }
@@ -68,7 +69,8 @@ export function pulihkanBaris(entri, katalog = []) {
   return entri.items.map((l) => ({
     produk: peta.get(String(l.produk.id)) || l.produk,
     kuantitas: l.kuantitas,
-    diskonPersen: l.diskonPersen
+    diskonPersen: l.diskonPersen,
+    nominalDiminta: l.nominalDiminta ?? null
   }))
 }
 

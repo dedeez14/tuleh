@@ -1,3 +1,5 @@
+import '../../../../core/utils/satuan_terukur.dart';
+
 /// Isi struk yang akan dicetak ke printer thermal.
 /// Sengaja bebas dari detail transport (ESC/POS) agar bisa diuji sebagai data.
 class StrukBaris {
@@ -5,11 +7,24 @@ class StrukBaris {
     required this.nama,
     required this.kuantitas,
     required this.harga,
+    this.satuan,
   });
 
   final String nama;
   final num kuantitas;
   final double harga;
+
+  /// Satuan ukur (Kg, liter, meter). Dicetak di struk supaya pelanggan tahu
+  /// "0,74 Kg", bukan "0,74" yang menggantung. Null untuk barang hitungan.
+  final String? satuan;
+
+  /// Baris yang dijual per ukuran (satuannya ikut dicetak).
+  bool get terukur => satuan != null && satuan!.isNotEmpty;
+
+  /// "0,74 Kg" atau "2" — dipakai struk teks & ESC/POS.
+  String get labelKuantitas => terukur
+      ? '${fmtQtyRingkas(kuantitas)} $satuan'
+      : fmtQtyRingkas(kuantitas);
 
   double get subtotal => harga * kuantitas;
 }
@@ -63,8 +78,10 @@ class Struk {
   /// Potongan diskon transaksi (rupiah); [total] sudah setelah potongan.
   final double? diskon;
 
+  /// Baris terukur dihitung satu item: "0,74 kg" bukan nol item (0,4 kg
+  /// membulat ke nol) dan bukan pula 0,74 item.
   int get jumlahItem =>
-      baris.fold<int>(0, (s, b) => s + b.kuantitas.round());
+      baris.fold<int>(0, (s, b) => s + (b.terukur ? 1 : b.kuantitas.round()));
 
   /// Transaksi offline menyimpan struk apa adanya untuk cetak ulang.
   Map<String, dynamic> toJson() => {

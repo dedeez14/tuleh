@@ -48,3 +48,14 @@ test('buildReceiptText: pra-bon tanpa baris bayar; struk kosong → teks kosong'
   assert.ok(!teks.includes('Kembalian'))
   assert.equal(M.buildReceiptText(null), '')
 })
+
+test('buildReceiptText: barang timbang mencetak satuannya', () => {
+  // "0,74 x Rp 27.000" tidak memberi tahu pelanggan 0,74 dari apa.
+  const teks = M.buildReceiptText({
+    ...struk,
+    items: [{ nama: 'Mangga Harum Manis', kuantitas: 0.74, harga: 27000, subtotal: 19980, satuan: 'kg' }]
+  }, { company })
+  assert.ok(teks.includes('0,74 kg x Rp 27.000'), teks)
+  // Barang hitungan tetap polos.
+  assert.ok(M.buildReceiptText(struk, { company }).includes('2 x Rp 18.000'))
+})

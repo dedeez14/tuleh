@@ -6,6 +6,7 @@ import { fmtIDR as _fmtIDR, fmtNumber, fmtDateTime } from '../utils/format.js'
 // Spasi biasa, bukan NBSP: WhatsApp/teks polos merender NBSP tidak konsisten.
 const fmtIDR = (v) => _fmtIDR(v).replace(/ /g, ' ')
 import { labelPembayaranStruk } from './qris-flow.js'
+import { labelKuantitas } from './satuan-terukur.js'
 
 export const TANDA_DEMO = 'MODE DEMO — BUKAN BUKTI PEMBAYARAN'
 
@@ -45,7 +46,7 @@ export function buildReceiptText(struk, { kolom = 32, demo = false, company = nu
   for (const it of struk.items || []) {
     bungkus(it.nama).forEach((t) => b.push(t))
     const disk = Number(it.diskon_persen) > 0 ? ` -${fmtNumber(it.diskon_persen)}%` : ''
-    dua(`  ${fmtNumber(it.kuantitas)} x ${fmtIDR(it.harga)}${disk}`, fmtIDR(it.subtotal))
+    dua(`  ${labelKuantitas(it.kuantitas, it.satuan)} x ${fmtIDR(it.harga)}${disk}`, fmtIDR(it.subtotal))
   }
   garis()
   dua('Subtotal', fmtIDR(struk.subtotal))

@@ -62,3 +62,10 @@ test('uang selalu bulat rupiah', () => {
   assert.equal(S.totalBaris(0.333, 10000), 3330)
   assert.equal(S.totalBaris(1.005, 999), 1004) // 1003.995 → 1004
 })
+
+test('label kuantitas: satuan hanya ikut pada barang terukur', () => {
+  assert.equal(S.labelKuantitas(0.74, 'kg'), '0,74 kg')
+  assert.equal(S.labelKuantitas(1.5, 'Liter'), '1,5 Liter')
+  assert.equal(S.labelKuantitas(2, 'pcs'), '2', 'barang hitungan tanpa satuan')
+  assert.equal(S.labelKuantitas(3, null), '3')
+})

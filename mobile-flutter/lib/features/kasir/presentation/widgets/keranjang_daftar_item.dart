@@ -79,6 +79,10 @@ class DaftarItemKeranjang extends ConsumerWidget {
                       Text(
                         it.terukur
                             ? '${it.labelQty} × ${fmtIDR(it.product.harga)}'
+                                  // Pelanggan minta "Rp 20.000", ditagih 19.980
+                                  // karena berat dibulatkan ke bawah. Sebutkan
+                                  // nominal aslinya agar selisihnya jelas.
+                                  '${it.cara == CaraInput.nominal && it.nominalDiminta != null && it.nominalDiminta != it.subtotal ? ' · diminta ${fmtIDR(it.nominalDiminta!)}' : ''}'
                             : '${fmtIDR(it.product.harga)} × ${fmtQtyRingkas(it.qty)}',
                         style: TextStyle(
                           fontSize: 12.5,

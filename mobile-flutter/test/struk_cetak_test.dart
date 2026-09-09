@@ -2,6 +2,7 @@ import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tuleh_pos/features/cetak/data/printer_service.dart';
 import 'package:tuleh_pos/features/cetak/data/struk_esc_pos.dart';
+import 'package:tuleh_pos/features/cetak/data/struk_teks.dart';
 import 'package:tuleh_pos/features/cetak/domain/entities/struk.dart';
 
 /// Penyusun struk thermal. Yang diuji adalah perataan kolom dan isi — bagian
@@ -126,6 +127,21 @@ void main() {
       expect(teks, contains('Rp 31.500'));
     });
 
+    test('barang timbang: satuan ikut tercetak, bukan angka menggantung', () {
+      // "0,74 x 27.000" tidak memberi tahu pelanggan 0,74 dari apa.
+      const baris = [
+        StrukBaris(nama: 'Mangga Harum Manis', kuantitas: 0.74, harga: 27000, satuan: 'kg'),
+      ];
+      final teks = const StrukEscPos().pratinjau(_struk(baris: baris, total: 19980));
+      expect(teks, contains('0,74 kg x Rp 27.000'));
+
+      final polos = const StrukTeks().bangun(_struk(baris: baris, total: 19980));
+      expect(polos, contains('0,74 kg x Rp 27.000'));
+
+      // Barang hitungan tetap tanpa satuan: "2 pcs" tidak menambah apa pun.
+      expect(const StrukEscPos().pratinjau(_struk()), contains('2 x Rp 18.000'));
+    });
+
     test('kembalian hanya tampil bila ada; catatan kaki bawaan dipakai', () {
       final tanpa = const StrukEscPos().pratinjau(_struk());
       expect(tanpa, isNot(contains('Kembali')));
@@ -168,10 +184,10 @@ void main() {
     test('struk uji bawaan lengkap & siap dipakai menguji printer', () async {
       final uji = PrinterService.strukUji(namaToko: 'Toko Saya');
       expect(uji.namaToko, 'Toko Saya');
-      expect(uji.baris.length, 2);
-      expect(uji.total, 155000);
-      expect(uji.kembalian, 45000);
-      expect(uji.jumlahItem, 3);
+      expect(uji.baris.length, 3);
+      expect(uji.total, 174980);
+      expect(uji.kembalian, 25020);
+      expect(uji.jumlahItem, 4, reason: '2 + 1 + baris timbang dihitung satu');
 
       final bytes = await const StrukEscPos().bangun(uji);
       expect(bytes, isNotEmpty);

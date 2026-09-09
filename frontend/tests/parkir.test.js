@@ -71,3 +71,20 @@ test('simpan/baca per toko lewat storage; data rusak → kosong', () => {
   assert.deepEqual(P.bacaParkir(st, 'T3'), [])
   assert.equal(P.hapusParkir(daftar, daftar[0].id).length, 0)
 })
+
+test('nominal yang diminta pelanggan ikut terparkir dan pulih', () => {
+  const mangga = { id: 'P3', nama: 'Mangga', harga_jual: 27000, satuan: 'kg' }
+  const { entri } = P.tambahParkir([], {
+    items: [
+      { produk: mangga, kuantitas: 0.74, diskonPersen: 0, nominalDiminta: 20000 },
+      { produk: roti, kuantitas: 1, diskonPersen: 0 }
+    ]
+  }, 3000)
+  assert.equal(entri.items[0].nominalDiminta, 20000)
+  assert.equal(entri.items[1].nominalDiminta, null, 'baris hitungan tanpa nominal')
+
+  const baris = P.pulihkanBaris(entri, [mangga, roti])
+  assert.equal(baris[0].kuantitas, 0.74)
+  assert.equal(baris[0].nominalDiminta, 20000)
+  assert.equal(baris[1].nominalDiminta, null)
+})

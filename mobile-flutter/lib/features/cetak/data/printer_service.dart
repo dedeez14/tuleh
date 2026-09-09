@@ -187,15 +187,21 @@ class PrinterService {
     baris: const [
       StrukBaris(nama: 'Contoh item satu', kuantitas: 2, harga: 15000),
       StrukBaris(
+        nama: 'Contoh barang timbang',
+        kuantitas: 0.74,
+        harga: 27000,
+        satuan: 'kg',
+      ),
+      StrukBaris(
         nama: 'Contoh item dengan nama panjang sekali',
         kuantitas: 1,
         harga: 125000,
       ),
     ],
-    total: 155000,
+    total: 174980,
     metode: 'TUNAI',
     dibayar: 200000,
-    kembalian: 45000,
+    kembalian: 25020,
     catatanKaki: 'Uji cetak berhasil',
     barcode: 'TES-0001',
   );

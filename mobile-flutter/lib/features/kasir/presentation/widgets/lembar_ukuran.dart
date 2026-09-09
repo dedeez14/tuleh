@@ -50,6 +50,15 @@ class _LembarUkuranState extends State<LembarUkuran> {
   double get _harga => widget.produk.harga;
   bool get _hargaSah => _harga > 0;
 
+  /// Batas atas ukuran. Baris terukur selalu MENGGANTI isi baris, jadi
+  /// batasnya stok penuh — bukan stok dikurangi isi keranjang. `null` =
+  /// produk tanpa kelola stok (jasa, atau stok tak dilacak).
+  double? get _sisaStok => widget.produk.stok;
+  bool get _lebihStok {
+    final sisa = _sisaStok;
+    return sisa != null && _qty > sisa;
+  }
+
   /// Ukuran hasil isian sekarang (sudah dibulatkan ke langkah satuan).
   double get _qty {
     if (!_modeNominal) {
@@ -70,7 +79,7 @@ class _LembarUkuranState extends State<LembarUkuran> {
 
   void _kirim() {
     final qty = _qty;
-    if (qty <= 0) return;
+    if (qty <= 0 || _lebihStok) return;
     HapticFeedback.selectionClick();
     Navigator.pop(context, (
       qty: qty,
@@ -86,6 +95,7 @@ class _LembarUkuranState extends State<LembarUkuran> {
     final nominalDiminta = _modeNominal ? parseRupiah(_nominal.text) : 0;
     final kurangDariMinimal =
         _modeNominal && nominalDiminta > 0 && qty <= 0 && _hargaSah;
+    final lebihStok = _lebihStok;
 
     return SafeArea(
       top: false,
@@ -110,6 +120,14 @@ class _LembarUkuranState extends State<LembarUkuran> {
                   color: AppColors.mint600,
                 ),
               ),
+              if (_sisaStok != null)
+                Text(
+                  'Sisa stok ${fmtQtyRingkas(_sisaStok!)} $_satuan',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: cs.onSurface.withValues(alpha: 0.65),
+                  ),
+                ),
               const SizedBox(height: 16),
 
               // Dua cara isi. Nominal dimatikan bila harga belum diisi —
@@ -142,14 +160,16 @@ class _LembarUkuranState extends State<LembarUkuran> {
                 harga: _harga,
                 total: _total,
                 nominalDiminta: _modeNominal && nominalDiminta > 0 ? nominalDiminta.toDouble() : null,
-                peringatan: kurangDariMinimal
+                peringatan: lebihStok
+                    ? 'Sisa stok hanya ${fmtQtyRingkas(_sisaStok!)} $_satuan.'
+                    : kurangDariMinimal
                     ? 'Minimal ${fmtIDR(minimalNominal(_harga, _satuan))} '
                           '(${fmtQtyRingkas(langkahSatuan(_satuan))} $_satuan).'
                     : null,
               ),
               const SizedBox(height: 14),
               FilledButton.icon(
-                onPressed: qty > 0 ? _kirim : null,
+                onPressed: qty > 0 && !lebihStok ? _kirim : null,
                 icon: const Icon(Icons.add_shopping_cart_rounded, size: 19),
                 label: Text(widget.qtyAwal == null ? 'Tambah ke keranjang' : 'Simpan perubahan'),
               ),
