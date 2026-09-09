@@ -7,6 +7,7 @@ class Meja {
     this.billId,
     this.billTotal,
     this.pax,
+    this.aktif = true,
   });
 
   final String id;
@@ -15,6 +16,10 @@ class Meja {
   final String? billId;
   final double? billTotal;
   final int? pax;
+
+  /// false = meja dinonaktifkan (server soft-delete). Hanya tampil di layar
+  /// Kelola Meja; peta kasir menyembunyikannya.
+  final bool aktif;
 
   bool get terisi => billId != null && billId!.isNotEmpty;
 }

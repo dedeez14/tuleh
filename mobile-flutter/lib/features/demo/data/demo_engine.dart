@@ -49,9 +49,12 @@ class DemoEngine {
   final List<Map<String, dynamic>> _orders = []; // + toko_id
   final List<Map<String, dynamic>> _bills = []; // + toko_id
   final List<Map<String, dynamic>> _pengeluaran = []; // + toko_id
+  /// Salinan meja yang bisa diubah (tambah / ubah nomor / nonaktifkan).
+  final List<Map<String, dynamic>> _meja = [];
   late Map<String, dynamic> _usaha;
   final Map<String, int> _antrian = {};
   int _nTrx = 0, _nSesi = 0, _nOrder = 0, _nBill = 0, _nExp = 0, _nCust = 0;
+  int _nMeja = 0;
 
   final _rand = Random(20260904);
 
@@ -83,8 +86,11 @@ class DemoEngine {
     _orders.clear();
     _bills.clear();
     _pengeluaran.clear();
+    _meja
+      ..clear()
+      ..addAll([for (final m in demoMejaBakso) Map<String, dynamic>.from(m)]);
     _antrian.clear();
-    _nTrx = _nSesi = _nOrder = _nBill = _nExp = 0;
+    _nTrx = _nSesi = _nOrder = _nBill = _nExp = _nMeja = 0;
     _nCust = _pelanggan.length;
     _usaha = {
       ...demoCompany,
@@ -533,6 +539,60 @@ class DemoEngine {
 
     // --- bon meja ---
     if (path == '/bills' && m == 'GET') return _ok({'tables': _petaMeja(toko)});
+
+    // --- kelola meja (pemilik/manajer) ---
+    if (path == '/tables' && m == 'GET') {
+      final semua = '${query['semua'] ?? ''}' == '1';
+      return _ok([
+        for (final t in _meja)
+          if (t['toko_id'] == toko && (semua || t['aktif'] != false)) {...t},
+      ]);
+    }
+    if (path == '/tables' && m == 'POST') {
+      final nomor = '${data['nomor'] ?? ''}'.trim();
+      if (nomor.isEmpty) return _err(422, 'Nomor meja wajib diisi.');
+      if (_meja.any((t) => t['toko_id'] == toko && t['nomor'] == nomor && t['aktif'] != false)) {
+        return _err(409, 'Nomor meja sudah dipakai.');
+      }
+      _nMeja += 1;
+      final jumlah = _meja.where((t) => t['toko_id'] == toko).length + 1;
+      final baris = <String, dynamic>{
+        'id': 'MEJA-DEMO-$_nMeja',
+        'toko_id': toko,
+        'nomor': nomor,
+        'kode': 'MJ-${jumlah.toString().padLeft(2, '0')}',
+        'aktif': true,
+      };
+      _meja.add(baris);
+      return _ok({...baris}, status: 201);
+    }
+    if (seg.length == 2 && seg[0] == 'tables' && (m == 'PUT' || m == 'DELETE')) {
+      final id = Uri.decodeComponent(seg[1]);
+      final meja = _meja.firstWhere(
+        (t) => t['id'] == id && t['toko_id'] == toko,
+        orElse: () => const {},
+      );
+      if (meja.isEmpty) return _err(404, 'Meja tidak ditemukan.');
+      if (m == 'DELETE') {
+        final bon = _bonMejaTerbuka(toko, '${meja['nomor']}');
+        if (bon != null) {
+          return _err(409, 'Meja ${meja['nomor']} masih punya bon ${bon['nomor']} yang belum dibayar.');
+        }
+        meja['aktif'] = false;
+        return _ok({...meja});
+      }
+      final nomor = '${data['nomor'] ?? ''}'.trim();
+      if (nomor.isEmpty) return _err(422, 'Nomor meja wajib diisi.');
+      final bentrok = _meja.any((t) =>
+          t['id'] != meja['id'] &&
+          t['toko_id'] == toko &&
+          t['nomor'] == nomor &&
+          t['aktif'] != false);
+      if (bentrok) return _err(409, 'Nomor meja sudah dipakai.');
+      // `kode` sengaja tidak berubah: QR yang sudah tertempel tetap sah.
+      meja['nomor'] = nomor;
+      return _ok({...meja});
+    }
     if (path == '/bills' && m == 'POST') return _bukaBon(toko, data);
     if (seg.length == 2 && seg[0] == 'bills' && m == 'GET') {
       final b = _bills.firstWhere((x) => x['id'] == seg[1], orElse: () => const {});
@@ -849,8 +909,19 @@ class DemoEngine {
     return out;
   }
 
+  /// Bon BUKA pada meja bernomor [nomor] (untuk penjagaan nonaktifkan meja).
+  Map<String, dynamic>? _bonMejaTerbuka(String toko, String nomor) {
+    for (final b in _bills) {
+      if (b['toko_id'] == toko && b['status'] == 'BUKA' && b['meja'] == 'Meja $nomor') {
+        return b;
+      }
+    }
+    return null;
+  }
+
   List<Map<String, dynamic>> _petaMeja(String toko) {
-    final meja = demoMejaBakso.where((m) => m['toko_id'] == toko);
+    // Meja nonaktif disembunyikan dari peta kasir (sama dengan GET /tables).
+    final meja = _meja.where((m) => m['toko_id'] == toko && m['aktif'] != false);
     return [
       for (final m in meja)
         () {
@@ -879,7 +950,8 @@ class DemoEngine {
 
   DemoResponse _bukaBon(String toko, Map<String, dynamic> data) {
     final mejaId = '${data['meja_id']}';
-    final meja = demoMejaBakso.firstWhere(
+    // Dari daftar yang bisa diubah, supaya meja hasil Kelola Meja ikut terpakai.
+    final meja = _meja.firstWhere(
       (m) => m['id'] == mejaId,
       orElse: () => const {},
     );

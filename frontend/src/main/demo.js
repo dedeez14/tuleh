@@ -40,6 +40,7 @@ let pelanggan = []
 let sesiList = []      // rekap penuh (+toko_id), terbaru dulu
 let transaksi = []     // struk penuh (+toko_id) + tanggal ISO, terbaru dulu
 let orders = []        // pesanan hidup (POS universal), semua toko
+let nMeja = 0          // penomoran id meja yang ditambahkan lewat Kelola Meja
 let bills = []         // bon meja hidup (open bill dine-in), semua toko
 let stations = []      // stasiun kerja (kasir/dapur/mesin), semua toko
 let stokRiwayat = []   // riwayat perubahan stok (+toko_id): PENJUALAN/MASUK/OPNAME, terbaru dulu
@@ -830,13 +831,60 @@ const handlers = {
     return ok(dihapus)
   },
 
-  'table:list': () => ok(TABLES.filter((t) => t.toko_id === activeTokoId)),
+  // Daftar meja: `semua` menyertakan yang nonaktif (layar Kelola Meja).
+  'table:list': ({ semua } = {}) => ok(
+    TABLES.filter((t) => t.toko_id === activeTokoId && (semua || t.aktif !== false))
+  ),
+
+  'table:tambah': ({ nomor } = {}) => {
+    const no = String(nomor || '').trim()
+    if (!no) return err(422, 'Nomor meja wajib diisi.')
+    if (TABLES.some((t) => t.toko_id === activeTokoId && t.nomor === no && t.aktif !== false)) {
+      return err(409, 'Nomor meja sudah dipakai.')
+    }
+    nMeja += 1
+    // Kode QR berurutan seperti server (MJ-01, MJ-02, …).
+    const baris = {
+      id: `MEJA-DEMO-${nMeja}`,
+      toko_id: activeTokoId,
+      nomor: no,
+      kode: `MJ-${String(TABLES.filter((t) => t.toko_id === activeTokoId).length + 1).padStart(2, '0')}`,
+      aktif: true
+    }
+    TABLES.push(baris)
+    return ok(baris, 201)
+  },
+
+  'table:ubah': ({ id, nomor } = {}) => {
+    const meja = TABLES.find((t) => t.id === id && t.toko_id === activeTokoId)
+    if (!meja) return err(404, 'Meja tidak ditemukan.')
+    const no = String(nomor || '').trim()
+    if (!no) return err(422, 'Nomor meja wajib diisi.')
+    if (TABLES.some((t) => t !== meja && t.toko_id === activeTokoId && t.nomor === no && t.aktif !== false)) {
+      return err(409, 'Nomor meja sudah dipakai.')
+    }
+    // `kode` sengaja tidak ikut berubah: QR yang sudah tertempel tetap sah.
+    meja.nomor = no
+    return ok({ ...meja })
+  },
+
+  'table:nonaktifkan': ({ id } = {}) => {
+    const meja = TABLES.find((t) => t.id === id && t.toko_id === activeTokoId)
+    if (!meja) return err(404, 'Meja tidak ditemukan.')
+    const bon = bonUntukMeja(meja.id)
+    if (bon) {
+      return err(409, `Meja ${meja.nomor} masih punya bon ${bon.nomor} yang belum dibayar.`)
+    }
+    meja.aktif = false
+    return ok({ ...meja })
+  },
 
   // ---------- Bon Meja (open bill dine-in) ----------
 
   // Peta meja: setiap meja toko aktif + ringkasan bon berjalannya (null = kosong)
   'bill:peta': () => {
-    const daftar = TABLES.filter((t) => t.toko_id === activeTokoId).map((t) => {
+    // Meja nonaktif tidak ikut di peta kasir (sama dengan GET /tables server).
+    const daftar = TABLES.filter((t) => t.toko_id === activeTokoId && t.aktif !== false).map((t) => {
       const bill = bonUntukMeja(t.id)
       return { id: t.id, nomor: t.nomor, kode: t.kode, bill: bill ? bonRingkas(bill) : null }
     })

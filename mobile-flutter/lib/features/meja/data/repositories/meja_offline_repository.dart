@@ -266,4 +266,41 @@ class MejaOfflineRepository implements MejaRepository {
       return Err(e);
     }
   }
+
+  // Kelola meja tidak punya jalur offline — diteruskan apa adanya.
+  @override
+  Future<Result<List<Meja>>> daftarMeja({bool semua = false}) async {
+    try {
+      return Ok(await remote.daftarMeja(semua: semua));
+    } on ApiException catch (e) {
+      return Err(e);
+    }
+  }
+
+  @override
+  Future<Result<Meja>> tambahMeja(String nomor) async {
+    try {
+      return Ok(await remote.tambahMeja(nomor));
+    } on ApiException catch (e) {
+      return Err(e);
+    }
+  }
+
+  @override
+  Future<Result<Meja>> ubahMeja(String id, String nomor) async {
+    try {
+      return Ok(await remote.ubahMeja(id, nomor));
+    } on ApiException catch (e) {
+      return Err(e);
+    }
+  }
+
+  @override
+  Future<Result<Meja>> nonaktifkanMeja(String id) async {
+    try {
+      return Ok(await remote.nonaktifkanMeja(id));
+    } on ApiException catch (e) {
+      return Err(e);
+    }
+  }
 }

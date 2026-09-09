@@ -17,8 +17,49 @@ class MejaRemoteDataSource {
     final tables = data is Map && data['tables'] is List ? data['tables'] as List : const [];
     return [
       for (final t in tables)
+        if (t is Map)
+          if (_meja(Map<String, dynamic>.from(t)) case final m when m.aktif) m,
+    ];
+  }
+
+  /// GET /tables → daftar meja. [semua] menyertakan yang nonaktif (untuk layar
+  /// Kelola Meja); tanpa itu server hanya mengirim meja aktif.
+  Future<List<Meja>> daftarMeja({bool semua = false}) async {
+    final body = await _send(() => _dio.get<dynamic>(
+          '/tables',
+          queryParameters: semua ? {'semua': 1} : null,
+        ));
+    final data = body['data'];
+    final rows = data is List
+        ? data
+        : (data is Map && data['tables'] is List ? data['tables'] as List : const []);
+    return [
+      for (final t in rows)
         if (t is Map) _meja(Map<String, dynamic>.from(t)),
     ];
+  }
+
+  /// POST /tables → tambah meja. Server yang membuat `kode` QR-nya.
+  Future<Meja> tambahMeja(String nomor) async {
+    final body = await _send(() => _dio.post<dynamic>('/tables', data: {'nomor': nomor}));
+    return _meja(body['data'] is Map ? Map<String, dynamic>.from(body['data'] as Map) : const <String, dynamic>{});
+  }
+
+  /// PUT /tables/{id} → ubah nomor. `kode` sengaja TIDAK dikirim supaya QR yang
+  /// sudah tercetak dan tertempel di meja tetap berlaku.
+  Future<Meja> ubahMeja(String id, String nomor) async {
+    final body = await _send(() => _dio.put<dynamic>(
+          '/tables/${Uri.encodeComponent(id)}',
+          data: {'nomor': nomor},
+        ));
+    return _meja(body['data'] is Map ? Map<String, dynamic>.from(body['data'] as Map) : const <String, dynamic>{});
+  }
+
+  /// DELETE /tables/{id} → nonaktifkan (bukan hapus). Server membalas 409 bila
+  /// meja masih punya bon terbuka; pesannya menyebut nomor bon itu.
+  Future<Meja> nonaktifkanMeja(String id) async {
+    final body = await _send(() => _dio.delete<dynamic>('/tables/${Uri.encodeComponent(id)}'));
+    return _meja(body['data'] is Map ? Map<String, dynamic>.from(body['data'] as Map) : const <String, dynamic>{});
   }
 
   /// POST /bills → buka bon. `meja_id` + `pax` (kontrak Electron); meja_id_dec
@@ -122,6 +163,8 @@ class MejaRemoteDataSource {
       billId: bill?['id']?.toString(),
       billTotal: bill == null ? null : _double(bill['total'] ?? bill['grand_total'] ?? bill['subtotal']),
       pax: bill?['pax'] is num ? (bill!['pax'] as num).toInt() : null,
+      // Server lama belum mengirim `aktif`; anggap aktif agar tetap tampil.
+      aktif: m['aktif'] != false,
     );
   }
 }

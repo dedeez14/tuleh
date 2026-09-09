@@ -7,6 +7,7 @@ import { getState } from '../state.js'
 import { esc } from '../utils/format.js'
 import { icons, showModal, emptyStateHTML, loadingHTML } from '../components/ui.js'
 import { printQR } from '../components/receipt.js'
+import { bukaKelolaMeja, bolehKelolaMeja } from './kelola-meja.js'
 
 export const TablesScreen = {
   id: 'tables',
@@ -26,6 +27,9 @@ export const TablesScreen = {
               pesanan masuk ke Papan Pesanan sebagai "Menunggu Bayar".
             </p>
           </div>
+          ${bolehKelolaMeja(getState().posRole)
+            ? `<button type="button" class="btn btn--outline" id="tbl-kelola">${icons.settings} Kelola Meja</button>`
+            : ''}
         </div>
         <div id="tbl-info" class="tbl-info u-hidden"></div>
         <div id="tbl-body">${loadingHTML('Memuat meja…')}</div>
@@ -33,6 +37,9 @@ export const TablesScreen = {
 
     const body = container.querySelector('#tbl-body')
     const infoEl = container.querySelector('#tbl-info')
+    // Perubahan daftar meja → muat ulang layar agar kartu QR ikut menyesuaikan.
+    container.querySelector('#tbl-kelola')?.addEventListener('click', () =>
+      bukaKelolaMeja({ onUbah: () => { if (alive) TablesScreen.render(container) } }))
 
     const [tables, appInfo] = await Promise.all([api.table.list(), api.app.info()])
     if (!alive) return

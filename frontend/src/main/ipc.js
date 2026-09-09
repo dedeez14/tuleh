@@ -685,7 +685,28 @@ function registerIpcHandlers(getMainWindow) {
       body: { to: 'ANTRIAN', tipe_pembayaran: str(tipePembayaran, { max: 20 }) }
     })))
 
-  handle('table:list', () => withAuthWatch(api.get('/tables')))
+  // Meja: server yang memiliki daftarnya (nomor + kode QR). `semua` menyertakan
+  // meja nonaktif untuk layar pengaturan; peta kasir memakai daftar aktif saja.
+  handle('table:list', ({ semua } = {}) =>
+    withAuthWatch(api.get('/tables', { query: semua ? { semua: 1 } : {} })))
+
+  handle('table:tambah', ({ nomor, kode }) =>
+    withAuthWatch(api.post('/tables', {
+      body: { nomor: str(nomor, { required: true, max: 30 }), kode: str(kode, { max: 60 }) || undefined }
+    })))
+
+  // Ubah nomor. `kode` sengaja TIDAK dikirim bila kosong: QR yang sudah
+  // tercetak dan tertempel di meja harus tetap berlaku setelah meja diberi
+  // nomor baru.
+  handle('table:ubah', ({ id, nomor, kode }) =>
+    withAuthWatch(api.put(`/tables/${encodeURIComponent(str(id, { required: true }))}`, {
+      body: { nomor: str(nomor, { required: true, max: 30 }), ...(kode ? { kode: str(kode, { max: 60 }) } : {}) }
+    })))
+
+  // Nonaktifkan (server soft-delete). Ditolak 409 bila meja masih punya bon
+  // terbuka — pesan server ditampilkan apa adanya karena menyebut nomor bonnya.
+  handle('table:nonaktifkan', ({ id }) =>
+    withAuthWatch(api.hapus(`/tables/${encodeURIComponent(str(id, { required: true }))}`)))
 
   // Nota bayar-saat-ambil (laundry). Kontrak server final menyusul (Blueprint §13).
   handle('order:simpanNota', ({ items, idPelanggan, catatan }) => {

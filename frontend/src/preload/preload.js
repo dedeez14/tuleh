@@ -121,7 +121,10 @@ contextBridge.exposeInMainWorld('iposAPI', {
     lunasi: invoke('order:lunasi')
   },
   table: {
-    list: invoke('table:list')
+    list: invoke('table:list'),
+    tambah: invoke('table:tambah'),
+    ubah: invoke('table:ubah'),
+    nonaktifkan: invoke('table:nonaktifkan')
   },
   bill: {
     peta: invoke('bill:peta'),

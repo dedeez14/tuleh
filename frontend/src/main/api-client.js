@@ -179,6 +179,8 @@ async function request(method, endpoint, { query, body, auth = true } = {}) {
 
 const get = (endpoint, options) => request('GET', endpoint, options)
 const post = (endpoint, options) => request('POST', endpoint, options)
+const put = (endpoint, options) => request('PUT', endpoint, options)
+const hapus = (endpoint, options) => request('DELETE', endpoint, options)
 
 /**
  * Unggah file multipart (field selalu `logo`). `file` = { bytes, filename, mime }.
@@ -257,4 +259,4 @@ const demoPerangkatStatus = (perangkatId) => request('GET', `/demo/perangkat/${e
 const demoOtpKirim = (body) => request('POST', '/demo/otp/kirim', { body, auth: false })
 const demoOtpVerifikasi = (body) => request('POST', '/demo/otp/verifikasi', { body, auth: false })
 
-module.exports = { request, get, post, upload, setBaseUrl, setGateway, setToken, hasToken, setActiveTokoId, getActiveTokoId, setUpgradeHandler, appVersion, waktuServer, demoPerangkatDaftar, demoPerangkatStatus, demoOtpKirim, demoOtpVerifikasi }
+module.exports = { request, get, post, put, hapus, upload, setBaseUrl, setGateway, setToken, hasToken, setActiveTokoId, getActiveTokoId, setUpgradeHandler, appVersion, waktuServer, demoPerangkatDaftar, demoPerangkatStatus, demoOtpKirim, demoOtpVerifikasi }

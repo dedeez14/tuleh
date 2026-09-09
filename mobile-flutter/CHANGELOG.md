@@ -5,6 +5,11 @@ sebagai isi Release GitHub (workflow flutter-release.yml), dan empat baris
 pertamanya tampil di banner pembaruan dalam aplikasi. Tulis untuk kasir, bukan
 untuk programmer.
 
+## 2.26.0
+
+- **Kelola Meja langsung dari aplikasi** (pemilik/manajer): tambah meja, ubah nomornya, atau nonaktifkan yang sudah tidak dipakai — lewat ikon meja di bilah atas layar Meja. Kode QR meja tidak ikut berubah saat nomor diganti, jadi stiker yang sudah tertempel tetap berlaku. Meja yang masih punya bon belum dibayar tidak bisa dinonaktifkan, dan alasannya disebutkan lengkap dengan nomor bonnya.
+- Meja yang dinonaktifkan langsung hilang dari peta kasir.
+
 ## 2.25.0
 
 Server Tuléh kini menolak transaksi kembar, jadi aplikasi tidak perlu lagi menyerahkan keputusan sulit ke kasir:

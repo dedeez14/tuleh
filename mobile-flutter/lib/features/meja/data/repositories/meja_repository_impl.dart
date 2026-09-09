@@ -62,4 +62,29 @@ class MejaRepositoryImpl implements MejaRepository {
       return Err(e);
     }
   }
+
+  @override
+  Future<Result<List<Meja>>> daftarMeja({bool semua = false}) =>
+      _jalankan(() => remote.daftarMeja(semua: semua));
+
+  @override
+  Future<Result<Meja>> tambahMeja(String nomor) => _jalankan(() => remote.tambahMeja(nomor));
+
+  @override
+  Future<Result<Meja>> ubahMeja(String id, String nomor) =>
+      _jalankan(() => remote.ubahMeja(id, nomor));
+
+  @override
+  Future<Result<Meja>> nonaktifkanMeja(String id) =>
+      _jalankan(() => remote.nonaktifkanMeja(id));
+
+  /// Kelola meja hanya online: tidak ada gunanya mengantre perubahan daftar
+  /// meja (bentrok nomor & hak akses baru ketahuan di server).
+  Future<Result<T>> _jalankan<T>(Future<T> Function() aksi) async {
+    try {
+      return Ok(await aksi());
+    } on ApiException catch (e) {
+      return Err(e);
+    }
+  }
 }

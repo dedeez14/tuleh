@@ -24,4 +24,18 @@ abstract interface class MejaRepository {
 
   /// Bayar & tutup bon (POST /bills/{id}/settle).
   Future<Result<HasilTulis>> bayar(String billId, {required String tipe, required double dibayar});
+
+  // ---- Kelola meja (pemilik/manajer; server menolak peran lain dgn 403) ----
+
+  /// Daftar meja (GET /tables). [semua] menyertakan yang nonaktif.
+  Future<Result<List<Meja>>> daftarMeja({bool semua = false});
+
+  /// Tambah meja baru; server yang membuat kode QR-nya.
+  Future<Result<Meja>> tambahMeja(String nomor);
+
+  /// Ubah nomor meja — kode QR TIDAK ikut berubah.
+  Future<Result<Meja>> ubahMeja(String id, String nomor);
+
+  /// Nonaktifkan meja (soft delete). 409 bila masih ada bon terbuka.
+  Future<Result<Meja>> nonaktifkanMeja(String id);
 }

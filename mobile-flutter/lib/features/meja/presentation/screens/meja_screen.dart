@@ -8,7 +8,9 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../core/widgets/states.dart';
 import '../../domain/entities/meja.dart';
+import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../providers/meja_providers.dart';
+import 'kelola_meja_screen.dart';
 import 'bill_detail_screen.dart';
 
 /// Layar Meja (dine-in) — peta meja: kosong vs terisi (+ total bon).
@@ -20,7 +22,21 @@ class MejaScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final peta = ref.watch(mejaPetaProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Meja')),
+      appBar: AppBar(
+        title: const Text('Meja'),
+        actions: [
+          // Hanya pemilik/manajer: server menolak peran lain dengan 403.
+          if (bolehKelolaMeja(ref.watch(authControllerProvider).valueOrNull?.role))
+            IconButton(
+              tooltip: 'Kelola meja',
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const KelolaMejaScreen()),
+              ),
+              icon: const Icon(Icons.table_restaurant_outlined),
+            ),
+          const SizedBox(width: 4),
+        ],
+      ),
       body: RefreshIndicator(
         onRefresh: () async => ref.invalidate(mejaPetaProvider),
         child: peta.when(

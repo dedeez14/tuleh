@@ -66,7 +66,9 @@ export const PetaMejaScreen = {
         root.innerHTML = `<div class="meja">${emptyStateHTML({ icon: icons.alert, title: 'Gagal memuat peta meja', desc: firstError(res) })}</div>`
         return
       }
-      lastTables = res.data.tables || []
+      // Meja nonaktif (dimatikan lewat Kelola Meja) disembunyikan; server lama
+      // yang belum mengirim `aktif` tetap menampilkan semuanya.
+      lastTables = (res.data.tables || []).filter((t) => t.aktif !== false)
       renderPeta()
     }
 

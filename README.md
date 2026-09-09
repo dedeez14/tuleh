@@ -149,6 +149,8 @@ APK Android **legacy** (`Tuleh-X.Y.Z-android.apk` di rilis desktop) kini melapor
 
 Sejak 0.9.24 cetak langsung hanya berlaku untuk **struk** — ekspor PDF laporan dan cetak QR meja selalu lewat dialog Windows (sebelumnya ikut tersedot ke printer thermal), dan **Uji cetak** memakai setelan yang sedang dicoba tanpa menyimpannya.
 
+**Kelola Meja** (desktop ≥ 0.9.27, Android ≥ 2.26.0): tambah meja, ubah nomor, dan nonaktifkan lewat `POST/PUT/DELETE /tables` — hanya untuk peran OWNER/MANAGER (server menolak lainnya dengan 403, jadi tombolnya disembunyikan). Nomor bentrok dibalas 409; meja dengan bon terbuka tidak bisa dinonaktifkan (pesan server menyebut nomor bonnya, ditampilkan apa adanya); `kode` QR tidak pernah ikut berubah saat meja di-rename. `GET /tables?semua=1` dipakai layar kelola untuk menampilkan meja nonaktif, sedangkan peta kasir menyaringnya.
+
 Sejak server MOVERA mengenal `client_ref` (9 Sep 2026; desktop ≥ 0.9.26, Android ≥ 2.25.0) antrean offline **tidak lagi** melempar baris ke *perlu ditinjau* saat timeout setelah kirim — kiriman ulang aman karena server membalas jawaban lama (`meta.idempoten`) alih-alih membuat transaksi kedua. Pemulih pencocokan total/metode/waktu hanya tersisa untuk baris TINJAU warisan. Pembaruan Android Flutter kini bersumber dari `/app/versi?platform=android-flutter`; GitHub Releases tinggal cadangan, termasuk saat ABI perangkat tidak cocok dengan berkas yang diiklankan server.
 
 Kebutuhan yang menunggu sisi server (idempotensi `client_ref`, kelola meja, jalur versi Flutter) dikumpulkan di [SERVER-YANG-DIBUTUHKAN.md](SERVER-YANG-DIBUTUHKAN.md) — dokumen itu sekaligus bisa ditempel sebagai prompt untuk yang mengerjakan MOVERA.

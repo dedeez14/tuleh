@@ -90,3 +90,37 @@
   max-width: 320px;
   margin: 0 auto;
 }
+
+/* ---------- Dialog Kelola Meja ---------- */
+
+.meja-kelola__tabel {
+  width: 100%;
+}
+
+.meja-kelola__nomor {
+  font-weight: 700;
+}
+
+.meja-kelola__tabel tr.is-nonaktif .meja-kelola__nomor {
+  color: var(--text-3);
+  text-decoration: line-through;
+}
+
+.meja-kelola__kosong,
+.meja-kelola__galat {
+  padding: var(--sp-5);
+  text-align: center;
+  color: var(--text-2);
+}
+
+/* Kolom isian + tombol tambah sejajar di kaki dialog. */
+.meja-kelola__foot {
+  display: flex;
+  gap: var(--sp-3);
+  align-items: center;
+  width: 100%;
+}
+
+.meja-kelola__foot .input {
+  flex: 1 1 auto;
+}
