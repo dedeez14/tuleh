@@ -14,11 +14,13 @@ import '../../../demo/demo_session.dart';
 import 'hasil_transaksi_sheet.dart';
 import '../../../pengaturan/presentation/providers/pengaturan_providers.dart';
 import '../../../sesi/presentation/providers/sesi_providers.dart';
+import '../../domain/entities/cart_item.dart';
 import '../controllers/cart_controller.dart';
 import '../controllers/keranjang_meta.dart';
 import 'keranjang_daftar_item.dart';
 import 'keranjang_form_bayar.dart';
 import 'keranjang_kartu_tambahan.dart';
+import 'lembar_ukuran.dart';
 import 'parkir_sheet.dart';
 import '../../../../core/offline/pengurai.dart';
 import '../../../products/presentation/providers/products_provider.dart';
@@ -212,6 +214,21 @@ class _CartSheetState extends ConsumerState<CartSheet> {
       );
   }
 
+  /// Barang terukur di keranjang: timbang ulang lewat lembar yang sama dengan
+  /// katalog, lalu GANTI isinya (bukan menambah) — menjumlahkan dua penimbangan
+  /// diam-diam akan menagih lebih.
+  Future<void> _ubahUkuran(CartItem it) async {
+    final isian = await tanyaUkuran(context, it.product, qtyAwal: it.qty);
+    if (isian == null || !mounted) return;
+    ref.read(cartControllerProvider.notifier).tambahUkuran(
+      it.product,
+      isian.qty,
+      cara: isian.cara,
+      nominalDiminta: isian.nominalDiminta,
+      ganti: true,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final items = ref.watch(cartControllerProvider);
@@ -253,6 +270,7 @@ class _CartSheetState extends ConsumerState<CartSheet> {
                     : _langkah == _Langkah.keranjang
                     ? DaftarItemKeranjang(
                         onUbah: cart.setQty,
+                        onUbahUkuran: (it) => _ubahUkuran(it),
                         onHapus: cart.remove,
                         tambahan: const KartuTambahanKeranjang(),
                       )

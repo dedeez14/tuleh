@@ -5,6 +5,13 @@ sebagai isi Release GitHub (workflow flutter-release.yml), dan empat baris
 pertamanya tampil di banner pembaruan dalam aplikasi. Tulis untuk kasir, bukan
 untuk programmer.
 
+## 2.27.0
+
+- **Jualan per kilo & "beli sekian rupiah".** Untuk barang bersatuan Kg / liter / meter / ons, mengetuk produk kini menanyakan ukurannya — atau berapa rupiah yang diminta pelanggan. Contoh: mangga Rp 27.000/kg, pelanggan minta Rp 20.000 → aplikasi menghitung 0,74 kg dan menagih Rp 19.980, ditampilkan lengkap sebelum masuk keranjang sehingga kasir bisa langsung menyebutkannya.
+- Tagihan tidak pernah melebihi nominal yang diminta (pembulatan berat ke bawah, ke kelipatan 0,01 kg).
+- Baris keranjang barang timbangan menampilkan "0,74 Kg" dan diketuk untuk menimbang ulang (mengganti isinya, bukan menambah).
+- Mode Demo minimarket kini punya kategori Buah & Sayur (mangga, jeruk, cabai) untuk mencoba fitur ini.
+
 ## 2.26.0
 
 - **Kelola Meja langsung dari aplikasi** (pemilik/manajer): tambah meja, ubah nomornya, atau nonaktifkan yang sudah tidak dipakai — lewat ikon meja di bilah atas layar Meja. Kode QR meja tidak ikut berubah saat nomor diganti, jadi stiker yang sudah tertempel tetap berlaku. Meja yang masih punya bon belum dibayar tidak bisa dinonaktifkan, dan alasannya disebutkan lengkap dengan nomor bonnya.

@@ -25,7 +25,8 @@ const KATEGORI = [
   { id: 'KAT-2', kode: 'MKN', nama: 'Makanan' },
   { id: 'KAT-3', kode: 'SNK', nama: 'Snack' },
   { id: 'KAT-4', kode: 'SMB', nama: 'Sembako' },
-  { id: 'KAT-5', kode: 'LAIN', nama: 'Lainnya' }
+  { id: 'KAT-5', kode: 'LAIN', nama: 'Lainnya' },
+  { id: 'KAT-6', kode: 'BUAH', nama: 'Buah & Sayur' }
 ]
 
 const GUDANG = [
@@ -81,7 +82,12 @@ function buatProduk() {
     p(19, 'SMB-004', 'Telur Ayam 1kg', '8991005104', 28000, 0, 'Kg', 'Sembako', true, 11),
     p(20, 'SMB-005', 'Indomie Goreng', '089686010947', 3500, 0, 'Pcs', 'Sembako', true, 96),
     p(21, 'LAIN-001', 'Tissue 250 lembar', '8991006101', 11000, 0, 'Pcs', 'Lainnya', true, 0),
-    p(22, 'LAIN-002', 'Sabun Mandi Batang', '8991006102', 5500, 0, 'Pcs', 'Lainnya', true, 17)
+    p(22, 'LAIN-002', 'Sabun Mandi Batang', '8991006102', 5500, 0, 'Pcs', 'Lainnya', true, 17),
+    // Buah timbangan: memakai satuan Kg supaya penjualan per kilo & per nominal
+    // ("mangga dua puluh ribu") bisa dicoba di Mode Demo.
+    p(23, 'BUAH-001', 'Mangga Harum Manis', null, 27000, 0, 'Kg', 'Buah & Sayur', true, 18.5),
+    p(24, 'BUAH-002', 'Jeruk Medan', null, 22000, 0, 'Kg', 'Buah & Sayur', true, 12),
+    p(25, 'BUAH-003', 'Cabai Merah Keriting', null, 48000, 0, 'Kg', 'Buah & Sayur', true, 6.25)
   ]
 }
 

@@ -36,13 +36,15 @@ class KeranjangParkir {
   final List<CartItem> items;
   final KeranjangMeta meta;
 
-  int get jumlahItem => items.fold(0, (s, e) => s + e.qty);
+  /// Barang terukur dihitung satu baris = satu item (0,74 kg tetap "1 item").
+  int get jumlahItem =>
+      items.fold(0, (s, e) => s + (e.terukur ? 1 : e.qty.round()));
   double get totalKotor => items.fold(0, (s, e) => s + e.subtotal);
   double get total => totalKotor - hitungPotongan(totalKotor, meta.diskonPersen);
 
   /// Ringkasan isi: "2× Kopi Susu, 1× Roti" (maks 3 nama).
   String get ringkasan {
-    final nama = [for (final e in items.take(3)) '${e.qty}× ${e.product.nama}'];
+    final nama = [for (final e in items.take(3)) '${e.labelQty}× ${e.product.nama}'];
     final sisa = items.length - 3;
     return sisa > 0 ? '${nama.join(', ')}, +$sisa lainnya' : nama.join(', ');
   }
@@ -52,7 +54,13 @@ class KeranjangParkir {
     'nomor': nomor,
     'waktu': waktu.toIso8601String(),
     'items': [
-      for (final e in items) {'qty': e.qty, 'produk': _produkKeJson(e.product)},
+      for (final e in items)
+        {
+          'qty': e.qty,
+          'cara': e.cara.name,
+          if (e.nominalDiminta != null) 'nominal_diminta': e.nominalDiminta,
+          'produk': _produkKeJson(e.product),
+        },
     ],
     'pelanggan': meta.pelanggan == null ? null : _pelangganKeJson(meta.pelanggan!),
     'diskon_persen': meta.diskonPersen,
@@ -66,9 +74,18 @@ class KeranjangParkir {
     for (final r in rawItems) {
       if (r is! Map) continue;
       final p = _produkDariJson(r['produk']);
-      final qty = (r['qty'] as num?)?.toInt() ?? 0;
+      // Keranjang lama menyimpan qty sebagai bilangan bulat; keduanya terbaca.
+      final qty = (r['qty'] as num?)?.toDouble() ?? 0;
       if (p == null || qty <= 0) continue;
-      items.add(CartItem(product: p, qty: qty));
+      items.add(CartItem(
+        product: p,
+        qty: qty,
+        cara: CaraInput.values.firstWhere(
+          (c) => c.name == '${r['cara'] ?? ''}',
+          orElse: () => CaraInput.satuan,
+        ),
+        nominalDiminta: (r['nominal_diminta'] as num?)?.toDouble(),
+      ));
     }
     if (items.isEmpty) return null;
     final pel = m['pelanggan'];

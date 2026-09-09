@@ -6,12 +6,23 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/utils/format.dart';
+import '../../../../core/utils/satuan_terukur.dart';
+import '../../domain/entities/cart_item.dart';
 import '../controllers/cart_controller.dart';
 
 class DaftarItemKeranjang extends ConsumerWidget {
-  const DaftarItemKeranjang({super.key, required this.onUbah, required this.onHapus, this.tambahan});
+  const DaftarItemKeranjang({
+    super.key,
+    required this.onUbah,
+    required this.onUbahUkuran,
+    required this.onHapus,
+    this.tambahan,
+  });
 
-  final void Function(String id, int qty) onUbah;
+  final void Function(String id, double qty) onUbah;
+
+  /// Barang terukur: buka lembar ukuran untuk baris ini.
+  final void Function(CartItem item) onUbahUkuran;
   final void Function(String id) onHapus;
 
   /// Kartu di bawah daftar item (pelanggan, diskon, catatan).
@@ -66,7 +77,9 @@ class DaftarItemKeranjang extends ConsumerWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '${fmtIDR(it.product.harga)} × ${it.qty}',
+                        it.terukur
+                            ? '${it.labelQty} × ${fmtIDR(it.product.harga)}'
+                            : '${fmtIDR(it.product.harga)} × ${fmtQtyRingkas(it.qty)}',
                         style: TextStyle(
                           fontSize: 12.5,
                           color: cs.onSurface.withValues(alpha: 0.6),
@@ -83,10 +96,21 @@ class DaftarItemKeranjang extends ConsumerWidget {
                     ],
                   ),
                 ),
-                PengaturJumlahKeranjang(
-                  qty: it.qty,
-                  onUbah: (n) => onUbah(it.product.id, n),
-                ),
+                // Barang terukur: ketuk untuk menimbang ulang, bukan +/− satuan.
+                if (it.terukur)
+                  ActionChip(
+                    avatar: Icon(Icons.scale_outlined, size: 16, color: cs.primary),
+                    label: Text(
+                      it.labelQty,
+                      style: TextStyle(fontWeight: FontWeight.w700, color: cs.primary),
+                    ),
+                    onPressed: () => onUbahUkuran(it),
+                  )
+                else
+                  PengaturJumlahKeranjang(
+                    qty: it.qty,
+                    onUbah: (n) => onUbah(it.product.id, n),
+                  ),
               ],
             ),
           ),
@@ -101,8 +125,8 @@ class DaftarItemKeranjang extends ConsumerWidget {
 class PengaturJumlahKeranjang extends StatelessWidget {
   const PengaturJumlahKeranjang({super.key, required this.qty, required this.onUbah});
 
-  final int qty;
-  final ValueChanged<int> onUbah;
+  final double qty;
+  final ValueChanged<double> onUbah;
 
   @override
   Widget build(BuildContext context) {
@@ -130,7 +154,7 @@ class PengaturJumlahKeranjang extends StatelessWidget {
           SizedBox(
             width: 24,
             child: Text(
-              '$qty',
+              fmtQtyRingkas(qty),
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontWeight: FontWeight.w800,

@@ -28,19 +28,44 @@ class CartController extends Notifier<List<CartItem>> {
     return const [];
   }
 
-  void add(Product p) {
+  /// Tambah barang hitungan: +1 tiap ketukan.
+  void add(Product p) => tambahUkuran(p, 1);
+
+  /// Tambah/ganti baris untuk barang terukur (atau hitungan dengan jumlah
+  /// tertentu). Ukuran DIGANTI, bukan ditambahkan: kasir menimbang ulang, dan
+  /// menjumlahkan dua penimbangan diam-diam akan menagih lebih.
+  void tambahUkuran(
+    Product p,
+    double qty, {
+    CaraInput cara = CaraInput.satuan,
+    double? nominalDiminta,
+    bool ganti = false,
+  }) {
+    if (qty <= 0) return;
     final idx = state.indexWhere((e) => e.product.id == p.id);
-    if (idx >= 0) {
+    if (idx < 0) {
       state = [
-        for (var i = 0; i < state.length; i++)
-          if (i == idx) state[i].copyWith(qty: state[i].qty + 1) else state[i],
+        ...state,
+        CartItem(product: p, qty: qty, cara: cara, nominalDiminta: nominalDiminta),
       ];
-    } else {
-      state = [...state, CartItem(product: p, qty: 1)];
+      return;
     }
+    final lama = state[idx];
+    state = [
+      for (var i = 0; i < state.length; i++)
+        if (i == idx)
+          CartItem(
+            product: p,
+            qty: ganti ? qty : lama.qty + qty,
+            cara: cara,
+            nominalDiminta: nominalDiminta,
+          )
+        else
+          state[i],
+    ];
   }
 
-  void setQty(String productId, int qty) {
+  void setQty(String productId, double qty) {
     if (qty <= 0) {
       remove(productId);
       return;
@@ -70,5 +95,9 @@ final cartTotalProvider = Provider<double>((ref) {
 
 /// Jumlah item (kuantitas) di keranjang.
 final cartCountProvider = Provider<int>((ref) {
-  return ref.watch(cartControllerProvider).fold<int>(0, (s, e) => s + e.qty);
+  // Barang terukur dihitung satu baris = satu item (0,74 kg tetap "1 item").
+  return ref.watch(cartControllerProvider).fold<int>(
+    0,
+    (s, e) => s + (e.terukur ? 1 : e.qty.round()),
+  );
 });

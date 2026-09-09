@@ -64,7 +64,7 @@ Future<bool> lanjutkanParkir(BuildContext context, WidgetRef ref, KeranjangParki
       builder: (ctx) => AlertDialog(
         title: const Text('Keranjang aktif masih berisi'),
         content: Text(
-          'Keranjang saat ini berisi ${aktif.fold<int>(0, (s, e) => s + e.qty)} item. '
+          'Keranjang saat ini berisi ${aktif.fold<int>(0, (s, e) => s + (e.terukur ? 1 : e.qty.round()))} item. '
           'Parkir dulu keranjang itu, atau ganti dengan keranjang #${p.nomor}?',
         ),
         actions: [

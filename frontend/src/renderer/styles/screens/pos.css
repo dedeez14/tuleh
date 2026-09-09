@@ -878,3 +878,28 @@
 .pos-pay__bank-name { font-weight: 700; }
 .pos-pay__bank-rek { font-size: var(--text-lg); letter-spacing: 0.02em; }
 .pos-pay__bank-nama { font-size: var(--text-sm); color: var(--text-2); }
+
+/* ---------- Dialog ukuran (barang per kilo / nominal) ---------- */
+
+/* Ringkasan hitungan yang dibacakan kasir ke pelanggan. */
+.ukur-ringkas {
+  margin-top: var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  font-weight: 700;
+  text-align: center;
+}
+
+.ukur-ringkas__galat {
+  color: var(--danger);
+}
+
+.tabs--sm {
+  margin-bottom: var(--sp-4);
+}
+
+.tabs--sm .tabs__item[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}

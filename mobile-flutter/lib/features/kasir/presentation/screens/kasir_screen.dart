@@ -6,6 +6,7 @@ import '../../../../core/layout/lebar.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/format.dart';
+import '../../../../core/utils/satuan_terukur.dart';
 import '../../../../core/widgets/app_background.dart';
 import '../../../../core/widgets/motion.dart';
 import '../../../../core/widgets/pindai_barcode.dart';
@@ -18,6 +19,7 @@ import '../../data/parkir_store.dart';
 import '../controllers/cart_controller.dart';
 import '../controllers/keranjang_meta.dart';
 import '../widgets/cart_sheet.dart';
+import '../widgets/lembar_ukuran.dart';
 import '../widgets/parkir_sheet.dart';
 
 /// Layar Kasir — katalog, pencarian, penyaring kategori, dan keranjang.
@@ -66,9 +68,37 @@ class _KasirScreenState extends ConsumerState<KasirScreen> {
     );
   }
 
-  void _tambah(Product p) {
+  Future<void> _tambah(Product p) async {
+    // Barang yang dijual per kilo/liter/meter tidak masuk akal ditambah "1"
+    // sekali ketuk — tanyakan ukurannya (atau nominal yang diminta pelanggan).
+    if (apakahTerukur(p.satuan)) {
+      final isian = await tanyaUkuran(context, p);
+      if (isian == null || !mounted) return;
+      ref.read(cartControllerProvider.notifier).tambahUkuran(
+        p,
+        isian.qty,
+        cara: isian.cara,
+        nominalDiminta: isian.nominalDiminta,
+        ganti: true,
+      );
+      HapticFeedback.selectionClick();
+      return;
+    }
     ref.read(cartControllerProvider.notifier).add(p);
     HapticFeedback.selectionClick();
+  }
+
+  /// Ubah isi baris terukur yang sudah ada di keranjang.
+  Future<void> _ubahUkuran(Product p, double qtyAwal) async {
+    final isian = await tanyaUkuran(context, p, qtyAwal: qtyAwal);
+    if (isian == null || !mounted) return;
+    ref.read(cartControllerProvider.notifier).tambahUkuran(
+      p,
+      isian.qty,
+      cara: isian.cara,
+      nominalDiminta: isian.nominalDiminta,
+      ganti: true,
+    );
   }
 
   /// Pindai beruntun: tiap barcode yang dikenal langsung masuk keranjang.
@@ -113,7 +143,7 @@ class _KasirScreenState extends ConsumerState<KasirScreen> {
     final cart = ref.read(cartControllerProvider.notifier);
 
     // Kuantitas per produk — dipakai kartu untuk menampilkan pengatur jumlah.
-    final qty = <String, int>{for (final e in items) e.product.id: e.qty};
+    final qty = <String, double>{for (final e in items) e.product.id: e.qty};
 
     final semua = products.valueOrNull ?? const <Product>[];
     final kategori = <String>{
@@ -170,6 +200,8 @@ class _KasirScreenState extends ConsumerState<KasirScreen> {
                                 qty: qty[tampil[i].id] ?? 0,
                                 onTambah: () => _tambah(tampil[i]),
                                 onUbahQty: (n) => cart.setQty(tampil[i].id, n),
+                                onUbahUkuran: () =>
+                                    _ubahUkuran(tampil[i], qty[tampil[i].id] ?? 0),
                               ),
                             ),
                           )
@@ -189,6 +221,8 @@ class _KasirScreenState extends ConsumerState<KasirScreen> {
                                 qty: qty[tampil[i].id] ?? 0,
                                 onTambah: () => _tambah(tampil[i]),
                                 onUbahQty: (n) => cart.setQty(tampil[i].id, n),
+                                onUbahUkuran: () =>
+                                    _ubahUkuran(tampil[i], qty[tampil[i].id] ?? 0),
                               ),
                             ),
                           ),
@@ -436,12 +470,16 @@ class _KartuProduk extends StatelessWidget {
     required this.qty,
     required this.onTambah,
     required this.onUbahQty,
+    required this.onUbahUkuran,
   });
 
   final Product product;
-  final int qty;
+  final double qty;
   final VoidCallback onTambah;
-  final ValueChanged<int> onUbahQty;
+  final ValueChanged<double> onUbahQty;
+
+  /// Barang terukur: buka lembar ukuran alih-alih menaikkan jumlah.
+  final VoidCallback onUbahUkuran;
 
   bool get _jasa => (product.tipe ?? '').toUpperCase() == 'JASA';
   bool get _diKeranjang => qty > 0;
@@ -533,11 +571,17 @@ class _KartuProduk extends StatelessWidget {
               AnimatedSwitcher(
                 duration: Gerak.cepat,
                 child: _diKeranjang
-                    ? _PengaturJumlah(
-                        key: const ValueKey('qty'),
-                        qty: qty,
-                        onUbah: onUbahQty,
-                      )
+                    ? (apakahTerukur(product.satuan)
+                          ? _TombolUbahUkuran(
+                              key: const ValueKey('ukuran'),
+                              label: '${fmtQtyRingkas(qty)} ${product.satuan}',
+                              onTekan: onUbahUkuran,
+                            )
+                          : _PengaturJumlah(
+                              key: const ValueKey('qty'),
+                              qty: qty,
+                              onUbah: onUbahQty,
+                            ))
                     : Semantics(
                         key: const ValueKey('tambah'),
                         button: true,
@@ -637,12 +681,31 @@ class _LencanaStok extends StatelessWidget {
   }
 }
 
+/// Barang terukur di keranjang: tampilkan ukurannya, ketuk untuk mengubah.
+class _TombolUbahUkuran extends StatelessWidget {
+  const _TombolUbahUkuran({super.key, required this.label, required this.onTekan});
+
+  final String label;
+  final VoidCallback onTekan;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return ActionChip(
+      avatar: Icon(Icons.scale_outlined, size: 16, color: cs.primary),
+      label: Text(label, style: TextStyle(fontWeight: FontWeight.w700, color: cs.primary)),
+      onPressed: onTekan,
+      tooltip: 'Ubah ukuran',
+    );
+  }
+}
+
 /// Pengatur jumlah ringkas (−  n  +) dengan sasaran sentuh yang layak.
 class _PengaturJumlah extends StatelessWidget {
   const _PengaturJumlah({super.key, required this.qty, required this.onUbah});
 
-  final int qty;
-  final ValueChanged<int> onUbah;
+  final double qty;
+  final ValueChanged<double> onUbah;
 
   @override
   Widget build(BuildContext context) {
@@ -657,8 +720,8 @@ class _PengaturJumlah extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           _TombolBulat(
-            ikon: qty == 1 ? Icons.delete_outline_rounded : Icons.remove_rounded,
-            tooltip: qty == 1 ? 'Hapus dari keranjang' : 'Kurangi',
+            ikon: qty <= 1 ? Icons.delete_outline_rounded : Icons.remove_rounded,
+            tooltip: qty <= 1 ? 'Hapus dari keranjang' : 'Kurangi',
             onTekan: () {
               onUbah(qty - 1);
               HapticFeedback.selectionClick();
@@ -667,7 +730,7 @@ class _PengaturJumlah extends StatelessWidget {
           SizedBox(
             width: 26,
             child: Text(
-              '$qty',
+              fmtQtyRingkas(qty),
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontWeight: FontWeight.w800,

@@ -14,6 +14,9 @@ import { lineTotals, cartTotals, kembalian, shortfall, quickCashOptions, clampQt
 import { midtransBoleh, qrisAksi, sisaDetik, formatSisa, harusFallbackStatis } from '../lib/qris-flow.js'
 import { customerViewHTML } from '../components/customer-view.js'
 import { bacaParkir, simpanParkir, tambahParkir, hapusParkir, pulihkanBaris, ringkasParkir } from '../lib/parkir.js'
+import {
+  apakahTerukur, bulatkanKuantitas, kuantitasDariNominal, minimalNominal, totalBaris, langkahSatuan
+} from '../lib/satuan-terukur.js'
 
 const QRIS_POLL_MS = 4000 // interval cek status tagihan QRIS (kontrak: 3–5s)
 
@@ -453,53 +456,116 @@ function renderPos(container) {
   }
 
   // Layanan kiloan (satuan Kg): tanya berat hasil timbangan, bukan langsung 1
-  function bukaInputBerat(produk) {
+  // Barang terukur (kilo/liter/meter): tanya ukurannya, atau berapa rupiah
+  // yang diminta pelanggan. Nominal diterjemahkan ke ukuran lebih dulu supaya
+  // uang yang ditagih tetap `ukuran × harga` — lihat PENJUALAN-TERUKUR.md.
+  function bukaInputUkuran(produk, { qtyAwal = null } = {}) {
+    const satuan = String(produk.satuan || '').toLowerCase()
+    const harga = hargaJual(produk)
+    const hargaSah = harga > 0
+
     const body = document.createElement('div')
     body.innerHTML = `
-      <div class="field">
-        <label class="field__label" for="berat-in">Berat hasil timbangan (kg)</label>
-        <input class="input input--lg num" id="berat-in" type="text" inputmode="decimal"
-               placeholder="mis. 4,5" autocomplete="off" />
-        <div class="field__hint num" id="berat-view">${fmtIDR(hargaJual(produk))} / kg</div>
+      <div class="tabs tabs--sm" role="tablist">
+        <button class="tabs__item is-active" type="button" data-mode="ukuran">Per ${esc(satuan)}</button>
+        <button class="tabs__item" type="button" data-mode="nominal" ${hargaSah ? '' : 'disabled'}>Nominal</button>
       </div>
-      <div class="u-flex" id="berat-cepat" style="flex-wrap:wrap">
-        ${[1, 2, 3, 4, 5].map((n) => `
-          <button type="button" class="btn btn--outline btn--sm" data-kg="${n}">${n} kg</button>`).join('')}
-      </div>`
+      <div class="field" id="ukur-field-ukuran">
+        <label class="field__label" for="ukur-in">Berat / ukuran hasil timbangan</label>
+        <input class="input input--lg num" id="ukur-in" type="text" inputmode="decimal"
+               placeholder="mis. 0,74" autocomplete="off" value="${qtyAwal ? esc(String(qtyAwal).replace('.', ',')) : ''}" />
+        <div class="u-flex" id="ukur-cepat" style="flex-wrap:wrap">
+          ${[0.25, 0.5, 1, 2, 5].map((n) => `
+            <button type="button" class="btn btn--outline btn--sm" data-q="${n}">${String(n).replace('.', ',')} ${esc(satuan)}</button>`).join('')}
+        </div>
+      </div>
+      <div class="field u-hidden" id="ukur-field-nominal">
+        <label class="field__label" for="ukur-rp">Pelanggan minta berapa rupiah?</label>
+        <input class="input input--lg num" id="ukur-rp" type="text" inputmode="numeric"
+               placeholder="mis. 20.000" autocomplete="off" />
+        <div class="u-flex" id="ukur-cepat-rp" style="flex-wrap:wrap">
+          ${[5000, 10000, 20000, 50000].map((n) => `
+            <button type="button" class="btn btn--outline btn--sm" data-rp="${n}">${fmtIDR(n)}</button>`).join('')}
+        </div>
+      </div>
+      <div class="ukur-ringkas num" id="ukur-view">${fmtIDR(harga)} / ${esc(satuan)}</div>`
+
     const footer = document.createElement('div')
-    footer.innerHTML = `<button type="button" class="btn btn--primary" id="berat-ok">Tambah ke Keranjang</button>`
+    footer.innerHTML = `<button type="button" class="btn btn--primary" id="ukur-ok">${qtyAwal ? 'Simpan perubahan' : 'Tambah ke Keranjang'}</button>`
 
     const { close } = showModal({ title: produk.nama, body, footer })
-    const input = body.querySelector('#berat-in')
-    const view = body.querySelector('#berat-view')
+    const inUkuran = body.querySelector('#ukur-in')
+    const inNominal = body.querySelector('#ukur-rp')
+    const view = body.querySelector('#ukur-view')
+    const tombolOk = footer.querySelector('#ukur-ok')
+    let mode = 'ukuran'
 
-    input.addEventListener('input', () => {
-      const kg = parseDesimal(input.value) || 0
-      view.textContent = kg > 0
-        ? `${fmtNumber(kg)} kg × ${fmtIDR(hargaJual(produk))} = ${fmtIDR(kg * hargaJual(produk))}`
-        : `${fmtIDR(hargaJual(produk))} / kg`
+    // Ukuran yang sedang diisi (sudah dibulatkan ke langkah satuannya).
+    function qtySekarang() {
+      if (mode === 'ukuran') return bulatkanKuantitas(parseDesimal(inUkuran.value) || 0, satuan)
+      return kuantitasDariNominal(parseAmount(inNominal.value), harga, satuan)
+    }
+
+    function render() {
+      const qty = qtySekarang()
+      const nominal = mode === 'nominal' ? parseAmount(inNominal.value) : 0
+      tombolOk.disabled = !(qty > 0)
+      if (mode === 'nominal' && nominal > 0 && qty <= 0) {
+        view.innerHTML = `<span class="ukur-ringkas__galat">Minimal ${fmtIDR(minimalNominal(harga, satuan))} (${String(langkahSatuan(satuan)).replace('.', ',')} ${esc(satuan)}).</span>`
+        return
+      }
+      if (!(qty > 0)) { view.textContent = `${fmtIDR(harga)} / ${satuan}`; return }
+      const diminta = mode === 'nominal' && nominal > 0 ? `Diminta ${fmtIDR(nominal)} → ` : ''
+      view.textContent = `${diminta}${fmtNumber(qty)} ${satuan} × ${fmtIDR(harga)} = ${fmtIDR(totalBaris(qty, harga))}`
+    }
+
+    body.querySelector('.tabs').addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-mode]')
+      if (!btn || btn.disabled) return
+      mode = btn.dataset.mode
+      body.querySelectorAll('.tabs__item').forEach((b) => b.classList.toggle('is-active', b === btn))
+      body.querySelector('#ukur-field-ukuran').classList.toggle('u-hidden', mode !== 'ukuran')
+      body.querySelector('#ukur-field-nominal').classList.toggle('u-hidden', mode !== 'nominal')
+      ;(mode === 'ukuran' ? inUkuran : inNominal).focus()
+      render()
     })
 
-    body.querySelector('#berat-cepat').addEventListener('click', (e) => {
-      const btn = e.target.closest('[data-kg]')
+    inUkuran.addEventListener('input', render)
+    inNominal.addEventListener('input', render)
+    body.querySelector('#ukur-cepat').addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-q]')
       if (!btn) return
-      input.value = btn.dataset.kg
-      input.dispatchEvent(new Event('input'))
-      input.focus()
+      inUkuran.value = String(btn.dataset.q).replace('.', ',')
+      render()
+      inUkuran.focus()
+    })
+    body.querySelector('#ukur-cepat-rp').addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-rp]')
+      if (!btn) return
+      inNominal.value = fmtNumber(Number(btn.dataset.rp))
+      render()
+      inNominal.focus()
     })
 
     const submit = () => {
-      const kg = parseDesimal(input.value)
-      if (!Number.isFinite(kg) || kg <= 0) {
-        toast('Isi berat yang valid (mis. 4,5).', 'error')
+      const qty = qtySekarang()
+      if (!(qty > 0)) return
+      // Timbang ulang MENGGANTI isi baris, bukan menambah: menjumlahkan dua
+      // penimbangan diam-diam akan menagih lebih.
+      const baris = cart.find((l) => l.produk.id === produk.id)
+      if (baris) {
+        setQty(baris, qty)
+        close()
         return
       }
-      if (tambahJumlah(produk, Math.round(kg * 100) / 100)) close()
+      if (tambahJumlah(produk, qty)) close()
     }
-    footer.querySelector('#berat-ok').addEventListener('click', submit)
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') submit()
-    })
+    tombolOk.addEventListener('click', submit)
+    for (const el of [inUkuran, inNominal]) {
+      el.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit() })
+    }
+    render()
+    ;(qtyAwal ? inUkuran : inUkuran).focus()
   }
 
   function addToCart(produk) {
@@ -508,8 +574,8 @@ function renderPos(container) {
       toast(`Stok "${produk.nama}" sudah habis.`, 'error')
       return false
     }
-    if (String(produk.satuan || '').toLowerCase() === 'kg') {
-      bukaInputBerat(produk)
+    if (apakahTerukur(produk.satuan)) {
+      bukaInputUkuran(produk)
       return true
     }
     return tambahJumlah(produk, 1)

@@ -440,7 +440,7 @@ Map<String, dynamic> _item(
   String satuan,
   String kategori, {
   bool stok = false,
-  int jumlah = 0,
+  num jumlah = 0, // pecahan untuk barang timbangan (18,5 kg)
   String? barcode,
 }) {
   _prd += 1;
@@ -490,6 +490,14 @@ Map<String, Map<String, List<Map<String, dynamic>>>> buatKatalogDemo() {
         stok: true, jumlah: 0),
     _item('PRD', 'LAIN-002', 'Sabun Mandi Batang', 5500, 'Pcs', 'Lainnya',
         stok: true, jumlah: 17),
+    // Buah timbangan: satuan Kg supaya penjualan per kilo & per nominal
+    // ("mangga dua puluh ribu") bisa dicoba di Mode Demo.
+    _item('PRD', 'BUAH-001', 'Mangga Harum Manis', 27000, 'Kg', 'Buah & Sayur',
+        stok: true, jumlah: 18.5),
+    _item('PRD', 'BUAH-002', 'Jeruk Medan', 22000, 'Kg', 'Buah & Sayur',
+        stok: true, jumlah: 12),
+    _item('PRD', 'BUAH-003', 'Cabai Merah Keriting', 48000, 'Kg', 'Buah & Sayur',
+        stok: true, jumlah: 6.25),
   ];
 
   _prd = 0;
@@ -588,7 +596,7 @@ Map<String, Map<String, List<Map<String, dynamic>>>> buatKatalogDemo() {
   };
 
   return {
-    'TOKO-1': pack(minimarket, ['Minuman', 'Snack', 'Sembako', 'Lainnya']),
+    'TOKO-1': pack(minimarket, ['Minuman', 'Snack', 'Sembako', 'Buah & Sayur', 'Lainnya']),
     'TOKO-2': pack(bakso, ['Bakso', 'Mie', 'Minuman', 'Tambahan']),
     'TOKO-3': pack(laundry, ['Kiloan', 'Satuan', 'Express']),
     'TOKO-4': pack(bengkel, ['Jasa Servis', 'Oli & Pelumas', 'Suku Cadang']),
