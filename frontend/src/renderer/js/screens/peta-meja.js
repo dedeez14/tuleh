@@ -9,6 +9,8 @@ import { esc, fmtIDR, fmtNumber } from '../utils/format.js'
 import { toast, icons, showModal, confirmDialog, emptyStateHTML, loadingHTML } from '../components/ui.js'
 import { printReceipt, buildReceiptHTML, printQR } from '../components/receipt.js'
 import { quickCashOptions } from '../lib/cart.js'
+import { apakahTerukur, labelKuantitas } from '../lib/satuan-terukur.js'
+import { tanyaUkuran } from '../components/dialog-ukuran.js'
 
 const POLL_MS = 5000
 
@@ -268,6 +270,25 @@ export const PetaMejaScreen = {
       renderBon()
     }
 
+    // Menu per kilo (ikan, seafood, buah): tanya ukurannya — menambah "1"
+    // pada ikan yang dijual per kilo tidak pernah benar.
+    async function tambahUkuran(produk) {
+      const baris = ronde.find((l) => l.produk.id === produk.id)
+      const isian = await tanyaUkuran(produk, {
+        harga: Number(produk.harga_jual) || 0,
+        qtyAwal: baris ? baris.kuantitas : null,
+        stok: Number(produk.stok),
+        kelolaStok: !!produk.kelola_stok,
+        labelTambah: 'Tambah ke pesanan'
+      })
+      if (!isian) return
+      // Timbang ulang mengganti isi baris, bukan menumpuk.
+      ronde = baris
+        ? ronde.map((l) => (l === baris ? { ...l, kuantitas: isian.qty } : l))
+        : [...ronde, { produk, kuantitas: isian.qty }]
+      renderRonde()
+    }
+
     function tambahLokal(produk, delta = 1) {
       const i = ronde.findIndex((l) => l.produk.id === produk.id)
       if (i >= 0) {
@@ -289,7 +310,7 @@ export const PetaMejaScreen = {
       grid.innerHTML = list.map((p) => `
         <button type="button" class="bill-prod" data-prod="${esc(p.id)}">
           <span class="bill-prod__nama">${esc(p.nama)}</span>
-          <span class="bill-prod__harga num">${fmtIDR(p.harga_jual)}</span>
+          <span class="bill-prod__harga num">${fmtIDR(p.harga_jual)}${apakahTerukur(p.satuan) ? ` / ${esc(p.satuan)}` : ''}</span>
         </button>`).join('') || '<div class="u-muted" style="padding:var(--sp-4)">Menu tidak ditemukan.</div>'
     }
 
@@ -301,9 +322,11 @@ export const PetaMejaScreen = {
           <div class="bill-line" data-i="${i}">
             <span class="bill-line__nama">${esc(l.produk.nama)}</span>
             <span class="bill-line__ctrl">
-              <button type="button" class="step" data-dec>−</button>
+              ${apakahTerukur(l.produk.satuan)
+                ? `<button type="button" class="btn btn--outline btn--sm num" data-ukur>${esc(labelKuantitas(l.kuantitas, l.produk.satuan))}</button>`
+                : `<button type="button" class="step" data-dec>−</button>
               <span class="num">${fmtNumber(l.kuantitas)}</span>
-              <button type="button" class="step" data-inc>+</button>
+              <button type="button" class="step" data-inc>+</button>`}
             </span>
             <span class="bill-line__sub num">${fmtIDR(l.produk.harga_jual * l.kuantitas)}</span>
           </div>`).join('')
@@ -390,14 +413,17 @@ export const PetaMejaScreen = {
         const btn = e.target.closest('[data-prod]')
         if (!btn) return
         const p = produkCache.find((x) => x.id === btn.dataset.prod)
-        if (p) tambahLokal(p, 1)
+        if (!p) return
+        if (apakahTerukur(p.satuan)) tambahUkuran(p)
+        else tambahLokal(p, 1)
       })
       root.querySelector('#bill-ronde').addEventListener('click', (e) => {
         const line = e.target.closest('.bill-line')
         if (!line) return
         const l = ronde[Number(line.dataset.i)]
         if (!l) return
-        if (e.target.closest('[data-inc]')) tambahLokal(l.produk, 1)
+        if (e.target.closest('[data-ukur]')) tambahUkuran(l.produk)
+        else if (e.target.closest('[data-inc]')) tambahLokal(l.produk, 1)
         else if (e.target.closest('[data-dec]')) tambahLokal(l.produk, -1)
       })
       root.querySelector('#bill-simpan').addEventListener('click', simpanRonde)

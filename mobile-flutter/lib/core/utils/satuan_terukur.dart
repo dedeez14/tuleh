@@ -74,3 +74,11 @@ String fmtQtyRingkas(num nilai) {
 /// Uang untuk [kuantitas] pada [harga] — dibulatkan ke rupiah penuh, sama
 /// dengan cara seluruh aplikasi menghitung uang.
 double totalBaris(double kuantitas, double harga) => (kuantitas * harga).roundToDouble();
+
+/// "0,74 kg" untuk barang terukur, "2" untuk barang hitungan.
+///
+/// Satuan hanya ikut bila barangnya memang dijual per ukuran: pada barang
+/// hitungan "2 pcs" tidak menambah informasi apa pun.
+String labelKuantitas(num kuantitas, String? satuan) => apakahTerukur(satuan)
+    ? '${fmtQtyRingkas(kuantitas)} ${satuan!.trim()}'
+    : fmtQtyRingkas(kuantitas);

@@ -1,4 +1,4 @@
-import '../../../../core/utils/satuan_terukur.dart';
+import '../../../../core/utils/satuan_terukur.dart' as ukur;
 
 /// Isi struk yang akan dicetak ke printer thermal.
 /// Sengaja bebas dari detail transport (ESC/POS) agar bisa diuji sebagai data.
@@ -19,12 +19,10 @@ class StrukBaris {
   final String? satuan;
 
   /// Baris yang dijual per ukuran (satuannya ikut dicetak).
-  bool get terukur => satuan != null && satuan!.isNotEmpty;
+  bool get terukur => ukur.apakahTerukur(satuan);
 
   /// "0,74 Kg" atau "2" — dipakai struk teks & ESC/POS.
-  String get labelKuantitas => terukur
-      ? '${fmtQtyRingkas(kuantitas)} $satuan'
-      : fmtQtyRingkas(kuantitas);
+  String get labelKuantitas => ukur.labelKuantitas(kuantitas, satuan);
 
   double get subtotal => harga * kuantitas;
 }

@@ -151,6 +151,7 @@ class MejaRemoteDataSource {
       kuantitas: kuantitas,
       harga: harga,
       subtotal: sub > 0 ? sub : harga * kuantitas, // fallback bila agregat kosong
+      satuan: m['satuan']?.toString(),
     );
   }
 

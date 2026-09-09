@@ -1,3 +1,4 @@
+import '../../../../core/utils/satuan_terukur.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -203,7 +204,12 @@ Struk _struk(WidgetRef ref, TransaksiDetail d) {
     kasir: d.kasir,
     baris: [
       for (final it in d.items)
-        StrukBaris(nama: it.nama, kuantitas: it.kuantitas, harga: it.harga),
+        StrukBaris(
+          nama: it.nama,
+          kuantitas: it.kuantitas,
+          harga: it.harga,
+          satuan: apakahTerukur(it.satuan) ? it.satuan : null,
+        ),
     ],
     total: d.grandTotal,
     metode: d.tipePembayaran,
@@ -305,7 +311,7 @@ class _ItemRow extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('${item.kuantitas.toInt()} × ${fmtIDR(item.harga)}',
+              Text('${labelKuantitas(item.kuantitas, item.satuan)} × ${fmtIDR(item.harga)}',
                   style: const TextStyle(color: Colors.grey)),
               Text(fmtIDR(item.subtotal)),
             ],

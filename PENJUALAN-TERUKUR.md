@@ -187,12 +187,19 @@ melihat totalnya. Nominal yang diminta ditampilkan di **keranjang** saja
   Ikut berubah: `cart_controller`, `keranjang_daftar_item` (stepper → tombol
   Ubah untuk barang terukur), `cart_sheet`, `checkout_repository`,
   `parkir_store` (baca `num`), `kasir_screen`, `parkir_sheet`.
-- Lembar baru `lembar_ukuran.dart` (dua tab).
+- Lembar baru `lembar_ukuran.dart` (dua tab) — dipakai layar Kasir **dan**
+  sheet "Tambah Pesanan" bon meja (tombol bertulis "Tambah ke pesanan").
+- `BillItem.satuan` & `TrxItem.satuan` dibaca dari server, jadi cetak ulang
+  struk lama dan pra-bon tetap menyebut "0,74 Kg" (bukan "0 ×").
 
 ### Desktop
 - Ganti `satuan === 'kg'` dengan `apakahTerukur(satuan)`.
-- Dialog berat yang sudah ada ditambah tab **Nominal** + pintasan.
-- Baris keranjang: tombol Ubah untuk barang terukur.
+- Dialog berat yang sudah ada ditambah tab **Nominal** + pintasan, lalu
+  dipindah ke `components/dialog-ukuran.js` (murni tampilan, mengembalikan
+  `{ qty, nominalDiminta }`) agar layar Kasir dan Peta Meja memakai dialog yang
+  sama.
+- Baris keranjang & baris ronde bon: tombol Ubah untuk barang terukur.
+- `nominalDiminta` ikut tersimpan saat keranjang diparkir.
 
 ### Mesin demo (dua aplikasi)
 - Tambah beberapa produk terukur di katalog demo (buah/sayur per kg) supaya

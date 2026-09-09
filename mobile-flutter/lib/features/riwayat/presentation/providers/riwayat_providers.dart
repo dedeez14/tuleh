@@ -88,6 +88,7 @@ final transaksiDetailProvider =
             kuantitas: b.kuantitas.toDouble(),
             harga: b.harga,
             subtotal: b.subtotal,
+            satuan: b.satuan,
           ),
       ],
     );

@@ -5,12 +5,17 @@ class BillItem {
     required this.kuantitas,
     this.harga,
     required this.subtotal,
+    this.satuan,
   });
 
   final String nama;
   final double kuantitas;
   final double? harga;
   final double subtotal;
+
+  /// Satuan dari server ("Kg", "Botol") — dipakai struk & pra-bon agar
+  /// barang timbang tercetak "0,74 Kg", bukan angka menggantung.
+  final String? satuan;
 }
 
 /// Detail bon meja (GET /bills/{id}).

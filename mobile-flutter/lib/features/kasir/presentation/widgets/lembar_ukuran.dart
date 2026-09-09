@@ -22,18 +22,28 @@ Future<IsianUkuran?> tanyaUkuran(
   BuildContext context,
   Product produk, {
   double? qtyAwal,
+  String labelTambah = 'Tambah ke keranjang',
 }) => tampilkanLembar<IsianUkuran>(
   context,
-  builder: (_) => LembarUkuran(produk: produk, qtyAwal: qtyAwal),
+  builder: (_) =>
+      LembarUkuran(produk: produk, qtyAwal: qtyAwal, labelTambah: labelTambah),
 );
 
 class LembarUkuran extends StatefulWidget {
-  const LembarUkuran({super.key, required this.produk, this.qtyAwal});
+  const LembarUkuran({
+    super.key,
+    required this.produk,
+    this.qtyAwal,
+    this.labelTambah = 'Tambah ke keranjang',
+  });
 
   final Product produk;
 
   /// Isi baris yang sedang diubah (null = menambah baris baru).
   final double? qtyAwal;
+
+  /// Tulisan tombol saat menambah baris baru — lembar ini juga dipakai bon meja.
+  final String labelTambah;
 
   @override
   State<LembarUkuran> createState() => _LembarUkuranState();
@@ -171,7 +181,7 @@ class _LembarUkuranState extends State<LembarUkuran> {
               FilledButton.icon(
                 onPressed: qty > 0 && !lebihStok ? _kirim : null,
                 icon: const Icon(Icons.add_shopping_cart_rounded, size: 19),
-                label: Text(widget.qtyAwal == null ? 'Tambah ke keranjang' : 'Simpan perubahan'),
+                label: Text(widget.qtyAwal == null ? widget.labelTambah : 'Simpan perubahan'),
               ),
             ],
           ),

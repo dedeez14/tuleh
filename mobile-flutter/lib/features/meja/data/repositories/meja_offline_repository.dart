@@ -61,6 +61,7 @@ class MejaOfflineRepository implements MejaRepository {
             kuantitas: _angka(t['kuantitas']),
             harga: _angka(t['harga']),
             subtotal: _angka(t['harga']) * _angka(t['kuantitas']),
+            satuan: t['satuan']?.toString(),
           ),
     ];
   }
@@ -201,6 +202,7 @@ class MejaOfflineRepository implements MejaRepository {
           kuantitas: ada.kuantitas + it.kuantitas,
           harga: it.harga,
           subtotal: ada.subtotal + it.subtotal,
+          satuan: it.satuan ?? ada.satuan,
         );
       }
     }

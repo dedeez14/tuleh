@@ -5,12 +5,16 @@ class TrxItem {
     required this.kuantitas,
     required this.harga,
     required this.subtotal,
+    this.satuan,
   });
 
   final String nama;
   final double kuantitas;
   final double harga;
   final double subtotal;
+
+  /// Satuan dari server — cetak ulang struk lama tetap menyebut "0,74 Kg".
+  final String? satuan;
 }
 
 /// Detail transaksi lengkap (`/transaksi/{id}`) — dipakai tampilan struk.

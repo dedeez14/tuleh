@@ -53,4 +53,11 @@ void main() {
     expect(totalBaris(0.333, 10000), 3330);
     expect(totalBaris(1.005, 999), 1004);
   });
+
+  test('label kuantitas: satuan hanya ikut pada barang terukur', () {
+    expect(labelKuantitas(0.74, 'kg'), '0,74 kg');
+    expect(labelKuantitas(1.5, 'Liter'), '1,5 Liter');
+    expect(labelKuantitas(2, 'pcs'), '2', reason: 'barang hitungan tanpa satuan');
+    expect(labelKuantitas(3, null), '3');
+  });
 }

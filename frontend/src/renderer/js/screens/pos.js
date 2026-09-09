@@ -14,9 +14,8 @@ import { lineTotals, cartTotals, kembalian, shortfall, quickCashOptions, clampQt
 import { midtransBoleh, qrisAksi, sisaDetik, formatSisa, harusFallbackStatis } from '../lib/qris-flow.js'
 import { customerViewHTML } from '../components/customer-view.js'
 import { bacaParkir, simpanParkir, tambahParkir, hapusParkir, pulihkanBaris, ringkasParkir } from '../lib/parkir.js'
-import {
-  apakahTerukur, bulatkanKuantitas, kuantitasDariNominal, minimalNominal, totalBaris, langkahSatuan
-} from '../lib/satuan-terukur.js'
+import { tanyaUkuran } from '../components/dialog-ukuran.js'
+import { apakahTerukur } from '../lib/satuan-terukur.js'
 
 const QRIS_POLL_MS = 4000 // interval cek status tagihan QRIS (kontrak: 3–5s)
 
@@ -63,11 +62,6 @@ function inisialProduk(nama) {
     .filter(Boolean)
   const dua = kata.slice(0, 2).map((w) => w[0]).join('')
   return (dua || '?').toUpperCase()
-}
-
-// Terima desimal gaya Indonesia (koma) maupun titik: '4,5' → 4.5
-function parseDesimal(v) {
-  return Number(String(v).trim().replace(',', '.'))
 }
 
 // ---------- Layar ----------
@@ -458,129 +452,21 @@ function renderPos(container) {
     return true
   }
 
-  // Barang terukur (kilo/liter/meter): tanya ukurannya, atau berapa rupiah
-  // yang diminta pelanggan. Nominal diterjemahkan ke ukuran lebih dulu supaya
-  // uang yang ditagih tetap `ukuran × harga` — lihat PENJUALAN-TERUKUR.md.
-  function bukaInputUkuran(produk, { qtyAwal = null } = {}) {
-    const satuan = String(produk.satuan || '').toLowerCase()
-    const harga = hargaJual(produk)
-    const hargaSah = harga > 0
-    // Baris terukur selalu MENGGANTI isi baris, jadi batas atasnya stok penuh
-    // (bukan stok dikurangi isi keranjang).
+  // Barang terukur: tanya ukuran/nominal lewat dialog bersama, lalu terapkan
+  // ke keranjang. Timbang ulang MENGGANTI isi baris, bukan menambah —
+  // menjumlahkan dua penimbangan diam-diam akan menagih lebih.
+  async function bukaInputUkuran(produk, { qtyAwal = null } = {}) {
     const { kelolaStok, stok } = stokInfo(produk)
-    const adaBatas = kelolaStok && Number.isFinite(stok)
-
-    const body = document.createElement('div')
-    body.innerHTML = `
-      <div class="tabs tabs--sm" role="tablist">
-        <button class="tabs__item is-active" type="button" data-mode="ukuran">Per ${esc(satuan)}</button>
-        <button class="tabs__item" type="button" data-mode="nominal" ${hargaSah ? '' : 'disabled'}>Nominal</button>
-      </div>
-      <div class="field" id="ukur-field-ukuran">
-        <label class="field__label" for="ukur-in">Berat / ukuran hasil timbangan</label>
-        <input class="input input--lg num" id="ukur-in" type="text" inputmode="decimal"
-               placeholder="mis. 0,74" autocomplete="off" value="${qtyAwal ? esc(String(qtyAwal).replace('.', ',')) : ''}" />
-        <div class="u-flex" id="ukur-cepat" style="flex-wrap:wrap">
-          ${[0.25, 0.5, 1, 2, 5].map((n) => `
-            <button type="button" class="btn btn--outline btn--sm" data-q="${n}">${String(n).replace('.', ',')} ${esc(satuan)}</button>`).join('')}
-        </div>
-      </div>
-      <div class="field u-hidden" id="ukur-field-nominal">
-        <label class="field__label" for="ukur-rp">Pelanggan minta berapa rupiah?</label>
-        <input class="input input--lg num" id="ukur-rp" type="text" inputmode="numeric"
-               placeholder="mis. 20.000" autocomplete="off" />
-        <div class="u-flex" id="ukur-cepat-rp" style="flex-wrap:wrap">
-          ${[5000, 10000, 20000, 50000].map((n) => `
-            <button type="button" class="btn btn--outline btn--sm" data-rp="${n}">${fmtIDR(n)}</button>`).join('')}
-        </div>
-      </div>
-      <div class="ukur-ringkas num" id="ukur-view">${fmtIDR(harga)} / ${esc(satuan)}</div>
-      ${adaBatas ? `<div class="ukur-sisa num">Sisa stok ${fmtNumber(stok)} ${esc(satuan)}</div>` : ''}`
-
-    const footer = document.createElement('div')
-    footer.innerHTML = `<button type="button" class="btn btn--primary" id="ukur-ok">${qtyAwal ? 'Simpan perubahan' : 'Tambah ke Keranjang'}</button>`
-
-    const { close } = showModal({ title: produk.nama, body, footer })
-    const inUkuran = body.querySelector('#ukur-in')
-    const inNominal = body.querySelector('#ukur-rp')
-    const view = body.querySelector('#ukur-view')
-    const tombolOk = footer.querySelector('#ukur-ok')
-    let mode = 'ukuran'
-
-    // Ukuran yang sedang diisi (sudah dibulatkan ke langkah satuannya).
-    function qtySekarang() {
-      if (mode === 'ukuran') return bulatkanKuantitas(parseDesimal(inUkuran.value) || 0, satuan)
-      return kuantitasDariNominal(parseAmount(inNominal.value), harga, satuan)
-    }
-
-    function render() {
-      const qty = qtySekarang()
-      const nominal = mode === 'nominal' ? parseAmount(inNominal.value) : 0
-      const lebihStok = adaBatas && qty > stok
-      // Dulu submit diam-diam memotong ke sisa stok: kasir menimbang 5 kg, yang
-      // masuk keranjang 0,8 kg tanpa pemberitahuan. Sekarang ditahan di sini.
-      tombolOk.disabled = !(qty > 0) || lebihStok
-      if (lebihStok) {
-        view.innerHTML = `<span class="ukur-ringkas__galat">Sisa stok hanya ${fmtNumber(stok)} ${esc(satuan)}.</span>`
-        return
-      }
-      if (mode === 'nominal' && nominal > 0 && qty <= 0) {
-        view.innerHTML = `<span class="ukur-ringkas__galat">Minimal ${fmtIDR(minimalNominal(harga, satuan))} (${String(langkahSatuan(satuan)).replace('.', ',')} ${esc(satuan)}).</span>`
-        return
-      }
-      if (!(qty > 0)) { view.textContent = `${fmtIDR(harga)} / ${satuan}`; return }
-      const diminta = mode === 'nominal' && nominal > 0 ? `Diminta ${fmtIDR(nominal)} → ` : ''
-      view.textContent = `${diminta}${fmtNumber(qty)} ${satuan} × ${fmtIDR(harga)} = ${fmtIDR(totalBaris(qty, harga))}`
-    }
-
-    body.querySelector('.tabs').addEventListener('click', (e) => {
-      const btn = e.target.closest('[data-mode]')
-      if (!btn || btn.disabled) return
-      mode = btn.dataset.mode
-      body.querySelectorAll('.tabs__item').forEach((b) => b.classList.toggle('is-active', b === btn))
-      body.querySelector('#ukur-field-ukuran').classList.toggle('u-hidden', mode !== 'ukuran')
-      body.querySelector('#ukur-field-nominal').classList.toggle('u-hidden', mode !== 'nominal')
-      ;(mode === 'ukuran' ? inUkuran : inNominal).focus()
-      render()
+    const isian = await tanyaUkuran(produk, {
+      harga: hargaJual(produk),
+      qtyAwal,
+      stok,
+      kelolaStok
     })
-
-    inUkuran.addEventListener('input', render)
-    inNominal.addEventListener('input', render)
-    body.querySelector('#ukur-cepat').addEventListener('click', (e) => {
-      const btn = e.target.closest('[data-q]')
-      if (!btn) return
-      inUkuran.value = String(btn.dataset.q).replace('.', ',')
-      render()
-      inUkuran.focus()
-    })
-    body.querySelector('#ukur-cepat-rp').addEventListener('click', (e) => {
-      const btn = e.target.closest('[data-rp]')
-      if (!btn) return
-      inNominal.value = fmtNumber(Number(btn.dataset.rp))
-      render()
-      inNominal.focus()
-    })
-
-    const submit = () => {
-      const qty = qtySekarang()
-      if (!(qty > 0) || (adaBatas && qty > stok)) return
-      // Timbang ulang MENGGANTI isi baris, bukan menambah: menjumlahkan dua
-      // penimbangan diam-diam akan menagih lebih.
-      const nominalDiminta = mode === 'nominal' ? parseAmount(inNominal.value) || null : null
-      const baris = cart.find((l) => l.produk.id === produk.id)
-      if (baris) {
-        setQty(baris, qty, { nominalDiminta })
-        close()
-        return
-      }
-      if (tambahJumlah(produk, qty, { nominalDiminta })) close()
-    }
-    tombolOk.addEventListener('click', submit)
-    for (const el of [inUkuran, inNominal]) {
-      el.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit() })
-    }
-    render()
-    ;(qtyAwal ? inUkuran : inUkuran).focus()
+    if (!isian) return
+    const baris = cart.find((l) => String(l.produk.id) === String(produk.id))
+    if (baris) setQty(baris, isian.qty, { nominalDiminta: isian.nominalDiminta })
+    else tambahJumlah(produk, isian.qty, { nominalDiminta: isian.nominalDiminta })
   }
 
   function addToCart(produk) {

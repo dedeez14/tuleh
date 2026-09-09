@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/utils/rupiah_input.dart';
+import '../../../../core/utils/satuan_terukur.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../../../core/offline/pengurai.dart';
 import '../../../../core/offline/rujukan_lokal.dart';
@@ -13,6 +14,7 @@ import '../../../cetak/domain/entities/struk.dart';
 import '../../../demo/demo_session.dart';
 import '../../../kasir/presentation/widgets/hasil_transaksi_sheet.dart';
 import '../../../pengaturan/presentation/providers/pengaturan_providers.dart';
+import '../../../kasir/presentation/widgets/lembar_ukuran.dart';
 import '../../../products/domain/entities/product.dart';
 import '../../../products/presentation/providers/products_provider.dart';
 import '../../domain/entities/bill_detail.dart';
@@ -93,7 +95,7 @@ class _Body extends ConsumerWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(it.nama, style: const TextStyle(fontWeight: FontWeight.w600)),
-                              Text('${it.kuantitas.toInt()} × ${fmtIDR(it.harga ?? 0)}',
+                              Text('${labelKuantitas(it.kuantitas, it.satuan)} × ${fmtIDR(it.harga ?? 0)}',
                                   style: TextStyle(color: cs.onSurface.withValues(alpha: 0.6), fontSize: 13)),
                             ],
                           ),
@@ -218,6 +220,7 @@ class _Body extends ConsumerWidget {
             nama: it.nama,
             kuantitas: it.kuantitas,
             harga: it.harga ?? (it.kuantitas > 0 ? it.subtotal / it.kuantitas : it.subtotal),
+            satuan: apakahTerukur(it.satuan) ? it.satuan : null,
           ),
       ],
       total: total,
@@ -322,11 +325,31 @@ class _AddPesananSheet extends ConsumerStatefulWidget {
 }
 
 class _AddPesananSheetState extends ConsumerState<_AddPesananSheet> {
-  final Map<String, int> _qty = {}; // productId → qty
+  final Map<String, double> _qty = {}; // productId → qty (pecahan untuk barang timbang)
   final Map<String, Product> _prod = {};
   bool _loading = false;
 
-  int get _count => _qty.values.fold(0, (s, q) => s + q);
+  /// Baris terukur dihitung satu item — "0,74 kg" bukan nol item.
+  int get _count => _qty.entries.fold(0, (s, e) {
+    if (e.value <= 0) return s;
+    return s + (apakahTerukur(_prod[e.key]?.satuan) ? 1 : e.value.round());
+  });
+
+  /// Barang per kilo/liter/meter: tanya ukurannya, jangan menambah "1".
+  Future<void> _pilih(Product p) async {
+    if (!apakahTerukur(p.satuan)) {
+      setState(() => _qty[p.id] = (_qty[p.id] ?? 0) + 1);
+      return;
+    }
+    final isian = await tanyaUkuran(
+      context,
+      p,
+      qtyAwal: _qty[p.id],
+      labelTambah: 'Tambah ke pesanan',
+    );
+    if (isian == null || !mounted) return;
+    setState(() => _qty[p.id] = isian.qty);
+  }
 
   Future<void> _kirim() async {
     if (_count == 0) return;
@@ -344,6 +367,7 @@ class _AddPesananSheetState extends ConsumerState<_AddPesananSheet> {
             'nama': _prod[e.key]?.nama ?? '-',
             'harga': _prod[e.key]?.harga ?? 0,
             'kuantitas': e.value,
+            'satuan': _prod[e.key]?.satuan,
             'kelola_stok': _prod[e.key]?.stok != null,
           },
     ];
@@ -402,11 +426,21 @@ class _AddPesananSheetState extends ConsumerState<_AddPesananSheet> {
                     return ListTile(
                       contentPadding: EdgeInsets.zero,
                       title: Text(p.nama),
-                      subtitle: Text(fmtIDR(p.harga)),
+                      subtitle: Text(apakahTerukur(p.satuan)
+                          ? '${fmtIDR(p.harga)} / ${p.satuan}'
+                          : fmtIDR(p.harga)),
                       trailing: q == 0
                           ? IconButton(
                               icon: const Icon(Icons.add_circle, color: AppColors.mint600),
-                              onPressed: () => setState(() => _qty[p.id] = 1),
+                              onPressed: () => _pilih(p),
+                            )
+                          : apakahTerukur(p.satuan)
+                          ? ActionChip(
+                              avatar: const Icon(Icons.scale_outlined, size: 16, color: AppColors.mint600),
+                              label: Text(labelKuantitas(q, p.satuan),
+                                  style: const TextStyle(fontWeight: FontWeight.w700)),
+                              onPressed: () => _pilih(p),
+                              tooltip: 'Ubah ukuran',
                             )
                           : Row(
                               mainAxisSize: MainAxisSize.min,
@@ -422,7 +456,7 @@ class _AddPesananSheetState extends ConsumerState<_AddPesananSheet> {
                                     }
                                   }),
                                 ),
-                                Text('$q', style: const TextStyle(fontWeight: FontWeight.w700)),
+                                Text(fmtQtyRingkas(q), style: const TextStyle(fontWeight: FontWeight.w700)),
                                 IconButton(
                                   icon: const Icon(Icons.add_circle_outline),
                                   onPressed: () => setState(() => _qty[p.id] = q + 1),

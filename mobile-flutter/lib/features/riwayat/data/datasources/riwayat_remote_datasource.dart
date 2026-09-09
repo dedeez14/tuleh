@@ -92,5 +92,6 @@ class RiwayatRemoteDataSource {
         kuantitas: _double(m['kuantitas'] ?? m['qty']),
         harga: _double(m['harga']),
         subtotal: _double(m['subtotal']),
+        satuan: m['satuan']?.toString(),
       );
 }
