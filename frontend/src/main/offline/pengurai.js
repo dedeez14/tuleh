@@ -81,18 +81,21 @@ class Pengurai {
       res = { ok: false, status: 0, message: err && err.message ? err.message : 'gagal' }
     }
     if (res.ok) {
-      this.antrean.selesai(p.clientRef, res.data || null)
+      // meta.idempoten = jawaban lama diulang; baris ini sudah tercatat pada
+      // percobaan sebelumnya, bukan transaksi baru.
+      const data = res.data || null
+      if (data && res.meta && res.meta.idempoten === true) data._idempoten = true
+      this.antrean.selesai(p.clientRef, data)
       if (this.koneksi) this.koneksi.tandaiOnline()
       this._ubah()
       return 'terkirim'
     }
-    if (res.status === -1) {
-      // Timeout setelah dikirim: mengulang bisa menggandakan → tinjau manusia.
-      this.antrean.perbarui(p.clientRef, { status: STATUS.TINJAU, galat: PESAN_TIMEOUT_SETELAH_KIRIM })
-      this._ubah()
-      return 'lanjut'
-    }
-    if (res.status === 0) {
+    // status -1 (timeout setelah kirim) & 0 (belum tersambung) sama-sama
+    // dicoba ulang: sejak server MOVERA mengenal `client_ref` (9 Sep 2026),
+    // kiriman ulang dengan ref yang sama tidak membuat baris kedua — ia
+    // membalas 200 dengan data yang sama. Dulu -1 dilempar ke TINJAU karena
+    // mengulang berisiko menggandakan penjualan.
+    if (res.status === 0 || res.status === -1) {
       const percobaan = (p.percobaan || 0) + 1
       this.antrean.perbarui(p.clientRef, {
         status: STATUS.MENUNGGU,

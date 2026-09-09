@@ -149,6 +149,8 @@ APK Android **legacy** (`Tuleh-X.Y.Z-android.apk` di rilis desktop) kini melapor
 
 Sejak 0.9.24 cetak langsung hanya berlaku untuk **struk** — ekspor PDF laporan dan cetak QR meja selalu lewat dialog Windows (sebelumnya ikut tersedot ke printer thermal), dan **Uji cetak** memakai setelan yang sedang dicoba tanpa menyimpannya.
 
+Sejak server MOVERA mengenal `client_ref` (9 Sep 2026; desktop ≥ 0.9.26, Android ≥ 2.25.0) antrean offline **tidak lagi** melempar baris ke *perlu ditinjau* saat timeout setelah kirim — kiriman ulang aman karena server membalas jawaban lama (`meta.idempoten`) alih-alih membuat transaksi kedua. Pemulih pencocokan total/metode/waktu hanya tersisa untuk baris TINJAU warisan. Pembaruan Android Flutter kini bersumber dari `/app/versi?platform=android-flutter`; GitHub Releases tinggal cadangan, termasuk saat ABI perangkat tidak cocok dengan berkas yang diiklankan server.
+
 Kebutuhan yang menunggu sisi server (idempotensi `client_ref`, kelola meja, jalur versi Flutter) dikumpulkan di [SERVER-YANG-DIBUTUHKAN.md](SERVER-YANG-DIBUTUHKAN.md) — dokumen itu sekaligus bisa ditempel sebagai prompt untuk yang mengerjakan MOVERA.
 
 **Printer struk** (desktop ≥ 0.9.22): Pengaturan → Printer struk memuat daftar printer Windows; pilih printer thermal, centang *cetak langsung tanpa dialog* agar struk keluar tanpa jendela cetak, dan *cetak otomatis setelah pembayaran* agar struk langsung tercetak begitu transaksi tercatat (termasuk struk lokal saat offline). Tombol **Uji cetak** dan **Uji lewat dialog** mencetak struk contoh; preferensi disimpan di `settings.json` (`cetak`). Bila printer pilihan dicabut, aplikasi memberi tahu dan jatuh ke dialog Windows.

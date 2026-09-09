@@ -19,7 +19,6 @@ class HasilTransaksiSheet extends ConsumerStatefulWidget {
     required this.struk,
     required this.kembalian,
     this.tertunda = false,
-    this.perluTinjau = false,
   });
 
   final Struk struk;
@@ -28,8 +27,6 @@ class HasilTransaksiSheet extends ConsumerStatefulWidget {
   /// Transaksi disimpan di perangkat (offline) dan menunggu dikirim.
   final bool tertunda;
 
-  /// Server mungkin sudah menerima; pengguna perlu memeriksa sebelum kirim ulang.
-  final bool perluTinjau;
 
   @override
   ConsumerState<HasilTransaksiSheet> createState() =>
@@ -121,13 +118,10 @@ class _HasilTransaksiSheetState extends ConsumerState<HasilTransaksiSheet> {
                     const Icon(Icons.cloud_upload_outlined, size: 18, color: AppColors.warn),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text(
-                        widget.perluTinjau
-                            ? 'Server tidak menjawab setelah data dikirim. Periksa '
-                                  'Riwayat lalu putuskan di Pengaturan → Sinkronisasi.'
-                            : 'Offline — nomor sementara. Dikirim otomatis saat '
-                                  'internet kembali; nomor resmi menyusul.',
-                        style: const TextStyle(fontSize: 12.5, height: 1.4),
+                      child: const Text(
+                        'Offline — nomor sementara. Dikirim otomatis saat '
+                        'internet kembali; nomor resmi menyusul.',
+                        style: TextStyle(fontSize: 12.5, height: 1.4),
                       ),
                     ),
                   ],

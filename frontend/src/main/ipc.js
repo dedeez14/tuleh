@@ -163,26 +163,24 @@ function registerIpcHandlers(getMainWindow) {
 
   /**
    * Permintaan tulis dengan jalur offline: bila diketahui offline → antrekan
-   * langsung; bila gagal jaringan → antrekan; timeout setelah kirim → antrekan
-   * berstatus TINJAU. Server menolak (4xx) → kembalikan apa adanya.
+   * langsung; bila gagal jaringan ATAU timeout setelah kirim → antrekan biasa
+   * dan kirim ulang otomatis (server menolak duplikat lewat `client_ref`).
+   * Server menolak (4xx) → kembalikan apa adanya.
    */
   async function tulisAtauAntre({ jenis, jalur, body, transaksi = null, deltaStok = {} }) {
     const clientRef = offline.buatClientRef()
     const badan = { ...body, client_ref: clientRef, waktu_klien: new Date().toISOString() }
-    let tinjau = false
     if (offline.koneksi.online) {
       const r = await withAuthWatch(api.post(jalur, { body: badan }))
       if (r.ok) return { ...r, clientRef }
       if (r.status !== 0) return r // ditolak server: tampilkan apa adanya
-      tinjau = !!r.timeout
     }
     offline.antrean.antrekan({
       clientRef, jenis, tokoId: api.getActiveTokoId(), path: jalur, body: badan,
-      status: tinjau ? offline.STATUS.TINJAU : offline.STATUS.MENUNGGU,
-      galat: tinjau ? 'Server tidak menjawab setelah data dikirim. Periksa dulu apakah sudah tercatat sebelum mengirim ulang.' : null
+      status: offline.STATUS.MENUNGGU
     }, { transaksi, deltaStok })
     kirimStatusOffline()
-    return { ok: true, status: 202, data: null, meta: null, message: '', tertunda: true, perluTinjau: tinjau, clientRef }
+    return { ok: true, status: 202, data: null, meta: null, message: '', tertunda: true, clientRef }
   }
 
   handle('offline:status', () => ({ ok: true, data: offline.status(api.getActiveTokoId()) }))

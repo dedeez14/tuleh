@@ -152,33 +152,32 @@ void main() {
     });
   });
 
-  group('pesan "perlu ditinjau" menunjuk tempat yang benar', () {
-    Future<String?> galat(String jenis) async {
+  group('timeout setelah kirim (server kini menolak duplikat)', () {
+    // Dulu baris ini masuk TINJAU dengan petunjuk "periksa dulu sebelum kirim
+    // ulang". Sejak server MOVERA mengenal `client_ref` (9 Sep 2026) kiriman
+    // ulang aman, jadi barisnya cukup menunggu dan dikirim ulang otomatis.
+    Future<PesanAntrean> baris(String jenis) async {
       final a = AntreanMemori();
       final tulis = AntreanTulis(antrean: a, tokoId: 'T1');
       await tulis.jalankan(
         jenis: jenis,
         path: '/x',
         body: const {},
-        // Timeout SETELAH kirim = "mungkin sampai" → baris masuk TINJAU.
         kirim: (_) async => throw const ApiException(
           message: 'Server tidak merespons (timeout).',
           mungkinSampai: true,
         ),
       );
-      return (await a.semua()).single.galatTerakhir;
+      return (await a.semua()).single;
     }
 
-    test('opname & stok masuk diarahkan ke layar Produk, bukan Riwayat', () async {
-      for (final jenis in ['OPNAME', 'STOK_MASUK']) {
-        final pesan = await galat(jenis);
-        expect(pesan, contains('layar Produk'), reason: jenis);
-        expect(pesan, isNot(contains('Riwayat')), reason: jenis);
+    test('opname, stok masuk, dan checkout sama-sama menunggu kiriman ulang', () async {
+      for (final jenis in ['OPNAME', 'STOK_MASUK', 'CHECKOUT']) {
+        final p = await baris(jenis);
+        expect(p.status, StatusAntrean.menunggu, reason: jenis);
+        expect(p.galatTerakhir, isNull, reason: '$jenis: tidak ada yang perlu diputuskan kasir');
+        expect(p.body['client_ref'], isNotNull, reason: '$jenis: ref penolak duplikat');
       }
-    });
-
-    test('checkout tetap diarahkan seperti semula', () async {
-      expect(await galat('CHECKOUT'), contains('sudah tercatat'));
     });
   });
 

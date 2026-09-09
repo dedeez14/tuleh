@@ -5,6 +5,13 @@ sebagai isi Release GitHub (workflow flutter-release.yml), dan empat baris
 pertamanya tampil di banner pembaruan dalam aplikasi. Tulis untuk kasir, bukan
 untuk programmer.
 
+## 2.25.0
+
+Server Tuléh kini menolak transaksi kembar, jadi aplikasi tidak perlu lagi menyerahkan keputusan sulit ke kasir:
+
+- **Transaksi yang "server tidak menjawab" dikirim ulang sendiri.** Dulu, kalau sinyal putus tepat setelah data terkirim, transaksinya masuk daftar *perlu ditinjau* dan kasir disuruh memeriksa Riwayat lalu memutuskan kirim ulang atau batal — salah tebak berarti penjualan tercatat dua kali. Sekarang aplikasi cukup mengirim ulang; server mengenali kiriman yang sama dan membalas transaksi yang sudah ada, bukan membuat yang baru.
+- Pembaruan aplikasi kini ditawarkan langsung oleh server Tuléh (sebelumnya aplikasi membaca daftar rilis GitHub sendiri). Untuk ponsel 32-bit, berkas yang diunduh otomatis disesuaikan dengan jenis prosesornya.
+
 ## 2.24.0
 
 - **Tidak lagi terkunci setelah menekan Keluar tanpa sinyal.** Keluar akun menghapus sesi DAN seluruh data yang tersimpan untuk dipakai offline, padahal masuk kembali memerlukan server — kasir yang menekan Keluar saat offline jadi tidak bisa memakai aplikasi sama sekali. Sekarang aplikasi memperingatkan lebih dulu, dengan pilihan utama Batal; "Tetap keluar" tetap ada bila memang disengaja.

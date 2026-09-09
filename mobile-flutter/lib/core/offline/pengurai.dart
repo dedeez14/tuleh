@@ -165,21 +165,13 @@ class PenguraiAntrean {
         data: body,
         queryParameters: p.tokoId == null ? null : {'toko_id': p.tokoId},
       );
-    } on DioException catch (e) {
-      final mungkinSampai =
-          e.type == DioExceptionType.receiveTimeout ||
-          e.type == DioExceptionType.sendTimeout;
-      if (mungkinSampai) {
-        await store.perbarui(
-          p.clientRef,
-          status: StatusAntrean.tinjau,
-          galatTerakhir:
-              'Server tidak menjawab setelah data dikirim. Periksa di Riwayat '
-              'apakah sudah tercatat sebelum mengirim ulang.',
-        );
-        setelahBerubah?.call();
-        return _Hasil.lanjut;
-      }
+    } on DioException {
+      // Sejak server MOVERA mengenal `client_ref` (9 Sep 2026), kiriman ulang
+      // dengan ref yang sama TIDAK membuat baris baru — jawabannya yang sama
+      // diulang. Jadi timeout "mungkin sudah sampai" tidak perlu lagi ditinjau
+      // manusia: cukup dikirim ulang seperti kegagalan jaringan biasa.
+      // Baris TINJAU lama (dibuat sebelum server mendukung) tetap ditangani
+      // pemulih pencocokan, karena client_ref-nya tak pernah dicatat server.
       // Belum sampai → mundur lalu coba lagi; hentikan putaran ini.
       final percobaan = p.percobaan + 1;
       await store.perbarui(
@@ -198,6 +190,10 @@ class PenguraiAntrean {
     final body = res.data is Map ? Map<String, dynamic>.from(res.data as Map) : const <String, dynamic>{};
     if (code >= 200 && code < 300 && body['success'] == true) {
       final data = body['data'] is Map ? Map<String, dynamic>.from(body['data'] as Map) : <String, dynamic>{};
+      // 200 + meta.idempoten = server mengulang jawaban lama: baris ini sudah
+      // tercatat pada percobaan sebelumnya, bukan penjualan kedua.
+      final meta = body['meta'] is Map ? Map<String, dynamic>.from(body['meta'] as Map) : const {};
+      if (meta['idempoten'] == true) data['_idempoten'] = true;
       await store.selesai(p.clientRef, hasil: data);
       koneksi?.tandaiOnline();
       setelahBerubah?.call();

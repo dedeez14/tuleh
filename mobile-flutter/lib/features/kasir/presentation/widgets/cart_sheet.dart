@@ -154,7 +154,6 @@ class _CartSheetState extends ConsumerState<CartSheet> {
         struk,
         res.kembalian,
         tertunda: res.tertunda,
-        perluTinjau: res.perluTinjau,
       );
     } on ApiException catch (e) {
       if (!mounted) return;
@@ -178,7 +177,6 @@ class _CartSheetState extends ConsumerState<CartSheet> {
     Struk struk,
     double kembalian, {
     bool tertunda = false,
-    bool perluTinjau = false,
   }) async {
     if (!mounted) return;
     await tampilkanLembar<void>(
@@ -187,7 +185,6 @@ class _CartSheetState extends ConsumerState<CartSheet> {
         struk: struk,
         kembalian: kembalian,
         tertunda: tertunda,
-        perluTinjau: perluTinjau,
       ),
     );
   }

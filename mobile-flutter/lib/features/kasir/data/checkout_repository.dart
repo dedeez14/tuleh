@@ -18,7 +18,6 @@ class HasilBayar {
     required this.nomor,
     required this.kembalian,
     this.tertunda = false,
-    this.perluTinjau = false,
     this.clientRef,
   });
 
@@ -29,8 +28,6 @@ class HasilBayar {
   final bool tertunda;
 
   /// true = server mungkin sudah menerima (timeout setelah kirim); pengguna
-  /// diminta memeriksa Riwayat sebelum mengirim ulang.
-  final bool perluTinjau;
   final String? clientRef;
 }
 
@@ -119,7 +116,6 @@ class CheckoutRepository {
           total: total,
           waktu: waktu,
           buatStruk: buatStruk,
-          tinjau: e.mungkinSampai,
         );
       }
     }
@@ -132,7 +128,6 @@ class CheckoutRepository {
       total: total,
       waktu: waktu,
       buatStruk: buatStruk,
-      tinjau: false,
     );
   }
 
@@ -145,7 +140,6 @@ class CheckoutRepository {
     required double total,
     required DateTime waktu,
     required Struk Function(String nomor, double kembalian) buatStruk,
-    required bool tinjau,
   }) async {
     final nomor = await nomorLokal.berikutnya(sekarang: waktu);
     final kembalian = metode == 'TUNAI' ? max(0.0, dibayar - total) : 0.0;
@@ -166,11 +160,7 @@ class CheckoutRepository {
         path: '/transaksi/checkout',
         body: body,
         dibuat: waktu,
-        status: tinjau ? StatusAntrean.tinjau : StatusAntrean.menunggu,
-        galatTerakhir: tinjau
-            ? 'Server tidak menjawab setelah data dikirim. Periksa di Riwayat '
-                  'apakah sudah tercatat sebelum mengirim ulang.'
-            : null,
+        status: StatusAntrean.menunggu,
       ),
       transaksi: TransaksiTertunda(
         clientRef: clientRef,
@@ -184,12 +174,11 @@ class CheckoutRepository {
       ),
       deltaStok: delta,
     );
-    if (!tinjau) unawaited(SinkronLatar.jadwalkanSekali());
+    unawaited(SinkronLatar.jadwalkanSekali());
     return HasilBayar(
       nomor: nomor,
       kembalian: kembalian,
       tertunda: true,
-      perluTinjau: tinjau,
       clientRef: clientRef,
     );
   }

@@ -12,11 +12,10 @@ import 'sinkron_latar.dart';
 
 /// Hasil permintaan tulis lewat [AntreanTulis].
 class HasilTulis {
-  const HasilTulis({this.tertunda = false, this.perluTinjau = false, this.clientRef});
+  const HasilTulis({this.tertunda = false, this.clientRef});
 
   /// true = disimpan di antrean, dikirim saat online.
   final bool tertunda;
-  final bool perluTinjau;
 
   /// client_ref baris antrean (hanya bila [tertunda]).
   final String? clientRef;
@@ -48,26 +47,6 @@ class AntreanTulis {
 
   /// [langsungAntre] = jangan coba ke server (mis. path merujuk bon lokal
   /// yang id servernya belum ada). [tokoId] menimpa toko default.
-  /// Petunjuk untuk baris "perlu ditinjau": tunjukkan tempat yang benar untuk
-  /// memeriksa, karena hanya CHECKOUT yang muncul di Riwayat. Opname/stok masuk
-  /// dicek di layar Produk, bon di peta meja.
-  static String _pesanTinjau(String jenis) {
-    const awal = 'Server tidak menjawab setelah data dikirim. ';
-    return awal + switch (jenis) {
-      'OPNAME' || 'STOK_MASUK' =>
-        'Periksa stok produknya di layar Produk sebelum mengirim ulang — '
-            'mengirim dua kali akan mengubah stok dua kali.',
-      'BILL_BUKA' || 'BILL_RONDE' || 'BILL_BAYAR' =>
-        'Periksa bon meja itu lebih dulu sebelum mengirim ulang.',
-      'PENGELUARAN' =>
-        'Periksa daftar Pengeluaran lebih dulu sebelum mengirim ulang.',
-      'SESI_BUKA' =>
-        'Periksa apakah sesi kasir sudah terbuka sebelum mengirim ulang.',
-      _ =>
-        'Periksa dulu apakah sudah tercatat sebelum mengirim ulang.',
-    };
-  }
-
   Future<HasilTulis> jalankan({
     required String jenis,
     required String path,
@@ -84,14 +63,14 @@ class AntreanTulis {
       'client_ref': clientRef,
       'waktu_klien': waktu.toIso8601String(),
     };
-    var tinjau = false;
     if (!langsungAntre && !(koneksi?.offline ?? false)) {
       try {
         await kirim(badan);
         return HasilTulis.langsung;
       } on ApiException catch (e) {
         if (!e.isJaringan) rethrow;
-        tinjau = e.mungkinSampai;
+        // Timeout setelah data terkirim pun cukup diantrekan biasa: server
+        // menolak duplikat lewat `client_ref` yang ikut di badan permintaan.
       }
     }
     await antrean.antrekan(
@@ -103,13 +82,12 @@ class AntreanTulis {
         path: path,
         body: badan,
         dibuat: waktu,
-        status: tinjau ? StatusAntrean.tinjau : StatusAntrean.menunggu,
-        galatTerakhir: tinjau ? _pesanTinjau(jenis) : null,
+        status: StatusAntrean.menunggu,
       ),
       deltaStok: deltaStok,
     );
-    if (!tinjau) unawaited(SinkronLatar.jadwalkanSekali());
-    return HasilTulis(tertunda: true, perluTinjau: tinjau, clientRef: clientRef);
+    unawaited(SinkronLatar.jadwalkanSekali());
+    return HasilTulis(tertunda: true, clientRef: clientRef);
   }
 }
 

@@ -163,7 +163,6 @@ void main() {
       );
       expect(server.panggilan, 0);
       expect(r.tertunda, isTrue);
-      expect(r.perluTinjau, isFalse);
       expect(r.nomor, matches(RegExp(r'^L-\d{6}-0001$')));
       expect(r.kembalian, 5000);
       final pesan = (await antrean.semua()).single;
@@ -188,15 +187,16 @@ void main() {
       expect((await antrean.semua()).single.status, StatusAntrean.menunggu);
     });
 
-    test('timeout setelah kirim: diantrekan TINJAU (tidak diulang otomatis)', () async {
+    test('timeout setelah kirim: diantrekan biasa & dikirim ulang otomatis', () async {
       final server = _Server((_) => DioExceptionType.receiveTimeout);
       final antrean = AntreanMemori();
       final r = await _repo(server, antrean, _Penanda()).bayar(
         items: _items, metode: 'TUNAI', dibayar: 20000, total: 15000, buatStruk: _struk,
       );
+      // Sejak server mengenal client_ref, timeout "mungkin sudah sampai" cukup
+      // dikirim ulang otomatis — kirim ulang tidak membuat transaksi kedua.
       expect(r.tertunda, isTrue);
-      expect(r.perluTinjau, isTrue);
-      expect((await antrean.semua()).single.status, StatusAntrean.tinjau);
+      expect((await antrean.semua()).single.status, StatusAntrean.menunggu);
     });
 
     test('ditolak server (409 sesi belum dibuka): dilempar apa adanya, tidak diantrekan', () async {
@@ -288,16 +288,38 @@ void main() {
       expect(PenguraiAntrean.mundur(99), const Duration(minutes: 10));
     });
 
-    test('timeout setelah kirim → TINJAU; kirimUlang mengirim lagi', () async {
+    test('timeout setelah kirim → dicoba lagi otomatis (server tolak duplikat)', () async {
+      // Dulu baris ini masuk TINJAU dan menunggu keputusan kasir. Sejak server
+      // mengenal client_ref, kiriman ulang aman: yang kedua dibalas 200 dengan
+      // data yang sama, bukan transaksi baru.
       var hidup = false;
       final server = _Server((_) => hidup ? (201, {'success': true, 'data': {}}) : DioExceptionType.receiveTimeout);
       final a = await antreanIsi(1);
       final p = PenguraiAntrean(store: a, dio: _dio(server), koneksi: _Penanda());
       await p.jalankan();
-      expect((await a.cari('c1'))!.status, StatusAntrean.tinjau);
+      final sesudahTimeout = (await a.cari('c1'))!;
+      expect(sesudahTimeout.status, StatusAntrean.menunggu);
+      expect(sesudahTimeout.percobaan, 1, reason: 'dijadwalkan ulang, bukan menunggu manusia');
       hidup = true;
       await p.kirimUlang('c1');
       expect((await a.cari('c1'))!.status, StatusAntrean.terkirim);
+      p.hentikan();
+    });
+
+    test('kiriman ulang dibalas 200 + meta.idempoten: dianggap sudah tercatat', () async {
+      final server = _Server((_) => (200, {
+        'success': true,
+        'data': {'id': 'TRX-9', 'nomor': '26-POS-000041'},
+        'meta': {'idempoten': true},
+      }));
+      final a = await antreanIsi(1);
+      final p = PenguraiAntrean(store: a, dio: _dio(server), koneksi: _Penanda());
+      await p.jalankan();
+      final baris = (await a.cari('c1'))!;
+      expect(baris.status, StatusAntrean.terkirim);
+      expect(baris.hasil?['nomor'], '26-POS-000041', reason: 'nomor resmi dari jawaban ulang');
+      expect(baris.hasil?['id'], 'TRX-9', reason: 'dipakai bon berantai lokal:<ref>');
+      expect(baris.hasil?['_idempoten'], isTrue);
       p.hentikan();
     });
   });

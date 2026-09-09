@@ -46,6 +46,25 @@ class AppVersionInfo {
     ukuran: null,
   );
 
+  /// Salinan dengan sebagian nilai diganti (penyesuaian ABI & penegasan
+  /// `wajib` dari server saat berkas diambil dari cadangan GitHub).
+  AppVersionInfo dengan({
+    bool? wajib,
+    String? androidUrl,
+    String? androidNama,
+    int? ukuran,
+    bool kosongkanUkuran = false,
+  }) => AppVersionInfo(
+    wajib: wajib ?? this.wajib,
+    updateTersedia: updateTersedia,
+    versiTerbaru: versiTerbaru,
+    versiMinimum: versiMinimum,
+    catatan: catatan,
+    androidUrl: androidUrl ?? this.androidUrl,
+    androidNama: androidNama ?? this.androidNama,
+    ukuran: kosongkanUkuran ? null : (ukuran ?? this.ukuran),
+  );
+
   /// APK bisa diunduh dalam-app: https dari sumber yang diizinkan
   /// ([SumberApk] — aturan yang sama dengan penegakan native).
   bool get hasAndroidDownload => SumberApk.diizinkan(androidUrl);

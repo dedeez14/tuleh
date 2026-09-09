@@ -12,7 +12,9 @@ const path = require('node:path')
 
 const { SalinanBaca, kunciSalinan } = require('../src/main/offline/salinan')
 const { Antrean, STATUS } = require('../src/main/offline/antrean')
-const { Pengurai, mundur, PESAN_TIMEOUT_SETELAH_KIRIM } = require('../src/main/offline/pengurai')
+const { Pengurai, mundur } = require('../src/main/offline/pengurai')
+// Pemulih hanya untuk baris TINJAU warisan (sebelum server mengenal client_ref).
+const { PESAN_TIMEOUT_SETELAH_KIRIM } = require('../src/main/offline/pemulih')
 const { NomorLokal, buatStrukLokal } = require('../src/main/offline/struk-lokal')
 
 function dirSementara() {
@@ -119,7 +121,10 @@ test('Pengurai: gagal jaringan → mundur eksponensial & FIFO ketat (yang di bel
   assert.deepEqual([mundur(1), mundur(2), mundur(3), mundur(4), mundur(5), mundur(9)], [5000, 15000, 45000, 120000, 600000, 600000])
 })
 
-test('Pengurai: timeout setelah kirim → TINJAU (tidak diulang); 401 → berhenti; kirimUlang memulihkan', async () => {
+test('Pengurai: timeout setelah kirim → dicoba lagi (server tolak duplikat); 401 → berhenti', async () => {
+  // Sejak server mengenal client_ref (9 Sep 2026), kiriman ulang dengan ref
+  // yang sama membalas jawaban lama, bukan transaksi kedua. Karena itu timeout
+  // tidak lagi menunggu keputusan kasir; dulu baris ini masuk TINJAU.
   const a = antreanMemori()
   pesan(a, 'a'); pesan(a, 'b')
   let mode = 'timeout'
@@ -128,9 +133,9 @@ test('Pengurai: timeout setelah kirim → TINJAU (tidak diulang); 401 → berhen
     : mode === '401' ? { ok: false, status: 401, message: 'Sesi berakhir' } : { ok: true, status: 200, data: {} }
   const pg = new Pengurai({ antrean: a, kirim, jadwal: () => null, batalJadwal: () => {} })
   await pg.jalankan()
-  assert.equal(a.cari('a').status, STATUS.TINJAU)
-  assert.equal(a.cari('a').galat, PESAN_TIMEOUT_SETELAH_KIRIM)
-  assert.equal(a.cari('b').status, STATUS.TINJAU)
+  assert.equal(a.cari('a').status, STATUS.MENUNGGU)
+  assert.equal(a.cari('a').percobaan, 1, 'dijadwalkan ulang, bukan menunggu manusia')
+  assert.ok(a.cari('a').cobaLagiSetelah > 0)
 
   mode = '401'
   await pg.kirimUlang('a')
@@ -139,6 +144,23 @@ test('Pengurai: timeout setelah kirim → TINJAU (tidak diulang); 401 → berhen
   mode = 'ok'
   await pg.jalankan()
   assert.equal(a.cari('a').status, STATUS.TERKIRIM)
+})
+
+test('Pengurai: jawaban ulang server (meta.idempoten) ditandai, bukan transaksi baru', async () => {
+  const a = antreanMemori()
+  pesan(a, 'a')
+  const kirim = async () => ({
+    ok: true,
+    status: 200,
+    data: { id: 'TRX-9', nomor: '26-POS-000041' },
+    meta: { idempoten: true }
+  })
+  const pg = new Pengurai({ antrean: a, kirim, jadwal: () => null, batalJadwal: () => {} })
+  await pg.jalankan()
+  const baris = a.cari('a')
+  assert.equal(baris.status, STATUS.TERKIRIM)
+  assert.equal(baris.hasil.nomor, '26-POS-000041')
+  assert.equal(baris.hasil._idempoten, true)
 })
 
 test('NomorLokal: naik per hari, format L-yyMMdd-NNNN, tersimpan', () => {

@@ -191,7 +191,6 @@ class _Body extends ConsumerWidget {
                 : struk,
             kembalian: struk.kembalian ?? 0,
             tertunda: h.tertunda,
-            perluTinjau: h.perluTinjau,
           ),
         );
       },
