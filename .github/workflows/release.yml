@@ -122,6 +122,18 @@ jobs:
           wrap demo-data "$SRCMAIN/demo-data.js" "$WWW/js/demo-data.js"
           wrap demo      "$SRCMAIN/demo.js"      "$WWW/js/demo.js"
           cp -r mobile/www-src/. "$WWW/"
+      - name: Set versi aplikasi di jembatan WebView
+        # Layar Pengaturan → Info, header X-Tuleh-Version, dan cek pembaruan
+        # semuanya membaca APP_VERSION dari mobile-bridge.js. Tanpa suntikan ini
+        # nilainya tetap angka yang tertulis di sumber, sehingga APK bernama
+        # 0.9.24 melapor dirinya sebagai versi lama.
+        run: |
+          set -e
+          VER="${{ needs.version-check.outputs.version }}"
+          FILE=mobile/www/js/mobile-bridge.js
+          sed -i -E "s/var APP_VERSION = '[^']*'/var APP_VERSION = '$VER'/" "$FILE"
+          grep -n "var APP_VERSION" "$FILE"
+          grep -q "var APP_VERSION = '$VER'" "$FILE" || { echo "::error::APP_VERSION gagal disuntik"; exit 1; }
       - name: Install deps (mobile)
         working-directory: mobile
         run: npm install --no-audit --no-fund

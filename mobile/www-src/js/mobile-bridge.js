@@ -12,7 +12,10 @@
   var API_PREFIX = '/api/pos/v1'
   var TIMEOUT_MS = 15000
   var DEFAULT_BASE = 'https://tatreport.com'
-  var APP_VERSION = '0.9.15'
+  // Diganti otomatis saat build (CI: workflow release, lokal: build-android.ps1)
+  // dengan versi di frontend/package.json. Angka di sini hanya cadangan bila
+  // seseorang membuka www-src langsung.
+  var APP_VERSION = '0.9.25'
 
   var baseUrl = DEFAULT_BASE
   var token = null

@@ -26,6 +26,16 @@ Wrap-Cjs 'demo-data' (Join-Path $srcMain 'demo-data.js') (Join-Path $www 'js\dem
 Wrap-Cjs 'demo'      (Join-Path $srcMain 'demo.js')      (Join-Path $www 'js\demo.js')
 Copy-Item (Join-Path $mobile 'www-src\*') $www -Recurse -Force   # overlay: index.html + mobile-bridge.js + polyfills.js
 
+# Versi yang dilaporkan aplikasi (Pengaturan → Info, header X-Tuleh-Version,
+# cek pembaruan) diambil dari frontend/package.json — sama dengan nama berkas
+# APK yang diterbitkan CI, supaya keduanya tidak pernah berbeda.
+$versi = (Get-Content (Join-Path $repo 'frontend\package.json') -Raw | ConvertFrom-Json).version
+$jembatan = Join-Path $www 'js\mobile-bridge.js'
+(Get-Content $jembatan -Raw) -replace "var APP_VERSION = '[^']*'", "var APP_VERSION = '$versi'" |
+  Set-Content $jembatan -NoNewline
+Write-Host "APP_VERSION = $versi"
+
+
 Write-Host '2b/5 Transpile www/js → es2017 (kompatibel Android 10 / WebView Chrome 77)…'
 Push-Location $mobile
 node transpile.mjs "www\js"

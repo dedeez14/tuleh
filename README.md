@@ -145,6 +145,8 @@ Mode Demo di desktop dan Android berlaku **7 hari** sejak pertama dibuka di pera
 
 **Cari di Riwayat** (desktop ≥ 0.9.23, Android ≥ 2.19.0): kotak Cari menyaring baris yang sudah dimuat — nomor nota, metode, status, atau nominal ("Rp 25.000" sama dengan "25000") — tanpa memanggil server lagi, jadi tetap jalan saat offline; Esc mengosongkannya. KPI di atas tabel tetap menghitung seluruh rentang.
 
+APK Android **legacy** (`Tuleh-X.Y.Z-android.apk` di rilis desktop) kini melaporkan versinya sendiri dengan benar: `APP_VERSION` di `mobile/www-src/js/mobile-bridge.js` disuntik saat build (CI & `build-android.ps1`) dari `frontend/package.json`. Sebelum 0.9.25 nilainya tertanam mati di 0.9.15, sehingga Pengaturan → Info, header `X-Tuleh-Version`, dan cek `/app/versi` semuanya melapor versi lama meski berkasnya bernama 0.9.24.
+
 Sejak 0.9.24 cetak langsung hanya berlaku untuk **struk** — ekspor PDF laporan dan cetak QR meja selalu lewat dialog Windows (sebelumnya ikut tersedot ke printer thermal), dan **Uji cetak** memakai setelan yang sedang dicoba tanpa menyimpannya.
 
 **Printer struk** (desktop ≥ 0.9.22): Pengaturan → Printer struk memuat daftar printer Windows; pilih printer thermal, centang *cetak langsung tanpa dialog* agar struk keluar tanpa jendela cetak, dan *cetak otomatis setelah pembayaran* agar struk langsung tercetak begitu transaksi tercatat (termasuk struk lokal saat offline). Tombol **Uji cetak** dan **Uji lewat dialog** mencetak struk contoh; preferensi disimpan di `settings.json` (`cetak`). Bila printer pilihan dicabut, aplikasi memberi tahu dan jatuh ke dialog Windows.
