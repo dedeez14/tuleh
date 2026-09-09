@@ -149,6 +149,8 @@ APK Android **legacy** (`Tuleh-X.Y.Z-android.apk` di rilis desktop) kini melapor
 
 Sejak 0.9.24 cetak langsung hanya berlaku untuk **struk** — ekspor PDF laporan dan cetak QR meja selalu lewat dialog Windows (sebelumnya ikut tersedot ke printer thermal), dan **Uji cetak** memakai setelan yang sedang dicoba tanpa menyimpannya.
 
+Kebutuhan yang menunggu sisi server (idempotensi `client_ref`, kelola meja, jalur versi Flutter) dikumpulkan di [SERVER-YANG-DIBUTUHKAN.md](SERVER-YANG-DIBUTUHKAN.md) — dokumen itu sekaligus bisa ditempel sebagai prompt untuk yang mengerjakan MOVERA.
+
 **Printer struk** (desktop ≥ 0.9.22): Pengaturan → Printer struk memuat daftar printer Windows; pilih printer thermal, centang *cetak langsung tanpa dialog* agar struk keluar tanpa jendela cetak, dan *cetak otomatis setelah pembayaran* agar struk langsung tercetak begitu transaksi tercatat (termasuk struk lokal saat offline). Tombol **Uji cetak** dan **Uji lewat dialog** mencetak struk contoh; preferensi disimpan di `settings.json` (`cetak`). Bila printer pilihan dicabut, aplikasi memberi tahu dan jatuh ke dialog Windows.
 
 Selama demo, beberapa hal sengaja dibatasi (desktop ≥ 0.9.17, Android ≥ 2.10.0) agar demo tetap untuk mencoba, bukan berjualan: struk cetak/pratinjau/teks bertanda **MODE DEMO — bukan bukti pembayaran**; paling banyak **20 transaksi per hari** (checkout kasir & bayar bon meja) yang dibuat pengguna; di desktop, ekspor CSV laporan, PDF & bagikan WhatsApp laporan keuangan, dan akses internet publik (tunnel) tidak tersedia. Data contoh tetap bisa dijelajahi seluruhnya.
