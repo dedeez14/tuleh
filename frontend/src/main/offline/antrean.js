@@ -25,6 +25,21 @@ function buatClientRef() {
   return crypto.randomUUID()
 }
 
+/**
+ * `waktu_klien` untuk badan permintaan: ISO-8601 **waktu lokal kasir**, detik
+ * penuh, tanpa akhiran zona.
+ *
+ * Bukan `toISOString()`: itu menghasilkan "…T07:25:40.635Z" (UTC + Z), dan
+ * server menyimpannya apa adanya ke kolom MySQL `datetime` → error 1292
+ * "Incorrect datetime value" sehingga transaksi ditolak. Waktu lokal juga yang
+ * dimaksud kolom itu: kapan kasir menekan Bayar menurut jam tokonya.
+ */
+function waktuKlien(waktu = new Date()) {
+  const dua = (n) => String(n).padStart(2, '0')
+  return `${waktu.getFullYear()}-${dua(waktu.getMonth() + 1)}-${dua(waktu.getDate())}`
+    + `T${dua(waktu.getHours())}:${dua(waktu.getMinutes())}:${dua(waktu.getSeconds())}`
+}
+
 class Antrean {
   constructor({ berkas = null, sekarang = () => Date.now() } = {}) {
     this.berkas = berkas
@@ -153,4 +168,18 @@ class Antrean {
   }
 }
 
-module.exports = { Antrean, STATUS, labelJenis, buatClientRef }
+/**
+ * Rapikan `waktu_klien` pada badan yang sudah tersimpan di antrean sebelum
+ * dikirim. Baris yang diantrekan versi lama membawa "…Z" (UTC) yang ditolak
+ * MySQL; tanpa ini transaksi lama akan terus gagal walau aplikasi sudah baru.
+ */
+function badanWaktuRapi(body) {
+  const nilai = body && body.waktu_klien
+  if (typeof nilai !== 'string' || !nilai) return body
+  const t = new Date(nilai)
+  if (Number.isNaN(t.getTime())) return body
+  const rapi = waktuKlien(t)
+  return rapi === nilai ? body : { ...body, waktu_klien: rapi }
+}
+
+module.exports = { Antrean, STATUS, labelJenis, buatClientRef, waktuKlien, badanWaktuRapi }

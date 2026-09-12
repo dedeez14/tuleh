@@ -169,7 +169,7 @@ function registerIpcHandlers(getMainWindow) {
    */
   async function tulisAtauAntre({ jenis, jalur, body, transaksi = null, deltaStok = {} }) {
     const clientRef = offline.buatClientRef()
-    const badan = { ...body, client_ref: clientRef, waktu_klien: new Date().toISOString() }
+    const badan = { ...body, client_ref: clientRef, waktu_klien: offline.waktuKlien() }
     if (offline.koneksi.online) {
       const r = await withAuthWatch(api.post(jalur, { body: badan }))
       if (r.ok) return { ...r, clientRef }

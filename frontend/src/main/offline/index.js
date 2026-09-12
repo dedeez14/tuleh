@@ -6,7 +6,7 @@
 
 const path = require('node:path')
 const { SalinanBaca } = require('./salinan')
-const { Antrean, STATUS, buatClientRef, labelJenis } = require('./antrean')
+const { Antrean, STATUS, buatClientRef, labelJenis, waktuKlien } = require('./antrean')
 const { Pengurai } = require('./pengurai')
 const { Pemulih } = require('./pemulih')
 const { NomorLokal, buatStrukLokal } = require('./struk-lokal')
@@ -70,6 +70,7 @@ module.exports = {
   koneksi,
   STATUS,
   buatClientRef,
+  waktuKlien,
   labelJenis,
   buatStrukLokal,
   get salinan() { return salinan },

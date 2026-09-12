@@ -8,7 +8,7 @@
 // { ok, status, data, message, errors } — status 0 = tidak sampai ke server,
 // status -1 = timeout (mungkin sudah sampai).
 
-const { STATUS } = require('./antrean')
+const { STATUS, badanWaktuRapi } = require('./antrean')
 
 const JEDA_MUNDUR_MS = [5000, 15000, 45000, 120000, 600000]
 
@@ -76,7 +76,7 @@ class Pengurai {
     this.antrean.perbarui(p.clientRef, { status: STATUS.MENGIRIM })
     let res
     try {
-      res = await this.kirim(p.path, p.body, p)
+      res = await this.kirim(p.path, badanWaktuRapi(p.body), p)
     } catch (err) {
       res = { ok: false, status: 0, message: err && err.message ? err.message : 'gagal' }
     }

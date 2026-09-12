@@ -7,6 +7,7 @@ import '../../../core/offline/antrean.dart';
 import '../../../core/offline/koneksi.dart';
 import '../../../core/offline/nomor_lokal.dart';
 import '../../../core/offline/sinkron_latar.dart';
+import '../../../core/offline/waktu_klien.dart';
 import '../../cetak/domain/entities/struk.dart';
 import '../domain/entities/cart_item.dart';
 import 'datasources/transaction_remote_datasource.dart';
@@ -98,7 +99,7 @@ class CheckoutRepository {
       if (idPelanggan != null && idPelanggan.isNotEmpty) 'id_pelanggan': idPelanggan,
       if (catatan != null && catatan.trim().isNotEmpty) 'catatan': catatan.trim(),
       'client_ref': clientRef,
-      'waktu_klien': waktu.toIso8601String(),
+      'waktu_klien': waktuKlienIso(waktu),
     };
 
     if (!(koneksi?.offline ?? false)) {

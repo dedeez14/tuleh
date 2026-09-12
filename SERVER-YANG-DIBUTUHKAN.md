@@ -47,7 +47,7 @@ badan JSON:
 ```jsonc
 {
   "client_ref": "5f2c1a6e-8f3d-4b21-9a77-0c2f9d1e4b88",  // UUID v4, dibuat di perangkat
-  "waktu_klien": "2026-09-09T14:05:33.412",              // ISO-8601 waktu lokal kasir
+  "waktu_klien": "2026-09-09T14:05:33",                  // ISO-8601 waktu LOKAL kasir, detik penuh
   "...": "field asli endpoint yang bersangkutan"
 }
 ```
@@ -85,6 +85,38 @@ menambahkan dukungannya tidak memerlukan rilis aplikasi baru.
 4. Simpan `waktu_klien` sebagai informasi (kapan kasir sebenarnya menekan
    bayar). Jangan dipakai sebagai waktu resmi transaksi kecuali memang
    diinginkan — jam perangkat kasir bisa salah.
+5. **Uraikan `waktu_klien` sebelum disimpan, jangan diteruskan mentah ke kolom
+   `datetime`.** Lihat catatan di bawah.
+
+### Catatan lapangan: `client_created_at` menolak seluruh transaksi (12 Sep 2026)
+
+Setelah kolom `client_created_at` aktif, checkout dari aplikasi Windows selalu
+gagal:
+
+```
+SQLSTATE[22007]: Invalid datetime format: 1292 Incorrect datetime value:
+'2026-09-12T07:25:40.635Z' for column 'client_created_at' at row 1
+```
+
+Sebabnya nilai `waktu_klien` disisipkan apa adanya ke kolom `datetime`; MySQL
+menolak akhiran zona `Z`. Akibatnya **penjualan tidak bisa diselesaikan sama
+sekali** — bukan sekadar kolom kosong.
+
+Sisi aplikasi sudah diperbaiki (desktop 0.9.32 / Android 2.27.4): `waktu_klien`
+kini selalu `YYYY-MM-DDTHH:MM:SS` waktu lokal kasir, tanpa milidetik dan tanpa
+akhiran zona, dan baris antrean lama ikut dirapikan sebelum dikirim ulang.
+
+Server tetap sebaiknya bertahan sendiri, karena APK lama yang sudah terpasang
+di ponsel pelanggan masih akan mengirim format lain:
+
+- uraikan nilainya (`Carbon::parse($v)`) lalu simpan hasilnya; nilai ber-`Z`
+  artinya UTC dan perlu dikonversi ke zona toko;
+- bila tidak bisa diuraikan, **simpan null** dan tetap proses transaksinya —
+  kolom informasi tidak boleh menggagalkan penjualan;
+- validasi `waktu_klien` sebagai `nullable|date` supaya kesalahannya muncul
+  sebagai 422 yang jelas, bukan galat SQL mentah yang bocor ke layar kasir
+  (pesan SQL lengkap berisi nama tabel & kolom sebaiknya tidak dikirim ke
+  klien).
 
 ### Kenapa `id` dan `nomor` wajib ikut di jawaban ulang
 

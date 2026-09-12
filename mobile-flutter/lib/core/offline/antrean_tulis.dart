@@ -9,6 +9,7 @@ import 'antrean.dart';
 import 'koneksi.dart';
 import 'pengurai.dart';
 import 'sinkron_latar.dart';
+import 'waktu_klien.dart';
 
 /// Hasil permintaan tulis lewat [AntreanTulis].
 class HasilTulis {
@@ -61,7 +62,7 @@ class AntreanTulis {
     final badan = {
       ...body,
       'client_ref': clientRef,
-      'waktu_klien': waktu.toIso8601String(),
+      'waktu_klien': waktuKlienIso(waktu),
     };
     if (!langsungAntre && !(koneksi?.offline ?? false)) {
       try {

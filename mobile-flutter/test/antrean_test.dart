@@ -150,7 +150,11 @@ void main() {
       expect(r.tertunda, isFalse);
       expect(r.nomor, '26-POS-000041');
       expect(server.badan.single['client_ref'], matches(RegExp(r'^[0-9a-f-]{36}$')));
-      expect(server.badan.single['waktu_klien'], isNotNull);
+      // Format dijaga: "…Z" membuat MySQL menolak seluruh transaksi.
+      expect(
+        server.badan.single['waktu_klien'],
+        matches(RegExp(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$')),
+      );
       expect((await antrean.ringkas()).total, 0);
     });
 
