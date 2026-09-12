@@ -88,7 +88,7 @@ menambahkan dukungannya tidak memerlukan rilis aplikasi baru.
 5. **Uraikan `waktu_klien` sebelum disimpan, jangan diteruskan mentah ke kolom
    `datetime`.** Lihat catatan di bawah.
 
-### Catatan lapangan: `client_created_at` menolak seluruh transaksi (12 Sep 2026)
+### Catatan lapangan: `client_created_at` menolak seluruh transaksi (12 Sep 2026) — SELESAI
 
 Setelah kolom `client_created_at` aktif, checkout dari aplikasi Windows selalu
 gagal:
@@ -106,17 +106,20 @@ Sisi aplikasi sudah diperbaiki (desktop 0.9.32 / Android 2.27.4): `waktu_klien`
 kini selalu `YYYY-MM-DDTHH:MM:SS` waktu lokal kasir, tanpa milidetik dan tanpa
 akhiran zona, dan baris antrean lama ikut dirapikan sebelum dikirim ulang.
 
-Server tetap sebaiknya bertahan sendiri, karena APK lama yang sudah terpasang
-di ponsel pelanggan masih akan mengirim format lain:
+**Sisi server sudah menyusul di hari yang sama** dan sudah diuji dari mesin ini
+(toko demo, tiap transaksi uji langsung dibatalkan):
 
-- uraikan nilainya (`Carbon::parse($v)`) lalu simpan hasilnya; nilai ber-`Z`
-  artinya UTC dan perlu dikonversi ke zona toko;
-- bila tidak bisa diuraikan, **simpan null** dan tetap proses transaksinya —
-  kolom informasi tidak boleh menggagalkan penjualan;
-- validasi `waktu_klien` sebagai `nullable|date` supaya kesalahannya muncul
-  sebagai 422 yang jelas, bukan galat SQL mentah yang bocor ke layar kasir
-  (pesan SQL lengkap berisi nama tabel & kolom sebaiknya tidak dikirim ke
-  klien).
+| `waktu_klien` yang dikirim | Jawaban server |
+|---|---|
+| `2026-09-12T13:01:10.938Z` (format desktop lama) | **201** — diterima, transaksi jadi |
+| `2026-09-12T14:37:28.597` (format Android) | **201** |
+| `2026-09-12T14:35:14` (format baru dua aplikasi) | **201** |
+| `entah bukan tanggal` | **422** `{"waktu_klien":["waktu klien bukan tanggal yang valid."]}` |
+
+Artinya kasir yang masih memakai desktop 0.9.31 pun sudah bisa berjualan tanpa
+memperbarui aplikasi, dan galat SQL mentah tidak lagi bocor ke layar kasir.
+Perbaikan sisi aplikasi tetap berlaku: formatnya kini yang paling aman, dan
+antrean offline lama ikut dirapikan sebelum dikirim ulang.
 
 ### Kenapa `id` dan `nomor` wajib ikut di jawaban ulang
 

@@ -81,7 +81,12 @@ class ActiveSesiNotifier extends AsyncNotifier<Sesi?> {
       offline = true; // /gudang belum tersalin & server tak terjangkau → diisi pengurai
     }
     if ((gudang == null || gudang.isEmpty) && !offline) {
-      throw const ApiException(message: 'Gudang toko tidak ditemukan.');
+      // Aplikasi tidak punya layar gudang (dibuat admin di tatreport.com), jadi
+      // pesannya harus menyebut jalan keluarnya — bukan sekadar "tidak ada".
+      throw const ApiException(
+        message: 'Usaha ini belum punya gudang, jadi sesi kasir belum bisa '
+            'dibuka. Minta admin Tuléh membuatkan gudang lebih dulu.',
+      );
     }
     final hasil = await ref.read(antreanTulisProvider).jalankan(
       jenis: 'SESI_BUKA',
