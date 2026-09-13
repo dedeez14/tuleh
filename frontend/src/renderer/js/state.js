@@ -4,6 +4,7 @@
 const state = {
   user: null,          // { id, name, email, is_admin }
   posRole: null,       // 'OWNER' | 'MANAGER' | 'KASIR' — dari data.pos_role login/me (kontrak peran)
+  akses: null,         // string[] kunci akses dari server (null = pakai matriks bawaan) — baca lewat akses.js
   company: null,       // { nama, alamat, telepon, npwp, logo }
   branch: null,
   permissions: [],
@@ -54,6 +55,7 @@ export function resetAuthState() {
   setState({
     user: null,
     posRole: null,
+    akses: null,
     company: null,
     branch: null,
     permissions: [],
@@ -68,6 +70,7 @@ export function resetAuthState() {
     session: null,
     sessionId: null,
     langganan: null,
+    stokAlerts: [],
     gudang: [],
     gudangError: null,
     kategori: [],

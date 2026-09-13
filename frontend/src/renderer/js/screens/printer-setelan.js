@@ -6,6 +6,7 @@ import { api } from '../api.js'
 import { esc } from '../utils/format.js'
 import { toast } from '../components/ui.js'
 import { printReceipt, preferensiCetak } from '../components/receipt.js'
+import { kemampuanPlatform } from '../lib/kemampuan.js'
 
 const STRUK_UJI = {
   nomor: 'UJI-CETAK',
@@ -44,7 +45,13 @@ export async function mountPrinterSetelan(container) {
   const langsung = container.querySelector('#pr-langsung')
   const otomatis = container.querySelector('#pr-otomatis')
 
-  const [pref, printers] = await Promise.all([preferensiCetak(true), api.app.printers()])
+  const [pref, printers, kemampuan] = await Promise.all([preferensiCetak(true), api.app.printers(), kemampuanPlatform()])
+  if (!kemampuan.printerSistem) {
+    // Tanpa daftar printer OS: struk selalu lewat dialog cetak perangkat.
+    sel.closest('.field').classList.add('u-hidden')
+    langsung.closest('label').classList.add('u-hidden')
+    container.querySelector('#pr-uji').classList.add('u-hidden')
+  }
   const daftar = printers.ok && Array.isArray(printers.data) ? printers.data : []
   sel.innerHTML = `<option value="">— Dialog cetak Windows —</option>` + daftar.map((p) =>
     `<option value="${esc(p.nama)}">${esc(p.nama)}${p.bawaan ? ' (bawaan)' : ''}</option>`).join('')

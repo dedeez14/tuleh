@@ -24,6 +24,8 @@ function Wrap-Cjs([string]$name, [string]$src, [string]$dest) {
 }
 Wrap-Cjs 'demo-data' (Join-Path $srcMain 'demo-data.js') (Join-Path $www 'js\demo-data.js')
 Wrap-Cjs 'demo'      (Join-Path $srcMain 'demo.js')      (Join-Path $www 'js\demo.js')
+# Kontrak kanal bersama desktop ↔ Android (mobile-bridge.js membentuk permintaan darinya)
+Copy-Item (Join-Path $repo 'frontend\src\shared\kontrak-kanal.js') (Join-Path $www 'js\kontrak-kanal.js') -Force
 Copy-Item (Join-Path $mobile 'www-src\*') $www -Recurse -Force   # overlay: index.html + mobile-bridge.js + polyfills.js
 
 # Versi yang dilaporkan aplikasi (Pengaturan → Info, header X-Tuleh-Version,

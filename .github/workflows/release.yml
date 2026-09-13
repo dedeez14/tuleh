@@ -118,6 +118,8 @@ jobs:
           rm -rf "$WWW"; mkdir -p "$WWW/js/lib"
           cp -r "$RENDERER/." "$WWW/"
           cp "$SRCMAIN/lib/qrcode-generator.js" "$WWW/js/lib/qrcode-generator.js"
+          # Kontrak kanal bersama desktop ↔ Android (mobile-bridge.js membentuk permintaan darinya)
+          cp frontend/src/shared/kontrak-kanal.js "$WWW/js/kontrak-kanal.js"
           wrap() { { echo "window.__cjs.define('$1', function (module, exports, require) {"; cat "$2"; echo ""; echo "});"; } > "$3"; }
           wrap demo-data "$SRCMAIN/demo-data.js" "$WWW/js/demo-data.js"
           wrap demo      "$SRCMAIN/demo.js"      "$WWW/js/demo.js"

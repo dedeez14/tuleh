@@ -63,3 +63,25 @@ test('tidak ada yang cocok → daftar kosong; urutan asal dipertahankan', () => 
 test('baris rusak tidak melempar', () => {
   assert.deepEqual(C.cariRiwayat([null, undefined, {}], 'apa'), [])
 })
+
+// 0.9.33 — Manager memantau banyak kasir: server mengirim kasir {id, nama} & sesi {id, nomor}.
+const olehAni = { id: '10', nomor: '26-POS-000070', grand_total: 15000, status: 'SELESAI', kasir: { id: 'x1', nama: 'Ani Kasir' }, sesi: { id: 's1', nomor: 'SK-001' } }
+const olehBudi = { id: '11', nomor: '26-POS-000071', grand_total: 20000, status: 'SELESAI', kasir: { id: 'x2', nama: 'Budi' }, sesi: { id: 's2', nomor: 'SK-002' } }
+const olehAni2 = { ...olehAni, id: '12', nomor: '26-POS-000072', kasir: { id: 'x3-enkripsi-lain', nama: 'Ani Kasir' } }
+
+test('pencarian mencocokkan nama kasir dan nomor sesi', () => {
+  const rows = [olehAni, olehBudi]
+  assert.deepEqual(nomor(C.cariRiwayat(rows, 'budi')), ['26-POS-000071'])
+  assert.deepEqual(nomor(C.cariRiwayat(rows, 'sk-001')), ['26-POS-000070'])
+})
+
+test('daftarKasir: nama unik terurut (id terenkripsi berbeda tiap baris diabaikan)', () => {
+  assert.deepEqual(C.daftarKasir([olehBudi, olehAni, olehAni2, tunai]), ['Ani Kasir', 'Budi'])
+  assert.deepEqual(C.daftarKasir(null), [])
+})
+
+test('saringKasir: kosong = semua; nama = hanya transaksi kasir itu', () => {
+  const rows = [olehAni, olehBudi, olehAni2]
+  assert.equal(C.saringKasir(rows, ''), rows)
+  assert.deepEqual(nomor(C.saringKasir(rows, 'Ani Kasir')), ['26-POS-000070', '26-POS-000072'])
+})

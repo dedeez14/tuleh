@@ -97,3 +97,10 @@
   gap: var(--sp-3);
   width: 100%;
 }
+
+.hst-col-kasir {
+  white-space: nowrap;
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

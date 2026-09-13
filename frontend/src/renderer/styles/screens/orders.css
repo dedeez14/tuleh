@@ -173,6 +173,11 @@
   color: var(--mint-800);
 }
 
+.ord-card__kasir {
+  font-family: var(--font-sans);
+  color: var(--text-2);
+}
+
 .ord-card__items {
   list-style: none;
   padding: 0;

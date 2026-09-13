@@ -7,6 +7,8 @@ import { api, firstError } from '../api.js'
 import { refreshConfig } from '../app.js'
 import { toast } from '../components/ui.js'
 import { esc } from '../utils/format.js'
+import { bisa } from '../akses.js'
+import { jadikanBacaSaja } from '../components/baca-saja.js'
 
 const ACCEPT = 'image/png,image/jpeg,image/webp'
 const MAKS_BYTE = 2 * 1024 * 1024
@@ -72,6 +74,7 @@ function render(host, data) {
 
   // --- Midtrans (bila diizinkan) ---
   if (mt.diizinkan === true) bindMidtrans(host, mt)
+  if (!bisa('pengaturan.pembayaran')) jadikanBacaSaja(body)
 }
 
 function bankRowHTML(r) {

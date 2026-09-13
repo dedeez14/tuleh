@@ -195,6 +195,7 @@ function registerIpcHandlers(getMainWindow) {
       version: app.getVersion(),
       hostname: os.hostname(),
       platform: process.platform,
+      kemampuan: { antreanOffline: true, printerSistem: true },
       gateway: gateway.status(),
       tracking: tracker.status(),
       // Jalur uji tampilan otomatis (screenshot smoke) — tidak dipakai produksi
@@ -585,6 +586,8 @@ function registerIpcHandlers(getMainWindow) {
 
   handle('trx:list', async (payload) => {
     const r = await withAuthWatch(kirimKontrak('trx:list', payload))
+    // Daftar per sesi (detail sesi kasir) hanya berisi transaksi server sesi itu.
+    if (payload && payload.sesiId) return r
     // Transaksi lokal yang belum terkirim ditaruh paling atas (id lokal:<ref>).
     const lokal = offline.antrean.transaksiTertunda(api.getActiveTokoId())
       .map((t) => ({ ...t.struk, id: `lokal:${t.clientRef}`, nomor: t.nomorLokal, status: 'BELUM SINKRON' }))

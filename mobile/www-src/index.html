@@ -85,8 +85,10 @@
   <script src="./js/demo.js"></script>
   <script>window.__demo = window.__cjs.get('demo')</script>
 
-  <!-- Jembatan Android: sediakan window.iposAPI (klasik) SEBELUM app.js (module) -->
+  <!-- Jembatan Android: sediakan window.iposAPI (klasik) SEBELUM app.js (module).
+       kontrak-kanal.js = pemetaan kanal → HTTP bersama desktop (disalin saat build). -->
   <script src="./js/lib/qrcode-generator.js"></script>
+  <script src="./js/kontrak-kanal.js"></script>
   <script src="./js/mobile-bridge.js"></script>
   <script type="module" src="./js/app.js"></script>
 </body>

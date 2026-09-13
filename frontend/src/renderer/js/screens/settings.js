@@ -2,6 +2,7 @@
 
 import { api, firstError } from '../api.js'
 import { getState } from '../state.js'
+import { bisa, labelPeran } from '../akses.js'
 import { icons, toast, confirmDialog } from '../components/ui.js'
 import { esc, fmtDateTime, fmtDate } from '../utils/format.js'
 import { mulaiPembayaran } from '../langganan-bayar.js'
@@ -9,6 +10,7 @@ import { mountProfilUsaha } from './profil-usaha.js'
 import { mountPembayaran } from './pembayaran-setelan.js'
 import { renderPanelSinkronisasi } from '../components/sinkronisasi.js'
 import { mountPrinterSetelan } from './printer-setelan.js'
+import { kemampuanPlatform } from '../lib/kemampuan.js'
 
 const DASH = '<span class="u-faint">—</span>'
 
@@ -68,8 +70,8 @@ function pickServerTime(data) {
 // Hak Akses (§4.4) — peran pemohon (dari pos_role); kelola user tetap di ERP.
 function hakAksesCardHTML() {
   const { user, posRole } = getState()
-  const label = { OWNER: 'Owner', MANAGER: 'Manager', KASIR: 'Kasir' }[posRole] || (posRole || '—')
-  const warna = posRole === 'OWNER' ? 'mint' : (posRole === 'MANAGER' ? 'info' : 'neutral')
+  const label = labelPeran(posRole)
+  const warna = bisa('peran.kelola') ? 'mint' : (bisa('laporan.lihat') ? 'info' : 'neutral')
   return `
     <section class="card">
       <div class="card__header"><h2 class="card__title">Hak Akses</h2></div>
@@ -100,9 +102,11 @@ function langgananCardHTML() {
           ${l.periode_akhir ? defRow('Berlaku sampai', `<span>${esc(fmtDate(l.periode_akhir))}</span>`) : ''}
           ${l.sisa_hari != null ? defRow('Sisa hari', `<span class="num">${esc(String(l.sisa_hari))}</span>`) : ''}
         </div>
-        <div class="set-actions">
-          <button class="btn btn--primary" id="set-perpanjang" type="button">Perpanjang Sekarang</button>
-        </div>
+        ${bisa('langganan.kelola')
+          ? `<div class="set-actions">
+               <button class="btn btn--primary" id="set-perpanjang" type="button">Perpanjang Sekarang</button>
+             </div>`
+          : '<div class="field__hint">Perpanjangan langganan dilakukan oleh pemilik usaha.</div>'}
       </div>
     </section>`
 }
@@ -231,7 +235,10 @@ export const SettingsScreen = {
     // Profil Usaha & Struk + Pembayaran — kartu dimuat & di-wiring secara async.
     mountProfilUsaha(container.querySelector('#set-profil-usaha'))
     mountPembayaran(container.querySelector('#set-pembayaran'))
-    renderPanelSinkronisasi(container.querySelector('#set-sinkron'))
+    kemampuanPlatform().then((k) => {
+      if (k.antreanOffline) renderPanelSinkronisasi(container.querySelector('#set-sinkron'))
+      else container.querySelector('#set-sinkron-card')?.remove() // perangkat ini selalu mengirim langsung
+    })
     mountPrinterSetelan(container.querySelector('#set-printer'))
 
     // Perpanjang langganan (alur pembayaran Midtrans)

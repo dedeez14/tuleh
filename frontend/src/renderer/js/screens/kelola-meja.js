@@ -12,12 +12,6 @@ import { esc } from '../utils/format.js'
 import { icons, showModal, toast, confirmDialog, loadingHTML } from '../components/ui.js'
 import { getState } from '../state.js'
 
-/** Peran yang boleh mengubah daftar meja (server menolak selain ini dgn 403). */
-export function bolehKelolaMeja(posRole) {
-  const r = String(posRole || '').toUpperCase()
-  return r === 'OWNER' || r === 'MANAGER'
-}
-
 /** Buka dialog kelola meja. `onUbah` dipanggil bila daftar berubah. */
 export function bukaKelolaMeja({ onUbah } = {}) {
   const body = document.createElement('div')

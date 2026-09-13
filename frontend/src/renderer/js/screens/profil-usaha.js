@@ -7,6 +7,8 @@ import { api, firstError } from '../api.js'
 import { refreshConfig } from '../app.js'
 import { toast } from '../components/ui.js'
 import { esc } from '../utils/format.js'
+import { bisa } from '../akses.js'
+import { jadikanBacaSaja } from '../components/baca-saja.js'
 
 const ACCEPT = 'image/png,image/jpeg,image/webp'
 const MAKS_BYTE = 2 * 1024 * 1024
@@ -74,6 +76,7 @@ function render(host, data) {
   body.querySelector('#pu-upload-logo').addEventListener('click', () => unggah(api.pengaturan.uploadLogo, host))
   body.querySelector('#pu-upload-struk').addEventListener('click', () => unggah(api.pengaturan.uploadLogoStruk, host))
   body.querySelector('#pu-save').addEventListener('click', () => simpan(host, awal, body))
+  if (!bisa('pengaturan.usaha')) jadikanBacaSaja(body)
 }
 
 /** Pilih file lalu unggah (field `logo`). Batas 2 MB, tipe png/jpg/webp. */

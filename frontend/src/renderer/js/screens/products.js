@@ -5,6 +5,7 @@
 
 import { api, firstError } from '../api.js'
 import { getState } from '../state.js'
+import { bisa } from '../akses.js'
 import { esc, fmtIDR, fmtNumber, debounce, parseAmount } from '../utils/format.js'
 import { toast, icons, showModal, emptyStateHTML, loadingHTML, confirmDialog } from '../components/ui.js'
 
@@ -33,9 +34,8 @@ export const ProductsScreen = {
 
   async render(container) {
     const kategori = getState().kategori || []
-    const posRole = getState().posRole
-    const canManage = !posRole || posRole === 'OWNER' || posRole === 'MANAGER'
-    const showBeli = canManage // harga_beli null utk KASIR → kolom disembunyikan
+    const canManage = bisa('produk.kelola')
+    const showBeli = bisa('produk.harga_beli') // server kirim harga_beli null bila tak berhak → kolom disembunyikan
 
     let alive = true
     let query = ''

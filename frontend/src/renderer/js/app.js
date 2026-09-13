@@ -31,6 +31,8 @@ import { InventoryScreen } from './screens/inventory.js'
 import { analisisStok } from './lib/stok-store.js'
 import { mulaiPemantau, hentikanPemantau } from './pemantau-pesanan.js'
 import { bukaBantuanPintasan } from './components/pintasan.js'
+import { bisa, isManajemen } from './akses.js'
+import { MODULES, MODULE_ACCENT, susunModul, kartuUtama } from './lib/registri-modul.js'
 
 const SCREENS = [
   PosScreen, HistoryScreen, SessionsScreen, ReportsScreen, SettingsScreen,
@@ -38,49 +40,6 @@ const SCREENS = [
   KeuanganScreen, PengeluaranScreen, StokScreen, InventoryScreen
 ]
 const LAST_TOKO_KEY = 'mpos.lastTokoId'
-
-// ---------- Registry modul (id menu manifest → layar / modul mendatang) ----------
-// Modul dengan `screen` sudah terbangun; `phase` = kartu "segera hadir" agar
-// wajah tiap bidang usaha terlihat sejak Fase 1.
-
-const MODULES = {
-  kasir: { screen: 'pos', title: 'Kasir', icon: null, desc: 'Catat penjualan dengan cepat — katalog, barcode, dan pembayaran.' },
-  riwayat: { screen: 'history', title: 'Riwayat', icon: null, desc: 'Telusuri transaksi, cetak ulang struk, atau batalkan.' },
-  sesi: { screen: 'sessions', title: 'Sesi Kasir', icon: null, desc: 'Buka/tutup shift kasir dan lihat rekap kas X/Z.' },
-  laporan: { screen: 'reports', title: 'Laporan', icon: null, desc: 'Penjualan harian, per produk, stok, dan rekap kasir.' },
-  pengaturan: { screen: 'settings', title: 'Pengaturan', icon: null, desc: 'Server, akun, dan informasi aplikasi.' },
-  dapur: { screen: 'orders', title: 'Dapur (KDS)', iconKey: 'kitchen', desc: 'Layar dapur: klaim pesanan, mulai masak, tandai siap.' },
-  antrian: { screen: 'orders', title: 'Antrian', iconKey: 'queue', desc: 'Papan nomor antrian pesanan yang sedang berjalan.' },
-  proses: { screen: 'orders', title: 'Papan Proses', iconKey: 'kanban', desc: 'Tahapan pengerjaan pesanan, dari antrian sampai siap diambil.' },
-  meja: { screen: 'peta-meja', title: 'Meja', iconKey: 'store', desc: 'Buka meja, catat pesanan, dan bayar saat pulang.' },
-  stasiun: { screen: 'stations', title: 'Stasiun', iconKey: 'station', desc: 'Atur jumlah & status stasiun kerja di toko ini.' },
-  produk: { screen: 'products', title: 'Produk', iconKey: 'box', desc: 'Jelajahi katalog — harga, barcode, dan posisi stok.' },
-  inventory: { screen: 'inventory', title: 'Inventory', iconKey: 'box', desc: 'Tambah/kurangi stok, opname, & riwayat perubahan stok.' },
-  pelanggan: { screen: 'customers', title: 'Pelanggan', iconKey: 'user', desc: 'Cari, lihat, dan tambahkan pelanggan.' },
-  keuangan: { screen: 'keuangan', title: 'Keuangan', iconKey: 'report', desc: 'Omzet, laba, margin, metode bayar, dan tren.' },
-  pengeluaran: { screen: 'pengeluaran', title: 'Pengeluaran', iconKey: 'wallet', desc: 'Catat biaya operasional: sewa, gaji, listrik, bahan.' },
-  stok: { screen: 'stok', title: 'Stok', iconKey: 'box', desc: 'Pantau stok menipis, atur batas minimum, & saran restok.' }
-}
-
-// Fitur ekstra khas app (DI LUAR manifest server) — analisis keuangan UMKM.
-// Ditampilkan SETELAH menu manifest, hanya utk peran manajemen. Server tidak
-// mengelola menu ini; keputusan pemilik (2 Agu 2026) mempertahankannya sbg
-// nilai tambah app. Bukan pelanggaran "menu dari manifest" (itu soal filter peran).
-const APP_EXTRA_MODULES = ['keuangan', 'stok']
-const MANAGEMENT_ROLES = new Set(['OWNER', 'MANAGER'])
-// Route_key yang bukan kartu Beranda (dashboard = Beranda itu sendiri).
-const NON_CARD_ROUTES = new Set(['dashboard', 'home'])
-// Fallback bila manifest tak menyertakan menus (server lama / tanpa /manifest):
-// tampilkan set inti agar app tetap terpakai — bukan filter peran, murni kompatibilitas.
-const DEFAULT_MENU_IDS = ['kasir', 'riwayat', 'sesi', 'produk', 'pelanggan', 'laporan', 'pengaturan']
-
-// Peta id modul → token warna aksen (dipakai kartu Beranda; ikut dark via token)
-const MODULE_ACCENT = {
-  kasir: 'kasir', dapur: 'dapur', antrian: 'antrian', proses: 'proses',
-  meja: 'meja', stasiun: 'stasiun', riwayat: 'riwayat', sesi: 'sesi',
-  laporan: 'laporan', produk: 'produk', inventory: 'produk', pelanggan: 'pelanggan', pengaturan: 'pengaturan',
-  keuangan: 'laporan', pengeluaran: 'meja', stok: 'dapur'
-}
 
 // Ombak kaki Beranda kini dirender sebagai LATAR CSS penuh-lebar (background-image
 // di .home, lihat shell.css) — ikut menggulir dengan konten, bukan elemen sticky.
@@ -148,34 +107,12 @@ function normalizeManifest(raw, toko) {
  *  fitur ekstra app utk peran manajemen. Bila manifest tanpa menus → set default
  *  (kompatibilitas server lama). App tidak memfilter ulang berdasarkan peran. */
 function moduleList() {
-  const { manifest, posRole } = getState()
-  const out = []
-  const seen = new Set()
-
-  const push = (key, label, appExtra = false) => {
-    if (!key || NON_CARD_ROUTES.has(key) || seen.has(key)) return
-    const mod = MODULES[key]
-    if (!mod) return // route_key yang app belum kenal → jangan render kartu rusak
-    seen.add(key)
-    out.push({ id: key, ...mod, title: label || mod.title, appExtra })
-  }
-
-  const menus = manifest && Array.isArray(manifest.menus) ? manifest.menus : []
-  if (menus.length > 0) {
-    for (const menu of [...menus].sort((a, b) => (a.order || 0) - (b.order || 0))) {
-      push(menu.routeKey || menu.id, menu.label)
-    }
-  } else {
-    for (const id of DEFAULT_MENU_IDS) push(id, '')
-  }
-
-  // Fitur ekstra app (keuangan, stok) — hanya manajemen; bila peran tak diketahui
-  // (server lama/manifest kosong) tetap tampil agar tak ada regresi fitur.
-  if (!posRole || MANAGEMENT_ROLES.has(posRole)) {
-    for (const key of APP_EXTRA_MODULES) push(key, '', true)
-  }
-
-  return out
+  const { manifest } = getState()
+  return susunModul({
+    menus: manifest && Array.isArray(manifest.menus) ? manifest.menus : [],
+    manajemen: isManajemen(),
+    peringatan: (key) => console.warn(`Menu manifest route_key "${key}" belum punya layar di aplikasi ini.`)
+  })
 }
 
 // ---------- Pemilihan toko ----------
@@ -300,7 +237,8 @@ async function loadWorkspace() {
     api.master.gudang(),
     api.master.kategori(),
     api.langganan.status(),
-    api.laporan.stok({})
+    // Peringatan stok menipis memakai /laporan/stok (khusus manajemen) — kasir tak memanggilnya (403).
+    isManajemen() ? api.laporan.stok({}) : Promise.resolve({ ok: false })
   ])
 
   const patch = {}
@@ -329,6 +267,8 @@ async function loadWorkspace() {
   patch.langganan = langganan.ok ? (langganan.data || null) : null
   if (stok.ok && Array.isArray(stok.data)) {
     patch.stokAlerts = analisisStok(stok.data, getState().toko?.id).alerts
+  } else if (!isManajemen()) {
+    patch.stokAlerts = [] // jangan mewarisi lonceng stok akun manajemen sebelumnya di perangkat ini
   }
   setState(patch)
 }
@@ -572,7 +512,7 @@ function moduleIcon(mod) {
 }
 
 function homeCardHTML(mod) {
-  const isPrimary = mod.id === 'kasir'
+  const isPrimary = kartuUtama(mod.id)
   // Token warna aksen per-modul → di-inject sebagai custom property kartu
   const accent = MODULE_ACCENT[mod.id]
   const accentStyle = (accent && !isPrimary)
@@ -618,14 +558,14 @@ function renderHome(container) {
             <div class="stat-tile home__stat">
               <span class="stat-tile__chip stat-tile__chip--trx">${icons.pos}</span>
               <div class="stat-tile__main">
-                <div class="stat-tile__label">Transaksi hari ini</div>
+                <div class="stat-tile__label">${isManajemen() ? 'Transaksi hari ini' : 'Transaksi Anda hari ini'}</div>
                 <div class="stat-tile__value num" id="home-trx">—</div>
               </div>
             </div>
             <div class="stat-tile home__stat">
               <span class="stat-tile__chip stat-tile__chip--omzet">${icons.wallet}</span>
               <div class="stat-tile__main">
-                <div class="stat-tile__label">Omzet hari ini</div>
+                <div class="stat-tile__label">${isManajemen() ? 'Omzet hari ini' : 'Penjualan Anda hari ini'}</div>
                 <div class="stat-tile__value num" id="home-omzet">—</div>
               </div>
             </div>
@@ -644,7 +584,7 @@ function renderHome(container) {
             <span class="home__notice-icon">${icons.alert}</span>
             <span class="u-grow"><strong>${esc(lang.judul)}.</strong> ${esc(lang.detail)}</span>
             <button type="button" class="btn btn--ghost btn--sm" data-cs-contact>Hubungi CS</button>
-            <button type="button" class="btn btn--primary btn--sm" data-langganan-perpanjang>Perpanjang</button>
+            ${bisa('langganan.kelola') ? '<button type="button" class="btn btn--primary btn--sm" data-langganan-perpanjang>Perpanjang</button>' : ''}
           </div>` : ''}
 
         <div class="home__grid">
@@ -779,6 +719,7 @@ async function enterApp(identity) {
   setState({
     user: identity.user || null,
     posRole: identity.pos_role || null,
+    akses: Array.isArray(identity.akses) ? identity.akses : null,
     company: identity.company || null,
     branch: identity.branch || null,
     permissions: identity.permissions || [],
@@ -963,6 +904,7 @@ async function boot() {
       setState({
         user: me.data.user,
         posRole: me.data.pos_role || null,
+        akses: Array.isArray(me.data.akses) ? me.data.akses : null,
         company: me.data.company || null,
         branch: me.data.branch || null,
         session: me.data.sesi_aktif || null,

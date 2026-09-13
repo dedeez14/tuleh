@@ -93,7 +93,8 @@ export const OrdersScreen = {
           ${order.bayar === 'BELUM' && !belumBayar ? '<span class="badge badge--warn">BELUM BAYAR</span>' : ''}
           <ul class="ord-card__items">${itemsHTML}</ul>
           <div class="ord-card__foot">
-            <span class="ord-card__meta num">${fmtIDR(order.total)} · ${fmtTime(order.created_at)}</span>
+            <span class="ord-card__meta num">${fmtIDR(order.total)} · ${fmtTime(order.created_at)}${order.kasir
+              ? ` · <span class="ord-card__kasir" title="Kasir pencatat">${esc(order.kasir)}</span>` : ''}</span>
             ${belumBayar
               ? `<button type="button" class="btn btn--sm btn--primary" data-confirm-pay>
                    Konfirmasi Bayar

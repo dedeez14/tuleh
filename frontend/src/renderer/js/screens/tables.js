@@ -4,10 +4,11 @@
 
 import { api, firstError } from '../api.js'
 import { getState } from '../state.js'
+import { bisa } from '../akses.js'
 import { esc } from '../utils/format.js'
 import { icons, showModal, emptyStateHTML, loadingHTML } from '../components/ui.js'
 import { printQR } from '../components/receipt.js'
-import { bukaKelolaMeja, bolehKelolaMeja } from './kelola-meja.js'
+import { bukaKelolaMeja } from './kelola-meja.js'
 
 export const TablesScreen = {
   id: 'tables',
@@ -27,7 +28,7 @@ export const TablesScreen = {
               pesanan masuk ke Papan Pesanan sebagai "Menunggu Bayar".
             </p>
           </div>
-          ${bolehKelolaMeja(getState().posRole)
+          ${bisa('toko.meja_stasiun')
             ? `<button type="button" class="btn btn--outline" id="tbl-kelola">${icons.settings} Kelola Meja</button>`
             : ''}
         </div>

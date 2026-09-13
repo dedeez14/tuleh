@@ -1,11 +1,15 @@
-// Layar Riwayat Transaksi — daftar transaksi dengan filter tanggal/status,
+// Layar Riwayat Transaksi — daftar transaksi dengan filter tanggal/status/kasir,
 // detail struk (cetak ulang), dan pembatalan transaksi.
+//
+// Server menyaring per toko aktif: Owner/Manager menerima transaksi SEMUA kasir
+// (kolom & saring Kasir tampil), Kasir hanya transaksinya sendiri.
 
 import { api, firstError } from '../api.js'
 import { esc, fmtIDR, fmtNumber, fmtDateTime, toISODate, daysAgo } from '../utils/format.js'
 import { toast, showModal, confirmDialog, emptyStateHTML, loadingHTML, icons } from '../components/ui.js'
 import { buildReceiptHTML, printReceipt, tombolBagikanStruk } from '../components/receipt.js'
-import { cariRiwayat } from '../lib/cari-riwayat.js'
+import { cariRiwayat, daftarKasir, saringKasir } from '../lib/cari-riwayat.js'
+import { bisa } from '../akses.js'
 
 const DEFAULT_RANGE_DAYS = 6
 
@@ -36,13 +40,16 @@ export const HistoryScreen = {
     let requestSeq = 0
     let loadedRows = []
     let closeDetailModal = null
+    const pantauSemua = bisa('transaksi.riwayat_semua')
 
     container.innerHTML = `
       <div class="screen-page">
         <div class="page-head">
           <div>
             <h1 class="page-head__title">Riwayat Transaksi</h1>
-            <p class="page-head__desc">Telusuri transaksi yang tercatat, cetak ulang struk, atau batalkan bila diperlukan.</p>
+            <p class="page-head__desc">${pantauSemua
+              ? 'Transaksi semua kasir di toko ini — saring per kasir, cetak ulang struk, atau batalkan bila diperlukan.'
+              : 'Transaksi yang Anda catat di toko ini — cetak ulang struk dari sini.'}</p>
           </div>
           <button class="icon-btn" id="hst-refresh" title="Muat ulang" aria-label="Muat ulang">${icons.refresh}</button>
         </div>
@@ -58,7 +65,7 @@ export const HistoryScreen = {
           </div>
           <div class="hst-filter__group hst-filter__group--cari">
             <label class="hst-filter__label" for="hst-cari">Cari</label>
-            <input class="input" type="search" id="hst-cari" placeholder="Nomor, nominal, atau metode…" autocomplete="off" />
+            <input class="input" type="search" id="hst-cari" placeholder="${pantauSemua ? 'Nomor, kasir, sesi, atau nominal…' : 'Nomor, nominal, atau metode…'}" autocomplete="off" />
           </div>
           <div class="hst-filter__group">
             <label class="hst-filter__label" for="hst-status">Status</label>
@@ -68,6 +75,11 @@ export const HistoryScreen = {
               <option value="DIBATALKAN">Dibatalkan</option>
             </select>
           </div>
+          ${pantauSemua ? `
+          <div class="hst-filter__group">
+            <label class="hst-filter__label" for="hst-kasir">Kasir</label>
+            <select class="select" id="hst-kasir"><option value="">Semua kasir</option></select>
+          </div>` : ''}
           <button class="btn btn--outline" id="hst-apply">Terapkan</button>
         </div>
 
@@ -75,7 +87,7 @@ export const HistoryScreen = {
           <div class="stat-tile">
             <div class="stat-tile__label">Transaksi</div>
             <div class="stat-tile__value num" id="hst-kpi-count">—</div>
-            <div class="stat-tile__sub">transaksi selesai pada rentang ini</div>
+            <div class="stat-tile__sub" id="hst-kpi-count-sub">transaksi selesai pada rentang ini</div>
           </div>
           <div class="stat-tile stat-tile--accent">
             <div class="stat-tile__label">Total Penjualan</div>
@@ -91,6 +103,8 @@ export const HistoryScreen = {
     const elSampai = container.querySelector('#hst-sampai')
     const elStatus = container.querySelector('#hst-status')
     const elCari = container.querySelector('#hst-cari')
+    const elKasir = container.querySelector('#hst-kasir') // null bila tak berhak melihat kasir lain
+    const kpiCountSub = container.querySelector('#hst-kpi-count-sub')
     const tableArea = container.querySelector('#hst-table-area')
     const kpiCount = container.querySelector('#hst-kpi-count')
     const kpiTotal = container.querySelector('#hst-kpi-total')
@@ -100,6 +114,9 @@ export const HistoryScreen = {
       const total = selesai.reduce((sum, trx) => sum + (Number(trx.grand_total) || 0), 0)
       kpiCount.textContent = fmtNumber(selesai.length)
       kpiTotal.textContent = fmtIDR(total)
+      kpiCountSub.textContent = elKasir && elKasir.value
+        ? `transaksi selesai oleh ${elKasir.value}`
+        : 'transaksi selesai pada rentang ini'
     }
 
     function resetKpis() {
@@ -114,7 +131,9 @@ export const HistoryScreen = {
         <tr class="is-clickable" data-id="${esc(trx.id)}" tabindex="0"
             aria-label="Lihat detail transaksi ${esc(trx.nomor)}">
           <td class="hst-col-no"><span class="mono">${esc(trx.nomor)}</span></td>
-          <td class="hst-col-date">${fmtDateTime(trx.tanggal)}</td>
+          <td class="hst-col-date">${fmtDateTime(trx.waktu || trx.tanggal)}</td>
+          ${pantauSemua ? `<td class="hst-col-kasir">${esc(trx.kasir?.nama || '—')}</td>` : ''}
+          <td class="hst-col-no"><span class="mono">${esc(trx.sesi?.nomor || '—')}</span></td>
           <td><span class="badge ${METHOD_BADGE[method] || 'badge--neutral'}">${esc(method || '—')}</span></td>
           <td><span class="badge ${STATUS_BADGE[status] || 'badge--neutral'}">${esc(status || '—')}</span></td>
           <td class="u-right"><span class="num hst-total">${fmtIDR(trx.grand_total)}</span></td>
@@ -144,7 +163,9 @@ export const HistoryScreen = {
             <thead>
               <tr>
                 <th>No.</th>
-                <th>Tanggal</th>
+                <th>Waktu</th>
+                ${pantauSemua ? '<th>Kasir</th>' : ''}
+                <th>Sesi</th>
                 <th>Metode</th>
                 <th>Status</th>
                 <th class="u-right">Total</th>
@@ -191,15 +212,28 @@ export const HistoryScreen = {
       loadedRows = Array.isArray(result.data) ? result.data : []
       if (elStatus.value === 'OK') loadedRows = loadedRows.filter((trx) => !isVoided(trx.status))
       else if (elStatus.value === 'DIBATALKAN') loadedRows = loadedRows.filter((trx) => isVoided(trx.status))
-      updateKpis(loadedRows)
+      isiPilihanKasir()
       terapkanPencarian()
     }
 
-    // Pencarian berjalan atas baris yang sudah dimuat: tidak memanggil server
-    // lagi, jadi tetap bekerja saat offline. KPI tetap menghitung seluruh
-    // rentang agar angka "hari ini" tidak berubah saat kasir mengetik.
+    // Pilihan kasir diturunkan dari baris yang dimuat (disaring per nama — id kasir
+    // terenkripsi berbeda tiap baris). Pilihan yang masih ada dipertahankan.
+    function isiPilihanKasir() {
+      if (!elKasir) return
+      const pilih = elKasir.value
+      const nama = daftarKasir(loadedRows)
+      elKasir.innerHTML = '<option value="">Semua kasir</option>' +
+        nama.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join('')
+      elKasir.value = nama.includes(pilih) ? pilih : ''
+    }
+
+    // Saring kasir & pencarian berjalan atas baris yang sudah dimuat: tidak memanggil
+    // server lagi, jadi tetap bekerja saat offline. KPI mengikuti kasir terpilih tetapi
+    // tidak berubah saat mengetik pencarian.
     function terapkanPencarian() {
-      renderRows(cariRiwayat(loadedRows, elCari.value))
+      const milikKasir = saringKasir(loadedRows, elKasir ? elKasir.value : '')
+      updateKpis(milikKasir)
+      renderRows(cariRiwayat(milikKasir, elCari.value))
     }
 
     // ---------- Detail transaksi (modal struk) ----------
@@ -236,6 +270,7 @@ export const HistoryScreen = {
         if (isVoided(struk.status)) return
         footer.appendChild(tombolBagikanStruk(struk))
         if (struk.belum_sinkron || String(struk.id || '').startsWith('lokal:')) return // batalkan lewat Pengaturan → Sinkronisasi
+        if (!bisa('transaksi.batal')) return // kasir meminta Owner/Manager membatalkan
 
         const btnCancel = document.createElement('button')
         btnCancel.className = 'btn btn--danger-outline'
@@ -304,6 +339,7 @@ export const HistoryScreen = {
     container.querySelector('#hst-apply').addEventListener('click', loadData)
     // Ketik = saring langsung (tanpa tombol Terapkan); Esc mengosongkan.
     elCari.addEventListener('input', terapkanPencarian)
+    if (elKasir) elKasir.addEventListener('change', terapkanPencarian)
     elCari.addEventListener('keydown', (event) => {
       if (event.key !== 'Escape' || !elCari.value) return
       elCari.value = ''

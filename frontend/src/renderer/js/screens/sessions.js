@@ -1,14 +1,22 @@
-// Layar Sesi Kasir — buka/tutup sesi, rekap X/Z, dan riwayat sesi per shift.
+// Layar Sesi Kasir — buka/tutup sesi sendiri, rekap X/Z, dan daftar sesi per shift.
+//
+// Satu toko punya banyak kasir, masing-masing bersesi sendiri. Owner/Manager
+// (`sesi.lihat_semua`) memantau sesi SEMUA kasir di toko aktif — ringkasan sesi
+// berjalan, detail transaksi per sesi, dan menutup sesi kasir lain (`sesi.tutup_lain`).
+// Kasir hanya melihat sesinya sendiri (server menyaring).
 
 import { api, firstError } from '../api.js'
 import { pasangFormatRupiah } from '../utils/rupiah-input.js'
 import { getState } from '../state.js'
+import { bisa } from '../akses.js'
+import { sesiAktifSaya, ringkasSesi, saringStatusSesi, bolehTutupDariDaftar } from '../lib/sesi-pantau.js'
 import { icons, toast, showModal, emptyStateHTML, loadingHTML } from '../components/ui.js'
 import {
   esc,
   fmtIDR,
   fmtNumber,
   fmtDateTime,
+  fmtTime,
   toISODate,
   daysAgo,
   parseAmount
@@ -81,6 +89,49 @@ function showRekapModal(rekap) {
       ${rekapBodyHTML(rekap)}`,
     footer: '<button class="btn btn--primary" data-modal-close>Tutup</button>'
   })
+}
+
+function trxSesiHTML(rows) {
+  if (rows.length === 0) {
+    return '<p class="u-muted ses-detail__empty">Belum ada transaksi pada sesi ini.</p>'
+  }
+  return `
+    <div class="table-wrap ses-detail__trx">
+      <table class="table">
+        <thead><tr><th>No.</th><th>Jam</th><th>Bayar</th><th class="u-right">Total</th></tr></thead>
+        <tbody>
+          ${rows.map((t) => `
+            <tr>
+              <td class="mono">${esc(t.nomor)}</td>
+              <td>${fmtTime(t.waktu || t.tanggal)}</td>
+              <td>${esc(t.tipe_pembayaran || '—')}<div class="ses-detail__status${String(t.status).toUpperCase() === 'DIBATALKAN' ? ' ses-neg' : ''}">${esc(t.status || '—')}</div></td>
+              <td class="u-right num">${fmtIDR(t.grand_total)}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`
+}
+
+function ringkasanHTML(rows) {
+  const r = ringkasSesi(rows)
+  return `
+    <div class="ses-ringkas">
+      <div class="stat-tile">
+        <div class="stat-tile__label">Kasir Bertugas</div>
+        <div class="stat-tile__value num">${fmtNumber(r.berjalan)}</div>
+        <div class="stat-tile__sub">sesi sedang berjalan</div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-tile__label">Transaksi Berjalan</div>
+        <div class="stat-tile__value num">${fmtNumber(r.transaksiBerjalan)}</div>
+        <div class="stat-tile__sub">dari semua sesi yang buka</div>
+      </div>
+      <div class="stat-tile stat-tile--accent">
+        <div class="stat-tile__label">Penjualan Berjalan</div>
+        <div class="stat-tile__value num">${fmtIDR(r.penjualanBerjalan)}</div>
+        <div class="stat-tile__sub">akumulasi sesi yang buka</div>
+      </div>
+    </div>`
 }
 
 function heroStatsHTML(s) {
@@ -193,10 +244,8 @@ async function resolveActiveSessionId() {
     toast(firstError(res), 'error')
     return null
   }
-  const open = (res.data || []).filter((row) => row.status === 'BUKA')
-  const match =
-    open.find((row) => session && row.nomor === session.nomor) ||
-    (open.length === 1 ? open[0] : null)
+  // Daftar Owner/Manager memuat sesi kasir lain — hanya sesi milik sendiri yang boleh terpilih.
+  const match = sesiAktifSaya(res.data || [], session)
   if (!match || match.id === undefined || match.id === null) {
     toast('Sesi aktif tidak ditemukan di daftar sesi server. Muat ulang aplikasi lalu coba lagi.', 'error')
     return null
@@ -211,19 +260,27 @@ export const SessionsScreen = {
   title: 'Sesi Kasir',
   icon: icons.session,
   async render(container) {
+    const pantauSemua = bisa('sesi.lihat_semua')
     container.innerHTML = `
       <div class="screen-page">
         <div class="page-head">
           <div>
             <h1 class="page-head__title">Sesi Kasir</h1>
-            <p class="page-head__desc">Buka dan tutup sesi kasir, lalu pantau rekap kas per shift.</p>
+            <p class="page-head__desc">${pantauSemua
+              ? 'Buka dan tutup sesi Anda, lalu pantau sesi, transaksi, dan kas semua kasir di toko ini.'
+              : 'Buka dan tutup sesi kasir, lalu pantau rekap kas per shift.'}</p>
           </div>
         </div>
         <section id="ses-active" aria-label="Sesi aktif"></section>
         <section class="ses-history" aria-label="Riwayat sesi">
           <div class="ses-history__head">
-            <h2 class="ses-history__title">Riwayat Sesi</h2>
+            <h2 class="ses-history__title">${pantauSemua ? 'Sesi Kasir di Toko Ini' : 'Riwayat Sesi'}</h2>
             <div class="ses-history__filter">
+              <select class="select ses-status" id="ses-status" aria-label="Status sesi">
+                <option value="">Semua status</option>
+                <option value="BUKA">Sedang berjalan</option>
+                <option value="TUTUP">Sudah ditutup</option>
+              </select>
               <input class="input ses-date" id="ses-from" type="date"
                      value="${toISODate(daysAgo(30))}" aria-label="Dari tanggal" />
               <span class="u-faint">s.d.</span>
@@ -232,13 +289,17 @@ export const SessionsScreen = {
               <button class="btn btn--ghost btn--sm" id="ses-refresh">${icons.refresh} Segarkan</button>
             </div>
           </div>
+          ${pantauSemua ? '<div id="ses-ringkas-host"></div>' : ''}
           <div id="ses-history-body"></div>
         </section>
       </div>`
 
     const activeHost = container.querySelector('#ses-active')
     const historyBody = container.querySelector('#ses-history-body')
+    const ringkasHost = container.querySelector('#ses-ringkas-host')
+    const elStatus = container.querySelector('#ses-status')
     let historyToken = 0
+    let semuaSesi = []
 
     // ----- Riwayat sesi -----
 
@@ -251,6 +312,7 @@ export const SessionsScreen = {
       })
       if (token !== historyToken) return
       if (!res.ok) {
+        if (ringkasHost) ringkasHost.innerHTML = ''
         historyBody.innerHTML = emptyStateHTML({
           icon: icons.alert,
           title: 'Gagal memuat riwayat',
@@ -258,30 +320,43 @@ export const SessionsScreen = {
         })
         return
       }
-      const rows = res.data || []
+      semuaSesi = res.data || []
+      renderHistory()
+    }
+
+    function renderHistory() {
+      if (ringkasHost) ringkasHost.innerHTML = ringkasanHTML(semuaSesi)
+      const rows = saringStatusSesi(semuaSesi, elStatus.value)
       if (rows.length === 0) {
         historyBody.innerHTML = emptyStateHTML({
           title: 'Belum ada sesi',
-          desc: 'Tidak ada sesi kasir pada rentang tanggal ini.'
+          desc: elStatus.value ? 'Tidak ada sesi dengan status ini pada rentang tanggal ini.' : 'Tidak ada sesi kasir pada rentang tanggal ini.'
         })
         return
       }
+      const kasirHTML = (row) => `${row.kasir ? esc(row.kasir) : DASH}${row.milik_saya ? ' <span class="badge badge--info">Anda</span>' : ''}`
       historyBody.innerHTML = `
         <div class="table-wrap">
           <table class="table">
             <thead>
-              <tr><th>Nomor</th><th>Status</th><th>Kasir</th><th>Buka</th><th>Tutup</th></tr>
+              <tr>
+                <th>Nomor</th><th>Status</th>${pantauSemua ? '<th>Kasir</th>' : ''}<th>Buka</th><th>Tutup</th>
+                <th class="u-right">Transaksi</th><th class="u-right">Penjualan</th><th class="u-right">Selisih</th>
+              </tr>
             </thead>
             <tbody>
               ${rows
                 .map(
                   (row, i) => `
-                    <tr class="is-clickable" data-i="${i}" tabindex="0" title="Lihat rekap sesi">
+                    <tr class="is-clickable" data-i="${i}" tabindex="0" title="Lihat detail sesi">
                       <td class="mono">${esc(row.nomor)}</td>
                       <td>${statusBadge(row.status)}</td>
-                      <td>${row.kasir ? esc(row.kasir) : DASH}</td>
+                      ${pantauSemua ? `<td>${kasirHTML(row)}</td>` : ''}
                       <td>${fmtDateTime(row.waktu_buka)}</td>
                       <td>${row.waktu_tutup ? fmtDateTime(row.waktu_tutup) : DASH}</td>
+                      <td class="u-right num">${row.jumlah_transaksi === undefined ? DASH : fmtNumber(row.jumlah_transaksi)}</td>
+                      <td class="u-right num">${row.total_penjualan === undefined ? DASH : fmtIDR(row.total_penjualan)}</td>
+                      <td class="u-right">${selisihHTML(row.selisih)}</td>
                     </tr>`
                 )
                 .join('')}
@@ -289,7 +364,7 @@ export const SessionsScreen = {
           </table>
         </div>`
       historyBody.querySelectorAll('tr.is-clickable').forEach((tr) => {
-        const openRow = () => openRekapFromRow(rows[Number(tr.dataset.i)])
+        const openRow = () => openDetailSesi(rows[Number(tr.dataset.i)])
         tr.addEventListener('click', openRow)
         tr.addEventListener('keydown', (e) => {
           if (e.key === 'Enter') openRow()
@@ -297,27 +372,71 @@ export const SessionsScreen = {
       })
     }
 
-    async function openRekapFromRow(row) {
+    // Detail sesi: rekap kas + transaksi sesi itu; Owner/Manager dapat menutup sesi kasir lain.
+    async function openDetailSesi(row) {
       if (!row || row.id === undefined || row.id === null) {
         toast('Sesi ini tidak memiliki ID sehingga rekapnya tidak bisa diambil.', 'error')
         return
       }
       // Id dari API bisa berupa angka — jembatan IPC (str) hanya menerima string.
-      const res = await api.sesi.rekap({ id: String(row.id) })
-      if (!res.ok) {
-        toast(firstError(res), 'error')
+      const id = String(row.id)
+      const body = document.createElement('div')
+      body.innerHTML = loadingHTML('Memuat detail sesi…')
+      const footer = document.createElement('div')
+      footer.className = 'ses-detail__foot'
+      const modal = showModal({
+        title: `Sesi ${row.nomor || ''}${row.kasir ? ` — ${row.kasir}` : ''}`,
+        body,
+        footer,
+        size: 'md'
+      })
+
+      const [rekap, trx] = await Promise.all([api.sesi.rekap({ id }), api.trx.list({ sesiId: id })])
+      if (!rekap.ok || !rekap.data) {
+        body.innerHTML = emptyStateHTML({ icon: icons.alert, title: 'Detail sesi tidak dapat dimuat', desc: firstError(rekap) || 'Sesi tidak ditemukan.' })
+        footer.innerHTML = '<button class="btn btn--ghost" data-modal-close>Tutup</button>'
         return
       }
-      showRekapModal(res.data)
+      const daftarTrx = trx.ok && Array.isArray(trx.data) ? trx.data : []
+      body.innerHTML = `
+        ${rekapBodyHTML(rekap.data)}
+        <h3 class="ses-detail__subtitle">Transaksi Sesi Ini${trx.ok ? ` (${fmtNumber(daftarTrx.length)})` : ''}</h3>
+        ${trx.ok ? trxSesiHTML(daftarTrx) : `<p class="u-muted">${esc(firstError(trx))}</p>`}`
+
+      footer.innerHTML = '<button class="btn btn--ghost" data-modal-close>Tutup</button>'
+      if (bolehTutupDariDaftar({ ...row, status: rekap.data.status }, bisa('sesi.tutup_lain'))) {
+        const btn = document.createElement('button')
+        btn.className = 'btn btn--danger'
+        btn.textContent = 'Tutup Sesi Kasir Ini'
+        btn.addEventListener('click', () => {
+          modal.close()
+          openCloseModal({ sesi: rekap.data, id, milikSendiri: false })
+        })
+        footer.appendChild(btn)
+      }
     }
 
     // ----- Sesi aktif -----
+
+    // Owner/Manager datang ke layar ini terutama untuk memantau: formulir buka sesi
+    // sendiri diringkas jadi satu baris sampai diminta.
+    let formSesiDibuka = !pantauSemua
 
     function renderActive() {
       const { session, gudang, gudangError } = getState()
       if (session) {
         activeHost.innerHTML = heroHTML(session)
         bindHero()
+      } else if (!formSesiDibuka) {
+        activeHost.innerHTML = `
+          <div class="card ses-ringkas-buka">
+            <span class="u-grow">Anda belum membuka sesi kasir sendiri.</span>
+            <button type="button" class="btn btn--outline btn--sm" id="ses-buka-saya">${icons.session} Buka Sesi Saya</button>
+          </div>`
+        activeHost.querySelector('#ses-buka-saya').addEventListener('click', () => {
+          formSesiDibuka = true
+          renderActive()
+        })
       } else {
         activeHost.innerHTML = openFormHTML(gudang || [], gudangError)
         bindOpenForm()
@@ -344,7 +463,7 @@ export const SessionsScreen = {
         renderActive() // segarkan angka hero dengan data terbaru
         showRekapModal(res.data)
       })
-      activeHost.querySelector('#ses-close').addEventListener('click', openCloseModal)
+      activeHost.querySelector('#ses-close').addEventListener('click', () => openCloseModal())
     }
 
     function bindOpenForm() {
@@ -392,14 +511,20 @@ export const SessionsScreen = {
       })
     }
 
-    function openCloseModal() {
-      const { session } = getState()
+    // Tanpa argumen = sesi aktif sendiri. `target` = sesi kasir lain dari detail daftar (Owner/Manager).
+    function openCloseModal(target = null) {
+      const milikSendiri = !target || target.milikSendiri !== false
+      const session = target ? target.sesi : getState().session
       if (!session) return
       const kasSistem = Number(session.kas_akhir_sistem) || 0
 
       const modal = showModal({
         title: `Tutup Sesi — ${session.nomor || ''}`,
         body: `
+          ${milikSendiri ? '' : `<div class="ses-open__warn ses-close__lain">
+            Sesi ini milik kasir <strong>${esc(session.kasir || 'lain')}</strong>. Hitung uang laci bersama kasir
+            sebelum menutupnya — kasir perlu membuka sesi baru untuk melayani lagi.
+          </div>`}
           <div class="ses-close__system">
             <span class="u-muted">Kas akhir sistem</span>
             <span class="mono num">${fmtIDR(kasSistem)}</span>
@@ -469,7 +594,7 @@ export const SessionsScreen = {
           btnSubmit.disabled = false
           btnSubmit.textContent = 'Tutup Sesi'
         }
-        const id = await resolveActiveSessionId()
+        const id = target && target.id ? target.id : await resolveActiveSessionId()
         if (id === null || id === undefined) {
           restore()
           return
@@ -485,10 +610,12 @@ export const SessionsScreen = {
           return
         }
         modal.close()
-        toast('Sesi berhasil ditutup.', 'success')
-        const { refreshActiveSession } = await import('../app.js')
-        await refreshActiveSession()
-        renderActive()
+        toast(milikSendiri ? 'Sesi berhasil ditutup.' : `Sesi ${session.nomor || ''} milik ${session.kasir || 'kasir'} berhasil ditutup.`, 'success')
+        if (milikSendiri) {
+          const { refreshActiveSession } = await import('../app.js')
+          await refreshActiveSession()
+          renderActive()
+        }
         loadHistory()
         showRekapModal(result.data)
       })
@@ -497,6 +624,7 @@ export const SessionsScreen = {
     container.querySelector('#ses-from').addEventListener('change', loadHistory)
     container.querySelector('#ses-to').addEventListener('change', loadHistory)
     container.querySelector('#ses-refresh').addEventListener('click', loadHistory)
+    elStatus.addEventListener('change', renderHistory)
 
     renderActive()
     loadHistory()
