@@ -16,78 +16,12 @@ const customerWindow = require('./customer-window')
 const updater = require('./updater')
 const offline = require('./offline')
 
-// ---------- Validasi input dari renderer (jangan percaya begitu saja) ----------
-
-function str(value, { max = 500, required = false } = {}) {
-  if (value === undefined || value === null || value === '') {
-    if (required) throw new Error('Field wajib diisi.')
-    return undefined
-  }
-  // API MOVERA mendefinisikan id sebagai string terenkripsi, tetapi beberapa
-  // deployment mengirim angka mentah — terima dan normalisasi ke string.
-  if (typeof value === 'number' && Number.isFinite(value)) value = String(value)
-  if (typeof value !== 'string') throw new Error('Tipe data tidak valid.')
-  return value.slice(0, max)
-}
-
-function num(value, { required = false } = {}) {
-  if (value === undefined || value === null || value === '') {
-    if (required) throw new Error('Field wajib diisi.')
-    return undefined
-  }
-  const n = Number(value)
-  if (!Number.isFinite(n)) throw new Error('Angka tidak valid.')
-  return n
-}
-
-function intBetween(value, min, max, fallback) {
-  const n = Number(value)
-  if (!Number.isInteger(n)) return fallback
-  return Math.min(max, Math.max(min, n))
-}
+// Validasi masukan & pemetaan kanal → HTTP tinggal di kontrak bersama (dipakai juga Android).
+const kontrak = require('../shared/kontrak-kanal')
+const { str, num } = kontrak
 
 function fail(message) {
   return { ok: false, status: 0, message, errors: null }
-}
-
-// Body PUT /pengaturan/usaha — hanya kunci yang dikirim renderer (partial update).
-// Teks kosong pada field boleh-null → dikirim `null` (menghapus nilai di server).
-function usahaBody(f) {
-  const b = {}
-  const teksNull = (v, max) => (v === null || v === undefined || String(v).trim() === '' ? null : String(v).trim().slice(0, max))
-  if ('nama' in f) b.nama = str(f.nama, { required: true, max: 150 })
-  if ('alamat' in f) b.alamat = teksNull(f.alamat, 500)
-  if ('telepon' in f) b.telepon = teksNull(f.telepon, 30)
-  if ('email' in f) b.email = teksNull(f.email, 150)
-  if ('struk_footer' in f) b.struk_footer = teksNull(f.struk_footer, 300)
-  if ('struk_tampil_logo' in f) b.struk_tampil_logo = !!f.struk_tampil_logo
-  return b
-}
-
-// Body PUT /pengaturan/pembayaran — daftar bank (maks 5) menggantikan seluruh
-// daftar; hapus_qr menghapus QR statis.
-function pembayaranBody({ bank, hapusQr } = {}) {
-  const b = {}
-  if (Array.isArray(bank)) {
-    b.bank = bank.slice(0, 5).map((r) => ({
-      bank: (str(r && r.bank, { max: 40 }) || '').trim(),
-      rekening: (str(r && r.rekening, { max: 40 }) || '').trim(),
-      atas_nama: (str(r && r.atas_nama, { max: 80 }) || '').trim()
-    })).filter((r) => r.bank || r.rekening || r.atas_nama)
-  }
-  if (hapusQr) b.hapus_qr = true
-  return b
-}
-
-// Body PUT /pengaturan/pembayaran/midtrans — pasang key {merchant_id, client_key,
-// server_key} ATAU saklar {aktif}. Server key TAK PERNAH di-log di sisi app.
-function midtransBody(f = {}) {
-  const b = {}
-  if ('merchant_id' in f) b.merchant_id = str(f.merchant_id, { max: 100 })
-  if ('client_key' in f) b.client_key = str(f.client_key, { max: 200 })
-  if ('server_key' in f) b.server_key = str(f.server_key, { max: 200 })
-  if ('aktif' in f) b.aktif = !!f.aktif
-  return b
 }
 
 // Handler dibungkus supaya error validasi kembali sebagai envelope, bukan exception IPC.
@@ -129,6 +63,14 @@ function registerIpcHandlers(getMainWindow) {
   // Muat pengaturan + token tersimpan saat start
   const settings = settingsStore.load()
   api.setBaseUrl(settings.baseUrl)
+
+  // ---------- Kanal HTTP bersama (src/shared/kontrak-kanal.js) ----------
+  const konteksKontrak = () => ({ tokoAktif: api.getActiveTokoId(), versiApp: api.appVersion() })
+  function kirimKontrak(kanal, payload) {
+    const minta = kontrak.bentuk(kanal, payload, konteksKontrak())
+    if (minta.metode === 'UPLOAD') return api.upload(minta.jalur, { file: minta.berkas })
+    return api.request(minta.metode, minta.jalur, { query: minta.query, body: minta.body, auth: minta.auth !== false })
+  }
 
   // ---------- Mode offline (salinan baca + antrean kirim) ----------
   // Pengurai mengirim ulang lewat api.post; timeout diberi status -1 agar
@@ -270,9 +212,7 @@ function registerIpcHandlers(getMainWindow) {
     }
   }))
 
-  // Auto-Update: cek versi ke server (tanpa auth). Balasan berisi
-  // { wajib, update_tersedia, versi_terbaru, catatan, unduhan:{windows,android}, ukuran }.
-  handle('app:checkUpdate', () => api.get('/app/versi', { auth: false, query: { versi: api.appVersion() } }))
+  // Auto-Update: cek versi (app:checkUpdate, tanpa auth) didaftarkan lewat kontrak bersama di bawah.
 
   // Auto-Update Tahap 3 (desktop): unduh & pasang lewat electron-updater.
   // Renderer memakai ini bila didukung; jika tidak, jatuh ke unduhan browser.
@@ -499,7 +439,7 @@ function registerIpcHandlers(getMainWindow) {
   })
 
   handle('net:ping', async () => {
-    const r = await api.get('/ping', { auth: false })
+    const r = await kirimKontrak('net:ping')
     if (r.ok) offline.koneksi.tandaiOnline(); else offline.koneksi.tandaiOffline()
     return r
   })
@@ -530,8 +470,6 @@ function registerIpcHandlers(getMainWindow) {
     return result
   })
 
-  handle('auth:me', () => withAuthWatch(api.get('/auth/me')))
-
   handle('auth:logout', async ({ paksa } = {}) => {
     // Antrean berisi = penjualan yang sudah terjadi; jangan hilang diam-diam.
     const sisa = offline.antrean.ringkas().total
@@ -545,44 +483,22 @@ function registerIpcHandlers(getMainWindow) {
     return result.ok ? result : { ok: true, status: 200, data: null, meta: null, message: '' }
   })
 
-  handle('config:get', () => withAuthWatch(api.get('/config')))
+  // Kanal HTTP generik: SEMUA entri kontrak kecuali yang butuh perilaku khusus desktop
+  // (penanda koneksi, antrean offline, riwayat lokal) — ditulis sesudah perulangan ini.
+  const KANAL_KHUSUS_DESKTOP = new Set(['net:ping', 'inventory:stokMasuk', 'pengeluaran:create', 'trx:checkout', 'trx:list', 'trx:detail'])
+  for (const kanal of Object.keys(kontrak.KANAL)) {
+    if (KANAL_KHUSUS_DESKTOP.has(kanal)) continue
+    handle(kanal, (payload) => withAuthWatch(kirimKontrak(kanal, payload)))
+  }
 
-  // ---------- Pengaturan Usaha & Struk (profil perusahaan — O/M) ----------
-  // GET semua peran; PUT & upload logo O/M (server menolak kasir 403). Mutasi
-  // menyegarkan /config (blok company+struk); renderer refresh config setelah simpan.
-  handle('pengaturan:usahaGet', () => withAuthWatch(api.get('/pengaturan/usaha')))
-  handle('pengaturan:usahaSimpan', (f) =>
-    withAuthWatch(api.request('PUT', '/pengaturan/usaha', { body: usahaBody(f || {}) })))
-  handle('pengaturan:uploadLogo', ({ bytes, filename, mime } = {}) =>
-    withAuthWatch(api.upload('/pengaturan/usaha/logo', { file: { bytes, filename, mime } })))
-  handle('pengaturan:uploadLogoStruk', ({ bytes, filename, mime } = {}) =>
-    withAuthWatch(api.upload('/pengaturan/usaha/logo-struk', { file: { bytes, filename, mime } })))
-
-  // ---------- Pengaturan Pembayaran (dua lapis: QR statis+bank & Midtrans) ----------
-  handle('pembayaran:get', () => withAuthWatch(api.get('/pengaturan/pembayaran')))
-  handle('pembayaran:simpan', ({ bank, hapusQr } = {}) =>
-    withAuthWatch(api.request('PUT', '/pengaturan/pembayaran', { body: pembayaranBody({ bank, hapusQr }) })))
-  handle('pembayaran:uploadQr', ({ bytes, filename, mime } = {}) =>
-    withAuthWatch(api.upload('/pengaturan/pembayaran/qr', { file: { bytes, filename, mime, field: 'qr' } })))
-  handle('pembayaran:midtransSimpan', (f) =>
-    withAuthWatch(api.request('PUT', '/pengaturan/pembayaran/midtrans', { body: midtransBody(f || {}) })))
-  handle('pembayaran:midtransHapus', () =>
-    withAuthWatch(api.request('DELETE', '/pengaturan/pembayaran/midtrans', {})))
-
-  // QRIS dinamis (kasir — semua peran). Buat tagihan (jumlah = grand total) + poll status.
-  handle('qris:buatTagihan', ({ jumlah, keterangan } = {}) =>
-    withAuthWatch(api.post('/qris/tagihan', { body: { jumlah: num(jumlah, { required: true }), keterangan: str(keterangan, { max: 190 }) } })))
-  handle('qris:statusTagihan', ({ id } = {}) =>
-    withAuthWatch(api.get(`/qris/tagihan/${encodeURIComponent(str(id, { required: true }))}`)))
-
-  // ---------- Langganan & Kontak CS (Sistem Mitra) ----------
-  // Endpoint per-tenant; kontrak di docs/Skema-API-Sistem-Mitra-Tuleh.md §6.5.
-  // Gateway harus meng-allowlist path ini (lihat Tiket-Server-Backend T-11) —
-  // Mode Demo meng-intersep keduanya via demo.js.
-  handle('langganan:status', () => withAuthWatch(api.get('/langganan/status')))
-  // Buat/ambil tagihan pembayaran (Midtrans Snap). Tanpa body; idempoten di server
-  // (dipanggil berulang → tagihan & link sama). Respons: {invoice, pembayaran}.
-  handle('langganan:bayar', () => withAuthWatch(api.post('/langganan/bayar', { body: {} })))
+  // Tulis yang boleh diantrekan saat offline (kontrak menandai `antrean`).
+  for (const kanal of ['inventory:stokMasuk', 'pengeluaran:create']) {
+    const { antrean } = kontrak.KANAL[kanal]
+    handle(kanal, (payload) => {
+      const minta = kontrak.bentuk(kanal, payload, konteksKontrak())
+      return tulisAtauAntre({ jenis: antrean.jenis, jalur: minta.jalur, body: minta.body, deltaStok: antrean.deltaStok ? antrean.deltaStok(payload) : {} })
+    })
+  }
 
   // Buka halaman pembayaran Midtrans DI DALAM aplikasi (BrowserWindow modal,
   // Chromium penuh → 3-D Secure & QRIS jalan). Pantau navigasi: saat Midtrans
@@ -624,15 +540,6 @@ function registerIpcHandlers(getMainWindow) {
     })
   })
 
-  handle('cs:kontak', () => withAuthWatch(api.get('/kontak-cs')))
-
-  // ---------- Toko & manifest (POS universal) ----------
-
-  handle('toko:list', () => withAuthWatch(api.get('/tokos')))
-
-  handle('toko:manifest', ({ id }) =>
-    withAuthWatch(api.get(`/tokos/${encodeURIComponent(str(id, { required: true }))}/manifest`)))
-
   // Konteks toko aktif (MOVERA §1.3): simpan id terpilih agar api-client
   // menyisipkannya sebagai ?toko_id di tiap permintaan terautentikasi —
   // menyingkirkan 409 "Pilih toko aktif" pada perusahaan multi-toko.
@@ -643,325 +550,14 @@ function registerIpcHandlers(getMainWindow) {
     return { ok: true, data: { selected: tokoId } }
   })
 
-  // ---------- Stasiun kerja (endpoint server menyusul — Blueprint §13) ----------
+  // ---------- Transaksi (khusus desktop: antrean offline & riwayat lokal) ----------
 
-  handle('station:list', () => withAuthWatch(api.get('/stations')))
-
-  handle('station:create', ({ type, nama, kapasitas }) =>
-    withAuthWatch(api.post('/stations', {
-      body: {
-        type: str(type, { required: true, max: 40 }),
-        nama: str(nama, { required: true, max: 100 }),
-        kapasitas: num(kapasitas)
-      }
-    })))
-
-  handle('station:update', ({ id, nama, status, kapasitas }) =>
-    withAuthWatch(api.request('PATCH', `/stations/${encodeURIComponent(str(id, { required: true }))}`, {
-      body: {
-        nama: str(nama, { max: 100 }),
-        status: str(status, { max: 20 }),
-        kapasitas: num(kapasitas)
-      }
-    })))
-
-  handle('station:delete', ({ id }) =>
-    withAuthWatch(api.request('DELETE', `/stations/${encodeURIComponent(str(id, { required: true }))}`)))
-
-  // ---------- Pesanan hidup (POS universal — KDS / Papan Proses) ----------
-
-  handle('order:list', ({ stage }) =>
-    withAuthWatch(api.get('/orders', { query: { stage: str(stage, { max: 40 }) } })))
-
-  handle('order:transition', ({ id, to }) =>
-    withAuthWatch(api.post(`/orders/${encodeURIComponent(str(id, { required: true }))}/transition`, {
-      body: { to: str(to, { required: true, max: 40 }) }
-    })))
-
-  // Konfirmasi bayar order QR meja. Di server MOVERA dipetakan sebagai
-  // transisi keluar dari MENUNGGU_BAYAR (kontrak final menunggu server).
-  handle('order:konfirmasiBayar', ({ id, tipePembayaran }) =>
-    withAuthWatch(api.post(`/orders/${encodeURIComponent(str(id, { required: true }))}/transition`, {
-      body: { to: 'ANTRIAN', tipe_pembayaran: str(tipePembayaran, { max: 20 }) }
-    })))
-
-  // Meja: server yang memiliki daftarnya (nomor + kode QR). `semua` menyertakan
-  // meja nonaktif untuk layar pengaturan; peta kasir memakai daftar aktif saja.
-  handle('table:list', ({ semua } = {}) =>
-    withAuthWatch(api.get('/tables', { query: semua ? { semua: 1 } : {} })))
-
-  handle('table:tambah', ({ nomor, kode }) =>
-    withAuthWatch(api.post('/tables', {
-      body: { nomor: str(nomor, { required: true, max: 30 }), kode: str(kode, { max: 60 }) || undefined }
-    })))
-
-  // Ubah nomor. `kode` sengaja TIDAK dikirim bila kosong: QR yang sudah
-  // tercetak dan tertempel di meja harus tetap berlaku setelah meja diberi
-  // nomor baru.
-  handle('table:ubah', ({ id, nomor, kode }) =>
-    withAuthWatch(api.put(`/tables/${encodeURIComponent(str(id, { required: true }))}`, {
-      body: { nomor: str(nomor, { required: true, max: 30 }), ...(kode ? { kode: str(kode, { max: 60 }) } : {}) }
-    })))
-
-  // Nonaktifkan (server soft-delete). Ditolak 409 bila meja masih punya bon
-  // terbuka — pesan server ditampilkan apa adanya karena menyebut nomor bonnya.
-  handle('table:nonaktifkan', ({ id }) =>
-    withAuthWatch(api.hapus(`/tables/${encodeURIComponent(str(id, { required: true }))}`)))
-
-  // Nota bayar-saat-ambil (laundry). Kontrak server final menyusul (Blueprint §13).
-  handle('order:simpanNota', ({ items, idPelanggan, catatan }) => {
-    if (!Array.isArray(items) || items.length === 0) return fail('Keranjang masih kosong.')
-    return withAuthWatch(api.post('/orders', {
-      body: {
-        bayar: 'NANTI',
-        items: items.map((i) => ({
-          id_produk: str(i.idProduk, { required: true }),
-          harga: num(i.harga, { required: true }),
-          kuantitas: num(i.kuantitas, { required: true })
-        })),
-        id_pelanggan: str(idPelanggan) || null,
-        catatan: str(catatan, { max: 500 }) || null
-      }
-    }))
-  })
-
-  handle('order:lunasi', ({ id, tipePembayaran }) =>
-    withAuthWatch(api.post(`/orders/${encodeURIComponent(str(id, { required: true }))}/transition`, {
-      body: { to: 'SELESAI', tipe_pembayaran: str(tipePembayaran, { max: 20 }) }
-    })))
-
-  // ---------- Bon Meja (open bill dine-in). Kontrak server final menyusul (Blueprint §13). ----------
-
-  handle('bill:peta', () => withAuthWatch(api.get('/bills', { query: { status: 'BUKA' } })))
-
-  handle('bill:buka', ({ mejaId, pax }) =>
-    withAuthWatch(api.post('/bills', {
-      body: { meja_id: str(mejaId, { required: true }), pax: num(pax) ?? 1 }
-    })))
-
-  handle('bill:detail', ({ id }) =>
-    withAuthWatch(api.get(`/bills/${encodeURIComponent(str(id, { required: true }))}`)))
-
-  handle('bill:tambahRonde', ({ id, items, catatan }) => {
-    if (!Array.isArray(items) || items.length === 0) return fail('Belum ada item pesanan.')
-    return withAuthWatch(api.post(`/bills/${encodeURIComponent(str(id, { required: true }))}/rounds`, {
-      body: {
-        items: items.map((i) => ({
-          id_produk: str(i.idProduk, { required: true }),
-          kuantitas: num(i.kuantitas, { required: true }),
-          catatan: str(i.catatan, { max: 120 }) || null
-        })),
-        catatan: str(catatan, { max: 300 }) || null
-      }
-    }))
-  })
-
-  handle('bill:setPax', ({ id, pax }) =>
-    withAuthWatch(api.request('PATCH', `/bills/${encodeURIComponent(str(id, { required: true }))}`, {
-      body: { pax: num(pax, { required: true }) }
-    })))
-
-  handle('bill:cetak', ({ id }) =>
-    withAuthWatch(api.get(`/bills/${encodeURIComponent(str(id, { required: true }))}/prebill`)))
-
-  handle('bill:bayar', ({ id, tipePembayaran, dibayar }) =>
-    withAuthWatch(api.post(`/bills/${encodeURIComponent(str(id, { required: true }))}/settle`, {
-      body: { tipe_pembayaran: str(tipePembayaran, { max: 20 }), dibayar: num(dibayar) ?? null }
-    })))
-
-  handle('bill:gabung', ({ idUtama, idGabung }) =>
-    withAuthWatch(api.post(`/bills/${encodeURIComponent(str(idUtama, { required: true }))}/merge`, {
-      body: { bill_id: str(idGabung, { required: true }) }
-    })))
-
-  handle('bill:batal', ({ id }) =>
-    withAuthWatch(api.post(`/bills/${encodeURIComponent(str(id, { required: true }))}/void`, { body: {} })))
-
-  // ---------- Produk & master ----------
-
-  handle('produk:list', ({ q, kategoriId, gudangId, tipe, includeHabis, perPage, page }) =>
-    withAuthWatch(api.get('/produk', {
-      query: {
-        q: str(q, { max: 190 }),
-        kategori_id: str(kategoriId),
-        gudang_id: str(gudangId),
-        // tipe: PRODUK | JASA | SEMUA (layar manajemen & katalog jasa)
-        tipe: str(tipe, { max: 10 }),
-        include_habis: includeHabis ? 1 : undefined,
-        per_page: intBetween(perPage, 1, 100, 50),
-        page: intBetween(page, 1, 100000, 1)
-      }
-    })))
-
-  handle('produk:barcode', ({ barcode, gudangId }) =>
-    withAuthWatch(api.get(`/produk/barcode/${encodeURIComponent(str(barcode, { required: true, max: 190 }))}`, {
-      query: { gudang_id: str(gudangId) }
-    })))
-
-  handle('produk:detail', ({ id, gudangId }) =>
-    withAuthWatch(api.get(`/produk/${encodeURIComponent(str(id, { required: true }))}`, {
-      query: { gudang_id: str(gudangId) }
-    })))
-
-  // Produk CRUD (manajemen — O/M; server menolak KASIR dgn 403)
-  handle('produk:create', ({ nama, tipe, hargaBeli, hargaJual, barcode, kelolaStok }) =>
-    withAuthWatch(api.post('/produk', {
-      body: {
-        nama: str(nama, { required: true, max: 190 }),
-        tipe: str(tipe, { max: 10 }) || 'PRODUK',
-        harga_beli: num(hargaBeli),
-        harga_jual: num(hargaJual, { required: true }),
-        barcode: str(barcode, { max: 60 }),
-        kelola_stok: kelolaStok === undefined ? undefined : !!kelolaStok
-      }
-    })))
-
-  // PATCH kirim HANYA field yang berubah (renderer mengisi yang berubah saja)
-  handle('produk:update', ({ id, nama, hargaBeli, hargaJual, barcode, kelolaStok }) =>
-    withAuthWatch(api.request('PATCH', `/produk/${encodeURIComponent(str(id, { required: true }))}`, {
-      body: {
-        nama: str(nama, { max: 190 }),
-        harga_beli: num(hargaBeli),
-        harga_jual: num(hargaJual),
-        barcode: str(barcode, { max: 60 }),
-        kelola_stok: kelolaStok === undefined ? undefined : !!kelolaStok
-      }
-    })))
-
-  handle('produk:remove', ({ id }) =>
-    withAuthWatch(api.request('DELETE', `/produk/${encodeURIComponent(str(id, { required: true }))}`)))
-
-  handle('master:kategori', () => withAuthWatch(api.get('/kategori')))
-  handle('master:gudang', () => withAuthWatch(api.get('/gudang')))
-  handle('master:satuan', () => withAuthWatch(api.get('/satuan')))
-
-  // ---------- Pelanggan ----------
-
-  handle('pelanggan:list', ({ q }) =>
-    withAuthWatch(api.get('/pelanggan', { query: { q: str(q, { max: 190 }) } })))
-
-  handle('pelanggan:create', ({ nama, telepon, alamat }) =>
-    withAuthWatch(api.post('/pelanggan', {
-      body: {
-        nama: str(nama, { required: true, max: 190 }),
-        telepon: str(telepon, { max: 30 }),
-        alamat: str(alamat, { max: 500 })
-      }
-    })))
-
-  handle('pelanggan:detail', ({ id }) =>
-    withAuthWatch(api.get(`/pelanggan/${encodeURIComponent(str(id, { required: true }))}`)))
-
-  // Quick add customer (nama + no WhatsApp) — semua peran; server normalkan nomor.
-  handle('pelanggan:quick', ({ nama, noWhatsapp }) =>
-    withAuthWatch(api.post('/pelanggan/quick', {
-      body: {
-        nama: str(nama, { required: true, max: 190 }),
-        no_whatsapp: str(noWhatsapp, { max: 30 })
-      }
-    })))
-
-  // ---------- Inventory (kelola stok — layar Inventory O/M) ----------
-
-  handle('inventory:stokMasuk', ({ idProduk, jumlah, keterangan }) =>
-    tulisAtauAntre({
-      jenis: 'STOK_MASUK',
-      jalur: '/inventory/stok-masuk',
-      body: {
-        id_produk: str(idProduk, { required: true }),
-        jumlah: num(jumlah, { required: true }),
-        keterangan: str(keterangan, { max: 300 })
-      },
-      deltaStok: { [str(idProduk, { required: true })]: num(jumlah, { required: true }) }
-    }))
-
-  handle('inventory:opname', ({ idProduk, jumlah, keterangan }) =>
-    withAuthWatch(api.post('/inventory/opname', {
-      body: {
-        id_produk: str(idProduk, { required: true }),
-        jumlah: num(jumlah, { required: true }),
-        keterangan: str(keterangan, { max: 300 })
-      }
-    })))
-
-  handle('inventory:riwayat', ({ page, perPage }) =>
-    withAuthWatch(api.get('/inventory/riwayat', {
-      query: { page: intBetween(page, 1, 100000, 1), per_page: intBetween(perPage, 1, 100, 25) }
-    })))
-
-  // ---------- Pengeluaran (kas keluar — O/M) ----------
-
-  handle('pengeluaran:list', ({ bulan }) =>
-    withAuthWatch(api.get('/pengeluaran', { query: { bulan: str(bulan, { max: 7 }) } })))
-
-  handle('pengeluaran:create', ({ keterangan, nominal, tanggal }) =>
-    tulisAtauAntre({
-      jenis: 'PENGELUARAN',
-      jalur: '/pengeluaran',
-      body: {
-        keterangan: str(keterangan, { required: true, max: 190 }),
-        nominal: num(nominal, { required: true }),
-        tanggal: str(tanggal, { max: 10 })
-      }
-    }))
-
-  handle('pengeluaran:remove', ({ id }) =>
-    withAuthWatch(api.request('DELETE', `/pengeluaran/${encodeURIComponent(str(id, { required: true }))}`)))
-
-  // ---------- Sesi kasir ----------
-
-  handle('sesi:aktif', () => withAuthWatch(api.get('/sesi/aktif')))
-
-  handle('sesi:list', ({ tanggalDari, tanggalSampai }) =>
-    withAuthWatch(api.get('/sesi', {
-      query: { tanggal_dari: str(tanggalDari, { max: 10 }), tanggal_sampai: str(tanggalSampai, { max: 10 }) }
-    })))
-
-  handle('sesi:buka', ({ gudangId, kasAwal, catatan }) =>
-    withAuthWatch(api.post('/sesi/buka', {
-      body: {
-        gudang_id: str(gudangId, { required: true }),
-        kas_awal: num(kasAwal, { required: true }),
-        catatan: str(catatan, { max: 500 }),
-        // Ikat sesi ke toko aktif (MOVERA §1.3 opsi 2); undefined → dihilangkan JSON
-        toko_id: api.getActiveTokoId() || undefined
-      }
-    })))
-
-  handle('sesi:tutup', ({ id, kasAkhirFisik, catatan }) =>
-    withAuthWatch(api.post(`/sesi/${encodeURIComponent(str(id, { required: true }))}/tutup`, {
-      body: {
-        kas_akhir_fisik: num(kasAkhirFisik, { required: true }),
-        catatan: str(catatan, { max: 500 })
-      }
-    })))
-
-  handle('sesi:rekap', ({ id }) =>
-    withAuthWatch(api.get(`/sesi/${encodeURIComponent(str(id, { required: true }))}/rekap`)))
-
-  // ---------- Transaksi ----------
-
-  handle('trx:checkout', async ({ items, tipePembayaran, dibayar, idPelanggan, catatan, qrisTagihanId, tampilan, kasirNama, pelangganNama }) => {
-    if (!Array.isArray(items) || items.length === 0) return fail('Keranjang masih kosong.')
-    if (items.length > 200) return fail('Terlalu banyak item dalam satu transaksi.')
-    const cleanItems = items.map((item) => ({
-      id_produk: str(item.idProduk, { required: true }),
-      harga: num(item.harga, { required: true }),
-      kuantitas: num(item.kuantitas, { required: true }),
-      diskon_persen: num(item.diskonPersen) ?? 0,
-      pajak_persen: num(item.pajakPersen) ?? 0
-    }))
-    const body = {
-      items: cleanItems,
-      tipe_pembayaran: str(tipePembayaran, { required: true, max: 20 }),
-      dibayar: num(dibayar, { required: true }),
-      id_pelanggan: str(idPelanggan) || null,
-      catatan: str(catatan, { max: 500 }) || null,
-      // QRIS terverifikasi (Midtrans): id tagihan LUNAS. Hanya dikirim bila ada.
-      qris_tagihan_id: str(qrisTagihanId) || undefined
-    }
+  handle('trx:checkout', async (payload) => {
+    const { tampilan, kasirNama, pelangganNama } = payload
+    const minta = kontrak.bentuk('trx:checkout', payload, konteksKontrak())
+    const body = minta.body
     // QRIS otomatis butuh server (tagihan diverifikasi online) → tanpa antrean.
-    if (body.qris_tagihan_id) return withAuthWatch(api.post('/transaksi/checkout', { body }))
+    if (body.qris_tagihan_id) return withAuthWatch(api.post(minta.jalur, { body }))
 
     // Struk lokal disusun dulu (nomor L-…) agar bisa dicetak & masuk riwayat
     // walau antre; bila terkirim langsung, struk server yang dipakai.
@@ -974,7 +570,7 @@ function registerIpcHandlers(getMainWindow) {
     })
     const deltaStok = {}
     for (const t of (Array.isArray(tampilan) ? tampilan : [])) {
-      if (t && t.kelola_stok) deltaStok[String(t.id_produk)] = -(Number((cleanItems.find((i) => i.id_produk === String(t.id_produk)) || {}).kuantitas) || 0)
+      if (t && t.kelola_stok) deltaStok[String(t.id_produk)] = -(Number((body.items.find((i) => i.id_produk === String(t.id_produk)) || {}).kuantitas) || 0)
     }
     const r = await tulisAtauAntre({
       jenis: 'CHECKOUT', jalur: '/transaksi/checkout', body, deltaStok,
@@ -987,20 +583,8 @@ function registerIpcHandlers(getMainWindow) {
     return r
   })
 
-  handle('trx:list', async ({ status, sesiId, tanggalDari, tanggalSampai }) => {
-    const r = await withAuthWatch(api.get('/transaksi', {
-      query: {
-        status: str(status, { max: 20 }),
-        sesi_id: str(sesiId),
-        // Dua gaya nama parameter dikirim sekaligus: OpenAPI memakai
-        // tanggal_dari/tanggal_sampai, Docs-API.md §6.11 memakai dari/sampai.
-        // Server mengabaikan yang tidak dikenalnya.
-        tanggal_dari: str(tanggalDari, { max: 10 }),
-        tanggal_sampai: str(tanggalSampai, { max: 10 }),
-        dari: str(tanggalDari, { max: 10 }),
-        sampai: str(tanggalSampai, { max: 10 })
-      }
-    }))
+  handle('trx:list', async (payload) => {
+    const r = await withAuthWatch(kirimKontrak('trx:list', payload))
     // Transaksi lokal yang belum terkirim ditaruh paling atas (id lokal:<ref>).
     const lokal = offline.antrean.transaksiTertunda(api.getActiveTokoId())
       .map((t) => ({ ...t.struk, id: `lokal:${t.clientRef}`, nomor: t.nomorLokal, status: 'BELUM SINKRON' }))
@@ -1017,34 +601,8 @@ function registerIpcHandlers(getMainWindow) {
       if (!t) return fail('Transaksi lokal tidak ditemukan (mungkin sudah terkirim).')
       return { ok: true, status: 200, data: { ...t.struk, id: sid, nomor: t.nomorLokal, status: 'BELUM SINKRON' }, meta: null, message: '' }
     }
-    return withAuthWatch(api.get(`/transaksi/${encodeURIComponent(sid)}`))
+    return withAuthWatch(kirimKontrak('trx:detail', { id: sid }))
   })
-
-  handle('trx:batal', ({ id }) =>
-    withAuthWatch(api.post(`/transaksi/${encodeURIComponent(str(id, { required: true }))}/batal`)))
-
-  // ---------- Laporan ----------
-
-  handle('laporan:penjualanHarian', ({ tanggalDari, tanggalSampai }) =>
-    withAuthWatch(api.get('/laporan/penjualan-harian', {
-      query: { tanggal_dari: str(tanggalDari, { max: 10 }), tanggal_sampai: str(tanggalSampai, { max: 10 }) }
-    })))
-
-  handle('laporan:penjualanProduk', ({ tanggalDari, tanggalSampai }) =>
-    withAuthWatch(api.get('/laporan/penjualan-produk', {
-      query: { tanggal_dari: str(tanggalDari, { max: 10 }), tanggal_sampai: str(tanggalSampai, { max: 10 }) }
-    })))
-
-  handle('laporan:stok', ({ gudangId }) =>
-    withAuthWatch(api.get('/laporan/stok', { query: { gudang_id: str(gudangId) } })))
-
-  handle('laporan:rekapKasir', ({ tanggalDari, tanggalSampai }) =>
-    withAuthWatch(api.get('/laporan/rekap-kasir', {
-      query: { tanggal_dari: str(tanggalDari, { max: 10 }), tanggal_sampai: str(tanggalSampai, { max: 10 }) }
-    })))
-
-  handle('laporan:keuangan', ({ bulan }) =>
-    withAuthWatch(api.get('/laporan/keuangan', { query: { bulan: str(bulan, { max: 7 }) } })))
 }
 
 module.exports = { registerIpcHandlers }
