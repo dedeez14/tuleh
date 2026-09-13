@@ -2,7 +2,7 @@
 
 import { api, firstError } from '../api.js'
 import { getState } from '../state.js'
-import { bisa, labelPeran } from '../akses.js'
+import { bisa, namaPeran } from '../akses.js'
 import { icons, toast, confirmDialog } from '../components/ui.js'
 import { esc, fmtDateTime, fmtDate } from '../utils/format.js'
 import { mulaiPembayaran } from '../langganan-bayar.js'
@@ -67,10 +67,10 @@ function pickServerTime(data) {
   return formatted === '—' ? String(raw) : formatted
 }
 
-// Hak Akses (§4.4) — peran pemohon (dari pos_role); kelola user tetap di ERP.
+// Hak Akses (§4.4) — peran & hak dari server (diatur pemilik usaha di tatreport.com → Role).
 function hakAksesCardHTML() {
-  const { user, posRole } = getState()
-  const label = labelPeran(posRole)
+  const { user, akses } = getState()
+  const label = namaPeran()
   const warna = bisa('peran.kelola') ? 'mint' : (bisa('laporan.lihat') ? 'info' : 'neutral')
   return `
     <section class="card">
@@ -78,9 +78,10 @@ function hakAksesCardHTML() {
       <div class="card__body">
         <div class="set-def">
           ${defRow('Pengguna', `<span>${esc(user?.name || '—')}</span>`)}
-          ${defRow('Peran (pos_role)', `<span class="badge badge--${warna}">${esc(label)}</span>`)}
+          ${defRow('Peran', `<span class="badge badge--${warna}">${esc(label)}</span>`)}
+          ${defRow('Hak akses', `<span class="num">${Array.isArray(akses) ? akses.length : 0} fitur</span>`)}
         </div>
-        <div class="field__hint">Peran menentukan menu yang tampil. Tambah/ubah pengguna &amp; peran dilakukan di tatreport.com (ERP).</div>
+        <div class="field__hint">Peran &amp; hak aksesnya diatur pemilik usaha di tatreport.com (ERP → Role) dan menentukan menu serta tombol yang tampil.</div>
       </div>
     </section>`
 }

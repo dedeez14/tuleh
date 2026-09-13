@@ -7,7 +7,7 @@
 
 const crypto = require('node:crypto')
 const {
-  COMPANY, USER, BRANCH, KATEGORI, GUDANG, SATUAN, PELANGGAN_AWAL, TOKOS, MANIFESTS, TABLES,
+  COMPANY, USER, BRANCH, KATEGORI, GUDANG, SATUAN, PELANGGAN_AWAL, TOKOS, MANIFESTS, TABLES, PERAN_DEMO,
   buatProduk, buatProdukBakso, buatProdukLaundry, buatProdukBengkel, buatProdukDoorsmeer, buatProdukSalon,
   KATEGORI_BAKSO, KATEGORI_LAUNDRY, KATEGORI_BENGKEL, KATEGORI_DOORSMEER, KATEGORI_SALON
 } = require('./demo-data')
@@ -644,13 +644,17 @@ function readEnv(name) {
   catch (e) { return '' }
 }
 
-// Peran demo. Default OWNER (lihat semua menu). Env IPOS_SMOKE_ROLE=OWNER|MANAGER|
-// KASIR memaksa peran untuk uji filter menu (kriteria terima Tahap 1: kasir hanya
-// melihat kasir/produk/riwayat/sesi + antrian bidang F&B/jasa).
-const PERAN_SAH = ['OWNER', 'MANAGER', 'KASIR']
-function demoRole() {
-  const r = String(readEnv('IPOS_SMOKE_ROLE')).toUpperCase()
-  return PERAN_SAH.includes(r) ? r : 'OWNER'
+// Peran demo dari tabel tiruan PERAN_DEMO (cermin data server). Baris pertama bawaan; env
+// IPOS_SMOKE_ROLE memilih baris lain untuk uji tampilan per hak akses.
+function demoPeran() {
+  const kode = String(readEnv('IPOS_SMOKE_ROLE')).toUpperCase()
+  return PERAN_DEMO.find((p) => p.kode === kode) || PERAN_DEMO[0]
+}
+const demoBisa = (kunci) => demoPeran().akses.includes(kunci)
+// Bidang identitas seperti respons login/me server: akses + peran (+ pos_role usang untuk app lama).
+function identitasPeran() {
+  const p = demoPeran()
+  return { akses: [...p.akses], peran: { nama: p.nama }, pos_role: p.kode }
 }
 
 function start() {
@@ -659,7 +663,7 @@ function start() {
   demoStartedAt = Date.now()
   return ok({
     user: USER,
-    pos_role: demoRole(),
+    ...identitasPeran(),
     company: COMPANY,
     branch: BRANCH,
     permissions: ['pos.semua'],
@@ -768,7 +772,7 @@ const handlers = {
 
   'auth:hasToken': () => ok({ hasToken: true }),
 
-  'auth:me': () => ok({ user: USER, pos_role: demoRole(), company: COMPANY, branch: BRANCH, sesi_aktif: sesiAktif() }),
+  'auth:me': () => ok({ user: USER, ...identitasPeran(), company: COMPANY, branch: BRANCH, sesi_aktif: sesiAktif() }),
 
   'auth:logout': () => {
     stop()
@@ -780,10 +784,10 @@ const handlers = {
   'toko:manifest': ({ id } = {}) => {
     const manifest = MANIFESTS[id]
     if (!manifest) return err(404, 'Manifest toko tidak ditemukan.')
-    // Cermin server: menus dikirim SUDAH terfilter peran aktif; app tak memfilter ulang.
-    const role = demoRole()
-    const menus = (manifest.menus || []).filter((m) => !m.roles || m.roles.includes(role))
-    return ok({ ...manifest, menus, role })
+    // Cermin server: menus dikirim SUDAH tersaring per hak akses; app tak memfilter ulang.
+    const p = demoPeran()
+    const menus = (manifest.menus || []).filter((m) => !m.required_permission || demoBisa(m.required_permission.replace(/^pos\./, '')))
+    return ok({ ...manifest, menus, akses: [...p.akses], role: p.kode })
   },
 
   'toko:select': ({ id } = {}) => {
@@ -1335,7 +1339,7 @@ const handlers = {
     const mulai = (halaman - 1) * size
     let slice = rows.slice(mulai, mulai + size)
     // Rahasia dagang: KASIR tak melihat harga beli (cermin server).
-    if (demoRole() === 'KASIR') slice = slice.map((p) => ({ ...p, harga_beli: null }))
+    if (!demoBisa('produk.harga_beli')) slice = slice.map((p) => ({ ...p, harga_beli: null }))
     return ok(slice, {
       current_page: halaman,
       last_page: Math.max(Math.ceil(rows.length / size), 1),

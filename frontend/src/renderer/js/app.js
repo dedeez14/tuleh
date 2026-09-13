@@ -84,7 +84,6 @@ function normalizeManifest(raw, toko) {
       routeKey: m.route_key || m.id,
       label: m.label || '',
       icon: m.icon || '',
-      roles: Array.isArray(m.roles) ? m.roles : null,
       order: Number(m.order) || 0
     }))
   return {
@@ -715,11 +714,11 @@ function enterLogin() {
 }
 
 async function enterApp(identity) {
-  // identity: { user, pos_role, company, branch, permissions, modules, payment_methods, demo? }
+  // identity: { user, akses, peran, company, branch, permissions, modules, payment_methods, demo? }
   setState({
     user: identity.user || null,
-    posRole: identity.pos_role || null,
     akses: Array.isArray(identity.akses) ? identity.akses : null,
+    peran: identity.peran || null,
     company: identity.company || null,
     branch: identity.branch || null,
     permissions: identity.permissions || [],
@@ -903,8 +902,8 @@ async function boot() {
     if (me.ok && me.data && me.data.user) {
       setState({
         user: me.data.user,
-        posRole: me.data.pos_role || null,
         akses: Array.isArray(me.data.akses) ? me.data.akses : null,
+        peran: me.data.peran || null,
         company: me.data.company || null,
         branch: me.data.branch || null,
         session: me.data.sesi_aktif || null,

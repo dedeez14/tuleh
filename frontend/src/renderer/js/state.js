@@ -3,8 +3,8 @@
 
 const state = {
   user: null,          // { id, name, email, is_admin }
-  posRole: null,       // 'OWNER' | 'MANAGER' | 'KASIR' — dari data.pos_role login/me (kontrak peran)
-  akses: null,         // string[] kunci akses dari server (null = pakai matriks bawaan) — baca lewat akses.js
+  akses: null,         // string[] kunci hak akses dari server (login/me) — baca lewat akses.js
+  peran: null,         // { nama } peran pengguna dari server (hanya tampilan)
   company: null,       // { nama, alamat, telepon, npwp, logo }
   branch: null,
   permissions: [],
@@ -54,8 +54,8 @@ export function subscribe(listener) {
 export function resetAuthState() {
   setState({
     user: null,
-    posRole: null,
     akses: null,
+    peran: null,
     company: null,
     branch: null,
     permissions: [],

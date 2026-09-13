@@ -142,14 +142,31 @@ const TOKOS = [
   }
 ]
 
-// Peran per menu (cermin filter server §3.2): menu manajemen hanya OWNER/MANAGER,
-// sisanya operasional (semua peran). demo.js memfilter menus per peran aktif.
-const ALL_ROLES = ['OWNER', 'MANAGER', 'KASIR']
-const OM_ROLES = ['OWNER', 'MANAGER']
-const MANAGEMENT_MENUS = new Set(['dashboard', 'inventory', 'pelanggan', 'pengeluaran', 'laporan', 'pengaturan', 'stasiun'])
+// Hak akses Mode Demo — DATA TIRUAN yang meniru database server (katalog pos_hak_akses × permission
+// role; lihat PosHakAksesSeeder). Mode Demo tidak punya server, jadi respons login/me/manifest demo
+// membawa `akses` dari tabel tiruan ini; app membacanya persis seperti dari server sungguhan.
+const KATALOG_AKSES = [
+  'dashboard.lihat', 'kasir.transaksi', 'pesanan.kelola', 'pesanan.void', 'transaksi.riwayat_semua', 'transaksi.batal',
+  'sesi.lihat_semua', 'sesi.tutup_lain', 'produk.lihat', 'produk.harga_beli', 'produk.kelola', 'inventory.kelola',
+  'pelanggan.kelola', 'pengeluaran.kelola', 'laporan.lihat', 'toko.meja_stasiun', 'toko.buat', 'pengaturan.lihat',
+  'pengaturan.usaha', 'pengaturan.pembayaran', 'pengaturan.keamanan', 'langganan.kelola', 'peran.kelola', 'pengguna.kelola'
+]
+const HAK_PEMILIK_SAJA = ['toko.buat', 'pengaturan.usaha', 'pengaturan.pembayaran', 'pengaturan.keamanan', 'langganan.kelola', 'peran.kelola', 'pengguna.kelola']
+// `kode` = pemilih env IPOS_SMOKE_ROLE untuk uji tampilan (baris pertama = bawaan).
+const PERAN_DEMO = [
+  { kode: 'OWNER', nama: 'Owner', akses: KATALOG_AKSES },
+  { kode: 'MANAGER', nama: 'Manager', akses: KATALOG_AKSES.filter((k) => !HAK_PEMILIK_SAJA.includes(k)) },
+  { kode: 'KASIR', nama: 'Kasir', akses: ['kasir.transaksi', 'pesanan.kelola', 'produk.lihat'] }
+]
+// Hak yang dibutuhkan tiap menu (cermin required_permission di config/pos_archetypes.php server).
+const HAK_MENU = {
+  dashboard: 'dashboard.lihat', kasir: 'kasir.transaksi', riwayat: 'kasir.transaksi', sesi: 'kasir.transaksi',
+  dapur: 'pesanan.kelola', antrian: 'pesanan.kelola', proses: 'pesanan.kelola', meja: 'pesanan.kelola',
+  produk: 'produk.lihat', inventory: 'inventory.kelola', pelanggan: 'pelanggan.kelola', pengeluaran: 'pengeluaran.kelola',
+  laporan: 'laporan.lihat', pengaturan: 'pengaturan.lihat', stasiun: 'toko.meja_stasiun'
+}
 const menuItem = (id, label, order) => ({
-  id, label, icon: id, route_key: id, capability: id, required_permission: 'pos.view', order,
-  roles: MANAGEMENT_MENUS.has(id) ? OM_ROLES : ALL_ROLES
+  id, label, icon: id, route_key: id, capability: id, required_permission: 'pos.' + HAK_MENU[id], order
 })
 
 // Fitur premium (semua nonaktif; menyala kelak hanya lewat perubahan flag server).
@@ -578,7 +595,7 @@ const PELANGGAN_AWAL = [
 ]
 
 module.exports = {
-  COMPANY, USER, BRANCH, KATEGORI, GUDANG, SATUAN, PELANGGAN_AWAL, TOKOS, MANIFESTS, TABLES,
+  COMPANY, USER, BRANCH, KATEGORI, GUDANG, SATUAN, PELANGGAN_AWAL, TOKOS, MANIFESTS, TABLES, PERAN_DEMO,
   buatProduk, buatProdukBakso, buatProdukLaundry, buatProdukBengkel, buatProdukDoorsmeer, buatProdukSalon,
   KATEGORI_BAKSO, KATEGORI_LAUNDRY, KATEGORI_BENGKEL, KATEGORI_DOORSMEER, KATEGORI_SALON
 }

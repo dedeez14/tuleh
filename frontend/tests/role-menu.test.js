@@ -15,15 +15,19 @@ const ids = (manifest) => manifest.data.menus.map((m) => m.id)
 
 test.afterEach(() => { delete process.env.IPOS_SMOKE_ROLE })
 
-test('login demo membawa pos_role (default OWNER)', () => {
+test('login demo membawa akses & peran seperti server (default pemilik: semua hak)', () => {
   const r = demo.start()
   assert.equal(r.ok, true)
-  assert.equal(r.data.pos_role, 'OWNER')
+  assert.ok(Array.isArray(r.data.akses) && r.data.akses.includes('peran.kelola'))
+  assert.equal(typeof r.data.peran.nama, 'string')
 })
 
-test('auth:me demo membawa pos_role', () => {
+test('auth:me demo membawa akses sesuai peran demo', () => {
+  process.env.IPOS_SMOKE_ROLE = 'KASIR'
+  const me = demo.handlers['auth:me']().data
+  assert.deepEqual(me.akses, ['kasir.transaksi', 'pesanan.kelola', 'produk.lihat'])
   process.env.IPOS_SMOKE_ROLE = 'MANAGER'
-  assert.equal(demo.handlers['auth:me']().data.pos_role, 'MANAGER')
+  assert.ok(demo.handlers['auth:me']().data.akses.includes('transaksi.batal'))
 })
 
 test('OWNER: manifest kirim semua menu manajemen + role + premium_features', () => {
@@ -55,10 +59,11 @@ test('KASIR F&B tetap melihat antrian/dapur/meja (operasional)', () => {
   assert.ok(!menu.includes('laporan'))
 })
 
-test('setiap menu punya route_key & roles (kontrak render app)', () => {
+test('setiap menu punya route_key & required_permission (kontrak render app)', () => {
   demo.start()
   for (const m of demo.handlers['toko:manifest']({ id: 'TOKO-1' }).data.menus) {
     assert.equal(typeof m.route_key, 'string')
-    assert.ok(Array.isArray(m.roles) && m.roles.length > 0)
+    assert.match(m.required_permission, /^pos\.[a-z_]+\.[a-z_]+$/)
+    assert.equal(m.roles, undefined)
   }
 })
