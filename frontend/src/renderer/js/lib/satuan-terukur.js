@@ -1,10 +1,17 @@
 // Aturan barang yang dijual per ukuran (kilo, liter, meter) — bukan per potong.
-// Server hanya mengirim `satuan` sebagai teks bebas, jadi klien yang
-// menerjemahkannya. Satuan tak dikenal dianggap TIDAK terukur agar perilaku
-// lama (klik = tambah 1) tidak berubah diam-diam.
 //
-// Padanan Dart: `mobile-flutter/lib/core/utils/satuan_terukur.dart` — tabel dan
-// pembulatannya harus sama persis di kedua aplikasi.
+// Server sejak 2026-09-14 mengirim perilaku jual PER PRODUK: `mode_jual`
+// (SATUAN | UKUR | UKUR_NOMINAL, dari master server), `desimal`, `boleh_nominal`,
+// `langkah` — hasil pilihan produk, satuan terukur, dan bidang usaha toko. Bila
+// ada, itu yang dipakai. Tabel satuan di bawah hanya cadangan untuk server lama
+// yang cuma mengirim `satuan` sebagai teks bebas; satuan tak dikenal dianggap
+// TIDAK terukur agar perilaku lama (klik = tambah 1) tidak berubah diam-diam.
+//
+// Setiap fungsi menerima objek produk ATAU teks satuan (pemanggil lama).
+//
+// Padanan Dart: `mobile-flutter/lib/core/utils/satuan_terukur.dart` dan server
+// `Modules/POS/app/Support/PosModeJualProduk.php` — tabel dan pembulatannya
+// harus sama persis.
 
 const LANGKAH = {
   kg: 0.01,
@@ -25,14 +32,42 @@ const LANGKAH = {
 
 const kunci = (satuan) => String(satuan || '').trim().toLowerCase()
 
-/** true bila barang dengan satuan ini dijual per ukuran. */
-export function apakahTerukur(satuan) {
-  return Object.prototype.hasOwnProperty.call(LANGKAH, kunci(satuan))
+/**
+ * Perilaku jual satu produk (atau satu teks satuan).
+ * @returns {{ terukur: boolean, bolehNominal: boolean, langkah: number, satuan: string }}
+ */
+export function perilakuJual(produkAtauSatuan) {
+  const x = produkAtauSatuan
+  if (x && typeof x === 'object') {
+    if (x.mode_jual) {
+      const langkah = Number(x.langkah)
+      const terukur = !!x.desimal
+      return {
+        terukur,
+        bolehNominal: terukur && !!x.boleh_nominal,
+        langkah: terukur && langkah > 0 ? langkah : 1,
+        satuan: String(x.satuan || '')
+      }
+    }
+    return perilakuJual(x.satuan)
+  }
+  const terukur = Object.prototype.hasOwnProperty.call(LANGKAH, kunci(x))
+  return { terukur, bolehNominal: terukur, langkah: LANGKAH[kunci(x)] || 1, satuan: String(x || '') }
 }
 
-/** Langkah terkecil untuk satuan (1 = barang hitungan biasa). */
-export function langkahSatuan(satuan) {
-  return LANGKAH[kunci(satuan)] || 1
+/** true bila barang (atau satuan) ini dijual per ukuran. */
+export function apakahTerukur(produkAtauSatuan) {
+  return perilakuJual(produkAtauSatuan).terukur
+}
+
+/** true bila kasir boleh mengisi nominal rupiah ("beli Rp 20.000"). */
+export function bolehNominal(produkAtauSatuan) {
+  return perilakuJual(produkAtauSatuan).bolehNominal
+}
+
+/** Langkah terkecil (1 = barang hitungan biasa). */
+export function langkahSatuan(produkAtauSatuan) {
+  return perilakuJual(produkAtauSatuan).langkah
 }
 
 /**
@@ -44,7 +79,8 @@ export function bulatkanKuantitas(kuantitas, satuan, { keBawah = false } = {}) {
   const langkah = langkahSatuan(satuan)
   const q = Number(kuantitas)
   if (!(langkah > 0) || !(q > 0)) return 0
-  const kelipatan = q / langkah
+  // Lewat 6 desimal dulu (sama dengan server): 0.3 / 0.1 = 2.9999999999999996 harus tetap 3.
+  const kelipatan = Number((q / langkah).toFixed(6))
   const bulat = keBawah ? Math.floor(kelipatan) : Math.round(kelipatan)
   // Lewat 6 desimal agar 0.1*3 tidak menjadi 0.30000000000000004.
   return Number((bulat * langkah).toFixed(6))
@@ -81,5 +117,6 @@ export function labelKuantitas(kuantitas, satuan) {
   const q = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 3 }).format(
     Number(kuantitas) || 0,
   )
-  return apakahTerukur(satuan) ? `${q} ${String(satuan).trim()}` : q
+  const teks = perilakuJual(satuan).satuan.trim()
+  return apakahTerukur(satuan) && teks ? `${q} ${teks}` : q
 }

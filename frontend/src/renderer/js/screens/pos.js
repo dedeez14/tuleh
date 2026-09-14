@@ -357,7 +357,7 @@ function renderPos(container) {
         <div class="pos-card__media">${media}${badge}</div>
         <div class="pos-card__name">${esc(p.nama)}</div>
         <div class="pos-card__code mono">${esc(p.kode)}</div>
-        <div class="pos-card__price num">${fmtIDR(hargaJual(p))}${apakahTerukur(p.satuan) ? ` <span class="pos-card__unit">/ ${esc(p.satuan)}</span>` : ''}${hargaNormalSaatPromo(p) != null ? ` <s class="pos-card__price-old">${fmtIDR(hargaNormalSaatPromo(p))}</s>` : ''}</div>
+        <div class="pos-card__price num">${fmtIDR(hargaJual(p))}${apakahTerukur(p) ? ` <span class="pos-card__unit">/ ${esc(p.satuan)}</span>` : ''}${hargaNormalSaatPromo(p) != null ? ` <s class="pos-card__price-old">${fmtIDR(hargaNormalSaatPromo(p))}</s>` : ''}</div>
       </button>`
   }
 
@@ -392,18 +392,27 @@ function renderPos(container) {
     }
     if (!append) gridEl.innerHTML = loadingHTML('Memuat produk…')
 
-    // Bidang JASA (salon/laundry/bengkel/konter): katalog kasir ikut sertakan
-    // layanan (?tipe=SEMUA). Retail biarkan default (kontrak §4.1).
+    // Jenis item katalog mengikuti bidang usaha toko: manifest server membawa
+    // item_config.jenis_item (["PRODUK"] / ["JASA","PRODUK"]) dari master. Server
+    // lama belum mengirimnya → tebakan dari nama bidang seperti dulu.
     const st = getState()
-    const bidang = st.toko?.bidang_usaha || {}
-    const sinyalJasa = `${bidang.kategori || ''} ${bidang.archetype || st.manifest?.archetype || ''} ${bidang.code || st.manifest?.verticalCode || ''}`.toLowerCase()
-    const isJasa = /jasa|service|laundry|salon|bengkel|konter|barber|doorsmeer|car.?wash|petshop|cuci/.test(sinyalJasa)
+    const jenisItem = Array.isArray(st.manifest?.itemConfig?.jenis_item) ? st.manifest.itemConfig.jenis_item : null
+    let tipe
+    if (jenisItem) {
+      const adaJasa = jenisItem.includes('JASA')
+      const adaProduk = jenisItem.includes('PRODUK')
+      tipe = adaJasa && adaProduk ? 'SEMUA' : (adaJasa ? 'JASA' : undefined)
+    } else {
+      const bidang = st.toko?.bidang_usaha || {}
+      const sinyalJasa = `${bidang.kategori || ''} ${bidang.archetype || st.manifest?.archetype || ''} ${bidang.code || st.manifest?.verticalCode || ''}`.toLowerCase()
+      tipe = /jasa|service|laundry|salon|bengkel|konter|barber|doorsmeer|car.?wash|petshop|cuci/.test(sinyalJasa) ? 'SEMUA' : undefined
+    }
 
     const result = await api.produk.list({
       q: query || undefined,
       kategoriId: kategoriId || undefined,
       gudangId: getState().session?.gudang_id,
-      tipe: isJasa ? 'SEMUA' : undefined,
+      tipe,
       perPage: PER_PAGE,
       page
     })
@@ -475,7 +484,7 @@ function renderPos(container) {
       toast(`Stok "${produk.nama}" sudah habis.`, 'error')
       return false
     }
-    if (apakahTerukur(produk.satuan)) {
+    if (apakahTerukur(produk)) {
       bukaInputUkuran(produk)
       return true
     }
@@ -524,11 +533,11 @@ function renderPos(container) {
         ${l.nominalDiminta > 0 && Math.round(l.nominalDiminta) !== Math.round(line.total)
           ? `<div class="pos-line__diminta num">diminta ${fmtIDR(l.nominalDiminta)}</div>` : ''}
         <div class="pos-line__ctrl">
-          ${apakahTerukur(p.satuan)
+          ${apakahTerukur(p)
             // Barang timbang: "+1" berarti +1 kg — hampir tidak pernah yang
             // dimaksud. Ketuk untuk menimbang ulang lewat dialog ukuran.
             ? `<button type="button" class="btn btn--outline btn--sm num" data-act="ukur"
-                       aria-label="Ubah ukuran ${esc(p.nama)}">${esc(labelKuantitas(l.kuantitas, p.satuan))}</button>`
+                       aria-label="Ubah ukuran ${esc(p.nama)}">${esc(labelKuantitas(l.kuantitas, p))}</button>`
             : `<div class="pos-step">
             <button type="button" class="icon-btn pos-step__btn" data-act="minus" aria-label="Kurangi jumlah">
               ${icons.minus}
@@ -615,7 +624,7 @@ function renderPos(container) {
     // "qty" hanya bermakna untuk barang hitungan: "0,74 qty" pada mangga
     // timbang bukan informasi, cukup "1 item".
     const qtyHitung = cart.reduce(
-      (n, l) => n + (apakahTerukur(l.produk.satuan) ? 0 : Number(l.kuantitas) || 0), 0)
+      (n, l) => n + (apakahTerukur(l.produk) ? 0 : Number(l.kuantitas) || 0), 0)
     countEl.textContent = cart.length
       ? `${cart.length} item${qtyHitung > 0 ? ` • ${fmtNumber(qtyHitung)} qty` : ''}`
       : '0 item'
@@ -1269,6 +1278,8 @@ function renderPos(container) {
           idProduk: l.produk.id,
           harga: hargaJual(l.produk),
           kuantitas: Number(l.kuantitas) || 0,
+          // Baris per rupiah: server menghitung ulang ukuran dari nominal dengan aturan yang sama & mencatatnya di struk.
+          nominal: l.nominalDiminta > 0 ? Number(l.nominalDiminta) : undefined,
           diskonPersen: diskonEfektif(l),
           pajakPersen: Number(l.produk.pajak_persen) || 0
         })),
@@ -1310,6 +1321,8 @@ function renderPos(container) {
           idProduk: l.produk.id,
           harga: hargaJual(l.produk),
           kuantitas: Number(l.kuantitas) || 0,
+          // Baris per rupiah: server menghitung ulang ukuran dari nominal dengan aturan yang sama & mencatatnya di struk.
+          nominal: l.nominalDiminta > 0 ? Number(l.nominalDiminta) : undefined,
           diskonPersen: diskonEfektif(l),
           pajakPersen: Number(l.produk.pajak_persen) || 0
         })),

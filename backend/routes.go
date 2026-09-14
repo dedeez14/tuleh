@@ -75,10 +75,15 @@ var routeTable = []route{
 	{method: "GET", pattern: "/produk/barcode/{barcode}", cache: 15 * time.Second},
 	{method: "GET", pattern: "/produk/{id}", cache: 15 * time.Second},
 	{method: "PATCH", pattern: "/produk/{id}", purge: []string{apiPrefix + "/produk", apiPrefix + "/laporan"}},
+	// Toko yang menjual produk (2026-09-14) — formulir Produk & Jasa. Bukan /produk/{id}/toko: bentrok dengan
+	// /produk/barcode/{barcode} di ServeMux Go 1.22 (panik saat gateway menyala).
+	{method: "GET", pattern: "/produk-toko/{id}"},
+	{method: "PUT", pattern: "/produk-toko/{id}", purge: []string{apiPrefix + "/produk"}},
 	{method: "DELETE", pattern: "/produk/{id}", purge: []string{apiPrefix + "/produk", apiPrefix + "/laporan"}},
 	{method: "GET", pattern: "/kategori", cache: 5 * time.Minute},
 	{method: "GET", pattern: "/gudang", cache: 5 * time.Minute},
 	{method: "GET", pattern: "/satuan", cache: 5 * time.Minute},
+	{method: "GET", pattern: "/mode-jual", cache: 5 * time.Minute},
 
 	// Pelanggan (+ quick add — semua peran; kebutuhan operasional kasir)
 	{method: "GET", pattern: "/pelanggan", cache: 15 * time.Second},

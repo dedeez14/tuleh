@@ -84,7 +84,7 @@ export function ringkasParkir(entri) {
     const q = Number(l.kuantitas) || 0
     // "qty" hanya dijumlahkan untuk barang hitungan: menambahkan 0,74 kg
     // mangga ke jumlah butir tidak berarti apa-apa.
-    if (!apakahTerukur(l.produk && l.produk.satuan)) qty += q
+    if (!apakahTerukur(l.produk)) qty += q
     total += harga * q * (1 - (Number(l.diskonPersen) || 0) / 100)
   }
   return { baris: entri.items.length, qty, total }
@@ -93,7 +93,7 @@ export function ringkasParkir(entri) {
 function salinProduk(p) {
   // Simpan bidang yang dibutuhkan kasir & struk; hindari objek besar (gambar base64 dsb).
   const out = {}
-  for (const k of ['id', 'nama', 'kode', 'sku', 'barcode', 'satuan', 'harga_jual', 'harga_efektif', 'promo_aktif', 'stok', 'kelola_stok', 'pajak_persen', 'kategori_id', 'kategori']) {
+  for (const k of ['id', 'nama', 'kode', 'sku', 'barcode', 'satuan', 'harga_jual', 'harga_efektif', 'promo_aktif', 'stok', 'kelola_stok', 'pajak_persen', 'kategori_id', 'kategori', 'mode_jual', 'desimal', 'boleh_nominal', 'langkah']) {
     if (p[k] !== undefined) out[k] = p[k]
   }
   return out

@@ -156,12 +156,15 @@ contextBridge.exposeInMainWorld('iposAPI', {
     detail: invoke('produk:detail'),
     create: invoke('produk:create'),
     update: invoke('produk:update'),
-    remove: invoke('produk:remove')
+    remove: invoke('produk:remove'),
+    toko: invoke('produk:toko'),
+    aturToko: invoke('produk:aturToko')
   },
   master: {
     kategori: invoke('master:kategori'),
     gudang: invoke('master:gudang'),
-    satuan: invoke('master:satuan')
+    satuan: invoke('master:satuan'),
+    modeJual: invoke('master:modeJual')
   },
   pelanggan: {
     list: invoke('pelanggan:list'),

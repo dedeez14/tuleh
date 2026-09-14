@@ -310,7 +310,7 @@ export const PetaMejaScreen = {
       grid.innerHTML = list.map((p) => `
         <button type="button" class="bill-prod" data-prod="${esc(p.id)}">
           <span class="bill-prod__nama">${esc(p.nama)}</span>
-          <span class="bill-prod__harga num">${fmtIDR(p.harga_jual)}${apakahTerukur(p.satuan) ? ` / ${esc(p.satuan)}` : ''}</span>
+          <span class="bill-prod__harga num">${fmtIDR(p.harga_jual)}${apakahTerukur(p) ? ` / ${esc(p.satuan)}` : ''}</span>
         </button>`).join('') || '<div class="u-muted" style="padding:var(--sp-4)">Menu tidak ditemukan.</div>'
     }
 
@@ -322,8 +322,8 @@ export const PetaMejaScreen = {
           <div class="bill-line" data-i="${i}">
             <span class="bill-line__nama">${esc(l.produk.nama)}</span>
             <span class="bill-line__ctrl">
-              ${apakahTerukur(l.produk.satuan)
-                ? `<button type="button" class="btn btn--outline btn--sm num" data-ukur>${esc(labelKuantitas(l.kuantitas, l.produk.satuan))}</button>`
+              ${apakahTerukur(l.produk)
+                ? `<button type="button" class="btn btn--outline btn--sm num" data-ukur>${esc(labelKuantitas(l.kuantitas, l.produk))}</button>`
                 : `<button type="button" class="step" data-dec>−</button>
               <span class="num">${fmtNumber(l.kuantitas)}</span>
               <button type="button" class="step" data-inc>+</button>`}
@@ -414,7 +414,7 @@ export const PetaMejaScreen = {
         if (!btn) return
         const p = produkCache.find((x) => x.id === btn.dataset.prod)
         if (!p) return
-        if (apakahTerukur(p.satuan)) tambahUkuran(p)
+        if (apakahTerukur(p)) tambahUkuran(p)
         else tambahLokal(p, 1)
       })
       root.querySelector('#bill-ronde').addEventListener('click', (e) => {

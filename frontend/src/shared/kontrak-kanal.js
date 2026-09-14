@@ -124,6 +124,8 @@
         id_produk: str(i.idProduk, { required: true }),
         harga: num(i.harga, { required: true }),
         kuantitas: num(i.kuantitas, { required: true }),
+        // Baris per rupiah (server 2026-09-14 menghitung ulang kuantitas dari nominal); undefined → hilang dari JSON.
+        nominal: num(i.nominal) > 0 ? num(i.nominal) : undefined,
         diskon_persen: num(i.diskonPersen) === undefined ? 0 : num(i.diskonPersen),
         pajak_persen: num(i.pajakPersen) === undefined ? 0 : num(i.pajakPersen)
       }
@@ -251,7 +253,11 @@
           harga_beli: num(p.hargaBeli),
           harga_jual: num(p.hargaJual, { required: true }),
           barcode: str(p.barcode, { max: 60 }),
-          kelola_stok: p.kelolaStok === undefined ? undefined : !!p.kelolaStok
+          kelola_stok: p.kelolaStok === undefined ? undefined : !!p.kelolaStok,
+          // 2026-09-14: satuan jual, mode input jumlah (null = otomatis ikut satuan), toko yang menjual (kosong = semua).
+          satuan_id: str(p.satuanId),
+          mode_jual: str(p.modeJual, { max: 20 }),
+          toko_ids: Array.isArray(p.tokoIds) ? p.tokoIds.map(function (t) { return str(t, { required: true }) }) : undefined
         })
       }
     },
@@ -267,15 +273,28 @@
             harga_beli: num(p.hargaBeli),
             harga_jual: num(p.hargaJual),
             barcode: str(p.barcode, { max: 60 }),
-            kelola_stok: p.kelolaStok === undefined ? undefined : !!p.kelolaStok
+            kelola_stok: p.kelolaStok === undefined ? undefined : !!p.kelolaStok,
+            satuan_id: str(p.satuanId),
+            // null eksplisit = kembali otomatis; tidak disebut = tidak diubah.
+            mode_jual: 'modeJual' in p ? (str(p.modeJual, { max: 20 }) || null) : undefined
           }
         }
+      }
+    },
+    // Toko yang menjual produk: GET memberi daftar toko + tanda dijual (id toko terenkripsi tak bisa dicocokkan klien).
+    'produk:toko': { permukaan: 'produk.toko', buat: function (p) { return GET('/produk-toko/' + id(p.id)) } },
+    'produk:aturToko': {
+      permukaan: 'produk.aturToko',
+      buat: function (p) {
+        if (!Array.isArray(p.tokoIds)) throw new Error('Daftar toko tidak valid.')
+        return { metode: 'PUT', jalur: '/produk-toko/' + id(p.id), body: { toko_ids: p.tokoIds.map(function (t) { return str(t, { required: true }) }) } }
       }
     },
     'produk:remove': { permukaan: 'produk.remove', buat: function (p) { return { metode: 'DELETE', jalur: '/produk/' + id(p.id) } } },
     'master:kategori': { permukaan: 'master.kategori', buat: function () { return GET('/kategori') } },
     'master:gudang': { permukaan: 'master.gudang', buat: function () { return GET('/gudang') } },
     'master:satuan': { permukaan: 'master.satuan', buat: function () { return GET('/satuan') } },
+    'master:modeJual': { permukaan: 'master.modeJual', buat: function () { return GET('/mode-jual') } },
 
     // Pelanggan
     'pelanggan:list': { permukaan: 'pelanggan.list', buat: function (p) { return GET('/pelanggan', { q: str(p.q, { max: 190 }) }) } },

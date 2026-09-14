@@ -47,6 +47,7 @@ export function buildReceiptText(struk, { kolom = 32, demo = false, company = nu
     bungkus(it.nama).forEach((t) => b.push(t))
     const disk = Number(it.diskon_persen) > 0 ? ` -${fmtNumber(it.diskon_persen)}%` : ''
     dua(`  ${labelKuantitas(it.kuantitas, it.satuan)} x ${fmtIDR(it.harga)}${disk}`, fmtIDR(it.subtotal))
+    if (Number(it.nominal_diminta) > 0) b.push(`  (diminta ${fmtIDR(it.nominal_diminta)})`)
   }
   garis()
   dua('Subtotal', fmtIDR(struk.subtotal))

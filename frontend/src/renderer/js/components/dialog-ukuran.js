@@ -12,7 +12,7 @@
 import { esc, fmtIDR, fmtNumber, parseAmount } from '../utils/format.js'
 import { showModal } from './ui.js'
 import {
-  bulatkanKuantitas, kuantitasDariNominal, langkahSatuan, minimalNominal, totalBaris
+  bolehNominal, bulatkanKuantitas, kuantitasDariNominal, langkahSatuan, minimalNominal, totalBaris
 } from '../lib/satuan-terukur.js'
 
 const PINTASAN_UKURAN = [0.25, 0.5, 1, 2, 5]
@@ -37,7 +37,8 @@ export function tanyaUkuran(produk, {
   labelTambah = 'Tambah ke Keranjang'
 } = {}) {
   const satuan = String(produk.satuan || '').toLowerCase()
-  const hargaSah = harga > 0
+  // Tab Nominal hanya untuk produk yang boleh dijual per rupiah (mode jual dari server; server lama: satuan terukur).
+  const hargaSah = harga > 0 && bolehNominal(produk)
   // Baris terukur selalu MENGGANTI isi baris, jadi batas atasnya stok penuh
   // (bukan stok dikurangi isi keranjang).
   const adaBatas = kelolaStok && Number.isFinite(stok)
@@ -88,8 +89,8 @@ export function tanyaUkuran(produk, {
 
     // Ukuran yang sedang diisi (sudah dibulatkan ke langkah satuannya).
     function qtySekarang() {
-      if (mode === 'ukuran') return bulatkanKuantitas(parseDesimal(inUkuran.value) || 0, satuan)
-      return kuantitasDariNominal(parseAmount(inNominal.value), harga, satuan)
+      if (mode === 'ukuran') return bulatkanKuantitas(parseDesimal(inUkuran.value) || 0, produk)
+      return kuantitasDariNominal(parseAmount(inNominal.value), harga, produk)
     }
 
     function render() {
@@ -104,7 +105,7 @@ export function tanyaUkuran(produk, {
         return
       }
       if (mode === 'nominal' && nominal > 0 && qty <= 0) {
-        view.innerHTML = `<span class="ukur-ringkas__galat">Minimal ${fmtIDR(minimalNominal(harga, satuan))} (${String(langkahSatuan(satuan)).replace('.', ',')} ${esc(satuan)}).</span>`
+        view.innerHTML = `<span class="ukur-ringkas__galat">Minimal ${fmtIDR(minimalNominal(harga, produk))} (${String(langkahSatuan(produk)).replace('.', ',')} ${esc(satuan)}).</span>`
         return
       }
       if (!(qty > 0)) { view.textContent = `${fmtIDR(harga)} / ${satuan}`; return }

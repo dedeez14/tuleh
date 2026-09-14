@@ -131,6 +131,17 @@ const produkToko = (tokoId) => (catalogs[tokoId] || {}).produk || []
 const kategoriToko = (tokoId) => (catalogs[tokoId] || {}).kategori || []
 const produkAktif = () => produkToko(activeTokoId)
 
+// Demo: pilihan mode jual produk (null = otomatis ikut satuan) — bentuk sama dengan ProdukResource server.
+function terapkanModeJualDemo(p, kode) {
+  const peta = { SATUAN: [false, false], UKUR: [true, false], UKUR_NOMINAL: [true, true] }
+  if (!kode || !peta[kode]) {
+    for (const k of ['mode_jual', 'mode_jual_asal', 'desimal', 'boleh_nominal', 'langkah']) delete p[k]
+    return
+  }
+  const [desimal, bolehNominal] = peta[kode]
+  Object.assign(p, { mode_jual: kode, mode_jual_asal: 'PRODUK', desimal, boleh_nominal: bolehNominal, langkah: desimal ? 0.01 : 1 })
+}
+
 function lifecycleStates(tokoId) {
   const m = MANIFESTS[tokoId]
   return m && m.lifecycle && Array.isArray(m.lifecycle.states) ? m.lifecycle.states : []
@@ -1360,7 +1371,7 @@ const handlers = {
 
   // ---------- Produk CRUD (manajemen — §4.1) ----------
 
-  'produk:create': ({ nama, tipe, hargaBeli, hargaJual, barcode, kelolaStok } = {}) => {
+  'produk:create': ({ nama, tipe, hargaBeli, hargaJual, barcode, kelolaStok, satuanId, modeJual } = {}) => {
     if (!nama || !String(nama).trim()) return err(422, 'Nama item wajib diisi.')
     const t = tipe === 'JASA' ? 'JASA' : 'PRODUK'
     const jual = Number(hargaJual)
@@ -1379,13 +1390,19 @@ const handlers = {
       pajak_persen: 0, satuan: 'Pcs', satuan_id: null,
       kategori: kat ? kat.nama : '-', kelola_stok: kelola, stok: 0, gambar: null
     }
+    const sat = SATUAN.find((x) => x.id === satuanId)
+    if (sat) { baru.satuan = sat.nama; baru.satuan_id = sat.id }
+    if (modeJual) terapkanModeJualDemo(baru, modeJual)
     produkAktif().unshift(baru)
     return ok(baru)
   },
 
-  'produk:update': ({ id, nama, hargaBeli, hargaJual, barcode, kelolaStok } = {}) => {
+  'produk:update': ({ id, nama, hargaBeli, hargaJual, barcode, kelolaStok, satuanId, modeJual } = {}) => {
     const p = produkAktif().find((x) => x.id === id)
     if (!p) return err(404, 'Produk tidak ditemukan.')
+    const sat = SATUAN.find((x) => x.id === satuanId)
+    if (sat) { p.satuan = sat.nama; p.satuan_id = sat.id }
+    if (modeJual !== undefined) terapkanModeJualDemo(p, modeJual)
     if (nama !== undefined && String(nama).trim()) p.nama = String(nama).trim()
     if (hargaJual !== undefined) { const v = Number(hargaJual); if (Number.isFinite(v) && v >= 0) p.harga_jual = Math.round(v) }
     if (hargaBeli !== undefined && p.tipe !== 'JASA') { const v = Number(hargaBeli); if (Number.isFinite(v) && v >= 0) p.harga_beli = Math.round(v) }
@@ -1405,6 +1422,23 @@ const handlers = {
   'master:kategori': () => ok(kategoriToko(activeTokoId)),
   'master:gudang': () => ok(GUDANG),
   'master:satuan': () => ok(SATUAN),
+  // Padanan master server pos_mode_jual (demo luring).
+  'master:modeJual': () => ok([
+    { kode: 'SATUAN', nama: 'Per satuan', keterangan: 'Jumlah bulat, mis. 2 pcs.', desimal: false, boleh_nominal: false },
+    { kode: 'UKUR', nama: 'Per ukuran', keterangan: 'Boleh desimal, mis. 1,25 kg.', desimal: true, boleh_nominal: false },
+    { kode: 'UKUR_NOMINAL', nama: 'Per ukuran atau per rupiah', keterangan: 'Desimal, atau isi nominal Rp — jumlah dihitung dari harga.', desimal: true, boleh_nominal: true }
+  ]),
+  // Demo: katalog sudah per toko, jadi hanya toko aktif yang ditampilkan.
+  'produk:toko': ({ id } = {}) => {
+    const p = produkAktif().find((x) => x.id === id)
+    if (!p) return err(404, 'Produk tidak ditemukan.')
+    const toko = TOKOS.find((t) => t.id === activeTokoId)
+    return ok({ semua_toko: true, tokos: toko ? [{ id: toko.id, nama: toko.nama, dijual: false }] : [] })
+  },
+  'produk:aturToko': ({ id } = {}) => {
+    const p = produkAktif().find((x) => x.id === id)
+    return p ? ok(p) : err(404, 'Produk tidak ditemukan.')
+  },
 
   'pelanggan:list': ({ q } = {}) => {
     if (!q) return ok(pelanggan)

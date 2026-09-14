@@ -151,7 +151,20 @@ export const ProductsScreen = {
           <div class="field"><label class="field__label" for="pf-jual">Harga Jual</label><input class="input" inputmode="numeric" id="pf-jual" value="${cur.harga_jual != null ? cur.harga_jual : ''}" placeholder="mis. 12rb" /></div>
         </div>
         <div class="field" id="pf-barcode-wrap"><label class="field__label" for="pf-barcode">Barcode (opsional)</label><input class="input" id="pf-barcode" maxlength="60" value="${esc(cur.barcode || '')}" /></div>
-        <label class="prd-form__check" id="pf-kelola-wrap"><input type="checkbox" id="pf-kelola" ${cur.kelola_stok !== false ? 'checked' : ''} /> <span>Kelola stok barang ini</span></label>`
+        <label class="prd-form__check" id="pf-kelola-wrap"><input type="checkbox" id="pf-kelola" ${cur.kelola_stok !== false ? 'checked' : ''} /> <span>Kelola stok barang ini</span></label>
+        <div class="prd-form__row">
+          <div class="field"><label class="field__label" for="pf-satuan">Satuan</label>
+            <select class="select" id="pf-satuan" disabled><option value="">${esc(cur.satuan && cur.satuan !== '-' ? cur.satuan : 'Memuat…')}</option></select>
+          </div>
+          <div class="field u-hidden" id="pf-mode-wrap"><label class="field__label" for="pf-mode">Cara input di kasir</label>
+            <select class="select" id="pf-mode"><option value="">Otomatis (ikut satuan)</option></select>
+          </div>
+        </div>
+        <div class="field__hint" id="pf-mode-hint"></div>
+        <div class="field u-hidden" id="pf-toko-wrap"><span class="field__label">Dijual di toko</span>
+          <div id="pf-toko-list"></div>
+          <div class="field__hint">Tidak ada yang dicentang = dijual di semua toko.</div>
+        </div>`
 
       const footer = `<button class="btn btn--ghost" data-modal-close type="button">Batal</button><button class="btn btn--primary" id="pf-save" type="button">${isEdit ? 'Simpan' : 'Tambah'}</button>`
       const modal = showModal({ title: isEdit ? 'Edit Item' : 'Tambah Produk / Jasa', body: formEl, footer, size: 'md' })
@@ -165,6 +178,53 @@ export const ProductsScreen = {
       }
       tipeEl.addEventListener('change', syncTipe); syncTipe()
 
+      // Satuan, cara input jumlah (master mode jual server), dan toko yang menjual — dimuat setelah modal terbuka.
+      // Server lama tanpa /mode-jual atau /produk/{id}/toko → kolomnya tetap tersembunyi.
+      const satuanEl = formEl.querySelector('#pf-satuan')
+      const modeEl = formEl.querySelector('#pf-mode')
+      const modeHint = formEl.querySelector('#pf-mode-hint')
+      let modeList = []
+      let tokoAwal = null // null = bagian toko tidak ditampilkan; [] = semua toko
+      const satuanAwal = cur.satuan && cur.satuan !== '-' ? cur.satuan : ''
+      const modeAwal = isEdit && cur.mode_jual_asal === 'PRODUK' ? cur.mode_jual : ''
+      const syncModeHint = () => {
+        const m = modeList.find((x) => x.kode === modeEl.value)
+        modeHint.textContent = m ? (m.keterangan || '') : 'Kg, liter, atau meter otomatis bisa diisi per ukuran dan per rupiah; satuan lain per jumlah bulat.'
+      }
+      modeEl.addEventListener('change', syncModeHint)
+
+      Promise.all([api.master.satuan(), api.master.modeJual ? api.master.modeJual() : Promise.resolve({ ok: false })]).then(([rs, rm]) => {
+        if (!formEl.isConnected) return
+        const satuans = rs.ok ? (rs.data || []) : []
+        satuanEl.innerHTML = (satuanAwal ? '' : '<option value="">Bawaan</option>') + satuans.map((x) =>
+          `<option value="${esc(x.id)}" data-nama="${esc(x.nama)}" ${x.nama === satuanAwal ? 'selected' : ''}>${esc(x.nama)}</option>`).join('')
+        satuanEl.disabled = satuans.length === 0
+        if (rm.ok && Array.isArray(rm.data) && rm.data.length) {
+          modeList = rm.data
+          modeEl.innerHTML = '<option value="">Otomatis (ikut satuan)</option>' + modeList.map((m) =>
+            `<option value="${esc(m.kode)}" ${m.kode === modeAwal ? 'selected' : ''}>${esc(m.nama)}</option>`).join('')
+          formEl.querySelector('#pf-mode-wrap').classList.remove('u-hidden')
+          syncModeHint()
+        }
+      })
+
+      const tokoList = getState().tokoList || []
+      const renderToko = (tokos) => {
+        formEl.querySelector('#pf-toko-list').innerHTML = tokos.map((t) =>
+          `<label class="prd-form__check"><input type="checkbox" data-toko="${esc(t.id)}" ${t.dijual ? 'checked' : ''} /> <span>${esc(t.nama)}</span></label>`).join('')
+        formEl.querySelector('#pf-toko-wrap').classList.remove('u-hidden')
+        tokoAwal = tokos.filter((t) => t.dijual).map((t) => t.id)
+      }
+      if (tokoList.length > 1) {
+        if (!isEdit) renderToko(tokoList.map((t) => ({ id: t.id, nama: t.nama, dijual: false })))
+        else if (api.produk.toko) {
+          api.produk.toko({ id: existing.id }).then((r) => {
+            if (formEl.isConnected && r.ok && r.data && Array.isArray(r.data.tokos) && r.data.tokos.length > 1) renderToko(r.data.tokos)
+          })
+        }
+      }
+      const tokoTerpilih = () => [...formEl.querySelectorAll('[data-toko]')].filter((c) => c.checked).map((c) => c.dataset.toko)
+
       modal.el.querySelector('#pf-save').addEventListener('click', async () => {
         const nama = formEl.querySelector('#pf-nama').value.trim()
         const tipe = tipeEl.value
@@ -176,6 +236,13 @@ export const ProductsScreen = {
         if (!nama) { toast('Isi nama item.', 'error'); return }
         if (!(jual > 0)) { toast('Isi harga jual yang valid.', 'error'); return }
 
+        const opsiSatuan = satuanEl.selectedOptions[0]
+        const satuanId = !satuanEl.disabled && satuanEl.value ? satuanEl.value : undefined
+        const satuanBerubah = satuanId && (opsiSatuan?.dataset.nama || '') !== satuanAwal
+        const modeTampil = !formEl.querySelector('#pf-mode-wrap').classList.contains('u-hidden')
+        const tokoTampil = tokoAwal !== null
+        const toko = tokoTampil ? tokoTerpilih() : []
+
         let r
         if (isEdit) {
           const patch = { id: existing.id } // kirim HANYA yang berubah
@@ -184,9 +251,19 @@ export const ProductsScreen = {
           if (!jasa && beli !== existing.harga_beli) patch.hargaBeli = beli
           if (!jasa && barcode !== (existing.barcode || '')) patch.barcode = barcode
           if (!jasa && kelola !== existing.kelola_stok) patch.kelolaStok = kelola
+          if (satuanBerubah) patch.satuanId = satuanId
+          if (modeTampil && modeEl.value !== modeAwal) patch.modeJual = modeEl.value || null
           r = await api.produk.update(patch)
+          if (r.ok && tokoTampil && (toko.length !== tokoAwal.length || toko.some((t) => !tokoAwal.includes(t)))) {
+            r = await api.produk.aturToko({ id: existing.id, tokoIds: toko })
+          }
         } else {
-          r = await api.produk.create({ nama, tipe, hargaBeli: beli, hargaJual: jual, barcode, kelolaStok: kelola })
+          r = await api.produk.create({
+            nama, tipe, hargaBeli: beli, hargaJual: jual, barcode, kelolaStok: kelola,
+            satuanId,
+            modeJual: modeTampil && modeEl.value ? modeEl.value : undefined,
+            tokoIds: tokoTampil && toko.length ? toko : undefined
+          })
         }
         if (!r.ok) { toast(firstError(r), 'error'); return }
         toast(isEdit ? 'Item diperbarui.' : `"${nama}" ditambahkan.`, 'success')
