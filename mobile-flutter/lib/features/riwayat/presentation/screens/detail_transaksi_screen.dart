@@ -209,6 +209,7 @@ Struk _struk(WidgetRef ref, TransaksiDetail d) {
           kuantitas: it.kuantitas,
           harga: it.harga,
           satuan: apakahTerukur(it.satuan) ? it.satuan : null,
+          nominalDiminta: it.nominalDiminta,
         ),
     ],
     total: d.grandTotal,
@@ -316,6 +317,9 @@ class _ItemRow extends StatelessWidget {
               Text(fmtIDR(item.subtotal)),
             ],
           ),
+          if ((item.nominalDiminta ?? 0) > 0)
+            Text('diminta ${fmtIDR(item.nominalDiminta!)}',
+                style: const TextStyle(color: Colors.grey, fontSize: 12)),
         ],
       ),
     );

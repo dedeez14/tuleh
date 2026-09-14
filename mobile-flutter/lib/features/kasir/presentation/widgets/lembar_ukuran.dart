@@ -60,6 +60,14 @@ class _LembarUkuranState extends State<LembarUkuran> {
   double get _harga => widget.produk.harga;
   bool get _hargaSah => _harga > 0;
 
+  /// Mode jual produk (server) — langkah pembulatan & boleh-tidaknya nominal.
+  PerilakuJual get _perilaku => widget.produk.perilaku;
+
+  /// Tab Nominal hanya untuk produk yang boleh dijual per rupiah (mode
+  /// UKUR_NOMINAL; server lama: satuan terukur) dan harganya sudah diisi —
+  /// membagi dengan nol tidak akan pernah masuk akal.
+  bool get _nominalTersedia => _hargaSah && _perilaku.bolehNominal;
+
   /// Batas atas ukuran. Baris terukur selalu MENGGANTI isi baris, jadi
   /// batasnya stok penuh — bukan stok dikurangi isi keranjang. `null` =
   /// produk tanpa kelola stok (jasa, atau stok tak dilacak).
@@ -73,9 +81,9 @@ class _LembarUkuranState extends State<LembarUkuran> {
   double get _qty {
     if (!_modeNominal) {
       final angka = double.tryParse(_ukuran.text.trim().replaceAll(',', '.')) ?? 0;
-      return bulatkanKuantitas(angka, _satuan);
+      return _perilaku.bulatkan(angka);
     }
-    return kuantitasDariNominal(parseRupiah(_nominal.text), _harga, _satuan);
+    return _perilaku.dariNominal(parseRupiah(_nominal.text), _harga);
   }
 
   double get _total => totalBaris(_qty, _harga);
@@ -140,8 +148,8 @@ class _LembarUkuranState extends State<LembarUkuran> {
                 ),
               const SizedBox(height: 16),
 
-              // Dua cara isi. Nominal dimatikan bila harga belum diisi —
-              // membagi dengan nol tidak akan pernah masuk akal.
+              // Dua cara isi. Nominal dimatikan bila harga belum diisi atau
+              // mode jual produk tidak membolehkan per rupiah.
               SegmentedButton<bool>(
                 segments: [
                   ButtonSegment(
@@ -153,7 +161,7 @@ class _LembarUkuranState extends State<LembarUkuran> {
                     value: true,
                     label: const Text('Nominal'),
                     icon: const Icon(Icons.payments_outlined, size: 18),
-                    enabled: _hargaSah,
+                    enabled: _nominalTersedia,
                   ),
                 ],
                 selected: {_modeNominal},
@@ -173,8 +181,8 @@ class _LembarUkuranState extends State<LembarUkuran> {
                 peringatan: lebihStok
                     ? 'Sisa stok hanya ${fmtQtyRingkas(_sisaStok!)} $_satuan.'
                     : kurangDariMinimal
-                    ? 'Minimal ${fmtIDR(minimalNominal(_harga, _satuan))} '
-                          '(${fmtQtyRingkas(langkahSatuan(_satuan))} $_satuan).'
+                    ? 'Minimal ${fmtIDR(_perilaku.minimalNominal(_harga))} '
+                          '(${fmtQtyRingkas(_perilaku.langkah)} $_satuan).'
                     : null,
               ),
               const SizedBox(height: 14),
@@ -206,7 +214,12 @@ class _LembarUkuranState extends State<LembarUkuran> {
     const SizedBox(height: 10),
     _Pintasan(
       label: (v) => '${fmtQtyRingkas(v)} $_satuan',
-      nilai: const [0.25, 0.5, 1, 2, 5],
+      // Hanya ukuran yang tepat kelipatan langkahnya (Karung per 0,5 tak
+      // menawarkan 0,25).
+      nilai: [
+        for (final v in const [0.25, 0.5, 1.0, 2.0, 5.0])
+          if (_perilaku.bulatkan(v) == v) v,
+      ],
       onPilih: (v) => setState(() => _ukuran.text = fmtQtyRingkas(v)),
     ),
   ];

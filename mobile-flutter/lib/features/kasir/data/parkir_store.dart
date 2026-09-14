@@ -116,6 +116,14 @@ Map<String, dynamic> _produkKeJson(Product p) => {
   'harga_normal': p.hargaNormal,
   'promo': p.promo,
   'gambar': p.gambar,
+  // Mode jual ikut disimpan: keranjang terparkir yang dilanjutkan tetap
+  // menimbang/menerima nominal seperti saat diparkir (cermin parkir.js desktop).
+  'mode_jual': ?p.modeJual,
+  'mode_jual_nama': ?p.modeJualNama,
+  'mode_jual_asal': ?p.modeJualAsal,
+  'desimal': ?p.desimal,
+  'boleh_nominal': ?p.bolehNominal,
+  'langkah': ?p.langkah,
 };
 
 Product? _produkDariJson(dynamic v) {
@@ -137,6 +145,12 @@ Product? _produkDariJson(dynamic v) {
     hargaNormal: (m['harga_normal'] as num?)?.toDouble(),
     promo: m['promo'] == true,
     gambar: m['gambar']?.toString(),
+    modeJual: m['mode_jual']?.toString(),
+    modeJualNama: m['mode_jual_nama']?.toString(),
+    modeJualAsal: m['mode_jual_asal']?.toString(),
+    desimal: m['desimal'] is bool ? m['desimal'] as bool : null,
+    bolehNominal: m['boleh_nominal'] is bool ? m['boleh_nominal'] as bool : null,
+    langkah: (m['langkah'] as num?)?.toDouble(),
   );
 }
 

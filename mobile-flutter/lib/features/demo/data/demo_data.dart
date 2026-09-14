@@ -27,6 +27,43 @@ const demoGudang = [
   {'id': 'GDG-2', 'kode': 'GC', 'nama': 'Gudang Cabang'},
 ];
 
+/// Master satuan — `GET /satuan` (formulir Produk & Jasa).
+const demoSatuan = [
+  {'id': 'SAT-1', 'kode': 'PCS', 'nama': 'Pcs'},
+  {'id': 'SAT-2', 'kode': 'CUP', 'nama': 'Cup'},
+  {'id': 'SAT-3', 'kode': 'PRS', 'nama': 'Porsi'},
+  {'id': 'SAT-4', 'kode': 'BTL', 'nama': 'Botol'},
+  {'id': 'SAT-5', 'kode': 'KG', 'nama': 'Kg'},
+  {'id': 'SAT-6', 'kode': 'UNIT', 'nama': 'Unit'},
+  {'id': 'SAT-7', 'kode': 'LTR', 'nama': 'Liter'},
+  {'id': 'SAT-8', 'kode': 'KRG', 'nama': 'Karung'},
+];
+
+/// Master mode jual — `GET /mode-jual` (padanan tabel server `pos_mode_jual`).
+const demoModeJual = [
+  {
+    'kode': 'SATUAN',
+    'nama': 'Per satuan',
+    'keterangan': 'Jumlah bulat, mis. 2 pcs.',
+    'desimal': false,
+    'boleh_nominal': false,
+  },
+  {
+    'kode': 'UKUR',
+    'nama': 'Per ukuran',
+    'keterangan': 'Boleh desimal, mis. 1,25 kg.',
+    'desimal': true,
+    'boleh_nominal': false,
+  },
+  {
+    'kode': 'UKUR_NOMINAL',
+    'nama': 'Per ukuran atau per rupiah',
+    'keterangan': 'Desimal, atau isi nominal Rp — jumlah dihitung dari harga.',
+    'desimal': true,
+    'boleh_nominal': true,
+  },
+];
+
 const demoPelanggan = [
   {'id': 'CUST-1', 'kode': 'PLG-001', 'nama': 'Budi Santoso', 'telepon': '081234567801'},
   {'id': 'CUST-2', 'kode': 'PLG-002', 'nama': 'Siti Aminah', 'telepon': '081234567802'},

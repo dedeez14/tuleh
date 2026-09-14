@@ -31,17 +31,24 @@ class CartItem {
   final double qty;
   final CaraInput cara;
 
-  /// Rupiah yang diminta pelanggan saat [cara] == nominal. Tidak dikirim ke
-  /// server; dipakai menampilkan "diminta Rp 20.000" bila hasilnya berbeda.
+  /// Rupiah yang diminta pelanggan saat [cara] == nominal. Dipakai menampilkan
+  /// "diminta Rp 20.000" bila hasilnya berbeda, dan dikirim sebagai `nominal`
+  /// saat checkout ([nominalCheckout]) — server 2026-09-14 menghitung ulang
+  /// ukurannya dengan aturan yang sama dan mencatatnya di struk.
   final double? nominalDiminta;
 
   /// Uang baris ini — dibulatkan ke rupiah penuh.
   double get subtotal => totalBaris(qty, product.harga);
 
-  bool get terukur => apakahTerukur(product.satuan);
+  /// Dijual per ukuran — mode jual dari server, atau tebakan satuan (server lama).
+  bool get terukur => product.perilaku.terukur;
 
   /// "0,74 kg" untuk barang terukur, "2" untuk barang hitungan.
-  String get labelQty => terukur ? '${fmtQtyRingkas(qty)} ${product.satuan}' : fmtQtyRingkas(qty);
+  String get labelQty => product.perilaku.label(qty);
+
+  /// `items.*.nominal` checkout: hanya baris yang diisi per rupiah.
+  double? get nominalCheckout =>
+      cara == CaraInput.nominal && (nominalDiminta ?? 0) > 0 ? nominalDiminta : null;
 
   CartItem copyWith({double? qty, CaraInput? cara, double? nominalDiminta}) => CartItem(
     product: product,

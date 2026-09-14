@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 
 import '../../../../core/network/api_error_mapper.dart';
 import '../../../../core/network/api_exception.dart';
+import '../../domain/entities/pilihan_produk.dart';
 import '../../domain/entities/product.dart';
 
 class ProductRemoteDataSource {
@@ -21,7 +22,10 @@ class ProductRemoteDataSource {
   ///
   /// [includeHabis]: sertakan produk berstok 0 (layar kelola produk, agar bisa
   /// direstok); kasir tidak (mengikuti desktop).
-  Future<List<Product>> list({String? query, bool includeHabis = false}) async {
+  ///
+  /// [tipe]: PRODUK | JASA | SEMUA. null = bawaan server — server 2026-09-14
+  /// mengikuti jenis item bidang usaha toko, server lama hanya PRODUK.
+  Future<List<Product>> list({String? query, bool includeHabis = false, String? tipe}) async {
     final hasil = <Product>[];
     for (var halaman = 1; halaman <= _maksHalaman; halaman++) {
       final body = await _send(() => _dio.get<dynamic>(
@@ -29,6 +33,7 @@ class ProductRemoteDataSource {
             queryParameters: {
               if (query != null && query.trim().isNotEmpty) 'q': query.trim(),
               if (includeHabis) 'include_habis': 1,
+              'tipe': ?tipe,
               'per_page': _perHalaman,
               'page': halaman,
             },
@@ -49,13 +54,18 @@ class ProductRemoteDataSource {
   }
 
   /// POST /produk → tambah produk. Kontrak MOVERA: wajib {nama, tipe, harga_jual};
-  /// harga_beli & barcode opsional.
+  /// harga_beli & barcode opsional. Server 2026-09-14 juga menerima
+  /// `satuan_id`, `mode_jual` (tanpa = otomatis ikut satuan), dan `toko_ids`
+  /// (tanpa/kosong = dijual di semua toko); server lama mengabaikannya.
   Future<void> create({
     required String nama,
     required String tipe,
     required double hargaJual,
     double? hargaBeli,
     String? barcode,
+    String? satuanId,
+    String? modeJual,
+    List<String>? tokoIds,
   }) async {
     await _send(() => _dio.post<dynamic>('/produk', data: {
           'nama': nama,
@@ -63,24 +73,97 @@ class ProductRemoteDataSource {
           'harga_jual': hargaJual,
           'harga_beli': ?hargaBeli,
           if (barcode != null && barcode.trim().isNotEmpty) 'barcode': barcode.trim(),
+          if (satuanId != null && satuanId.isNotEmpty) 'satuan_id': satuanId,
+          if (modeJual != null && modeJual.isNotEmpty) 'mode_jual': modeJual,
+          if (tokoIds != null && tokoIds.isNotEmpty) 'toko_ids': tokoIds,
         }));
   }
 
   /// PATCH /produk/{id} → ubah sebagian field (PUT tak didukung server).
+  ///
+  /// [modeJual]: null = tidak diubah; `''` = kembali otomatis ikut satuan
+  /// (dikirim `mode_jual: null`).
   Future<void> update({
     required String id,
     String? nama,
     double? hargaJual,
     double? hargaBeli,
     String? barcode,
+    String? satuanId,
+    String? modeJual,
   }) async {
     final data = <String, dynamic>{
       'nama': ?nama,
       'harga_jual': ?hargaJual,
       'harga_beli': ?hargaBeli,
       'barcode': ?barcode,
+      'satuan_id': ?satuanId,
+      if (modeJual != null) 'mode_jual': modeJual.isEmpty ? null : modeJual,
     };
     await _send(() => _dio.patch<dynamic>('/produk/$id', data: data));
+  }
+
+  /// GET /satuan → master satuan untuk formulir produk.
+  Future<List<SatuanPilihan>> satuan() async {
+    final body = await _send(() => _dio.get<dynamic>('/satuan'));
+    final data = body['data'];
+    return [
+      if (data is List)
+        for (final e in data)
+          if (e is Map && e['id'] != null)
+            SatuanPilihan(
+              id: e['id'].toString(),
+              nama: (e['nama'] ?? e['kode'] ?? '-').toString(),
+              kode: e['kode']?.toString(),
+            ),
+    ];
+  }
+
+  /// GET /mode-jual → master cara input jumlah di kasir (server 2026-09-14).
+  Future<List<ModeJualPilihan>> modeJual() async {
+    final body = await _send(() => _dio.get<dynamic>('/mode-jual'));
+    final data = body['data'];
+    return [
+      if (data is List)
+        for (final e in data)
+          if (e is Map && e['kode'] != null)
+            ModeJualPilihan(
+              kode: e['kode'].toString(),
+              nama: (e['nama'] ?? e['kode']).toString(),
+              keterangan: e['keterangan']?.toString(),
+              desimal: _bool(e['desimal']) ?? false,
+              bolehNominal: _bool(e['boleh_nominal']) ?? false,
+            ),
+    ];
+  }
+
+  /// GET /produk-toko/{id} → toko (dalam skop pengguna) + tanda dijual.
+  Future<TokoProdukDaftar> tokoProduk(String id) async {
+    final body = await _send(() => _dio.get<dynamic>('/produk-toko/${Uri.encodeComponent(id)}'));
+    final data = body['data'];
+    final m = data is Map ? data : const {};
+    final tokos = m['tokos'];
+    return (
+      semuaToko: m['semua_toko'] == true,
+      tokos: [
+        if (tokos is List)
+          for (final t in tokos)
+            if (t is Map && t['id'] != null)
+              TokoProduk(
+                id: t['id'].toString(),
+                nama: (t['nama'] ?? '-').toString(),
+                dijual: t['dijual'] == true,
+              ),
+      ],
+    );
+  }
+
+  /// PUT /produk-toko/{id} → atur toko yang menjual produk; kosong = semua toko.
+  Future<void> aturToko(String id, List<String> tokoIds) async {
+    await _send(() => _dio.put<dynamic>(
+          '/produk-toko/${Uri.encodeComponent(id)}',
+          data: {'toko_ids': tokoIds},
+        ));
   }
 
   // ---- helper ----
@@ -107,6 +190,14 @@ class ProductRemoteDataSource {
   double _double(dynamic v) =>
       v is num ? v.toDouble() : double.tryParse('${v ?? ''}') ?? 0;
 
+  static bool? _bool(dynamic v) {
+    if (v == null) return null;
+    if (v is bool) return v;
+    if (v is num) return v != 0;
+    final s = '$v'.trim().toLowerCase();
+    return s == 'true' || s == '1';
+  }
+
   Product _product(Map<String, dynamic> m) {
     final kat = m['kategori'];
     final katNama = kat is Map ? (kat['nama'] ?? kat['name']) : kat;
@@ -115,6 +206,7 @@ class ProductRemoteDataSource {
     final hargaJual = _double(m['harga_jual'] ?? m['harga'] ?? m['price']);
     final promo = m['promo_aktif'] == true && m['harga_efektif'] != null;
     final gambar = m['gambar']?.toString();
+    final modeJual = m['mode_jual']?.toString();
     return Product(
       id: (m['id'] ?? '').toString(),
       nama: (m['nama'] ?? m['name'] ?? '-').toString(),
@@ -128,6 +220,13 @@ class ProductRemoteDataSource {
       kategori: katNama?.toString(),
       barcode: m['barcode']?.toString(),
       stok: m['stok'] == null ? null : _double(m['stok']),
+      // Aditif server 2026-09-14; server lama tidak mengirimnya → semua null.
+      modeJual: modeJual == null || modeJual.isEmpty ? null : modeJual,
+      modeJualNama: m['mode_jual_nama']?.toString(),
+      modeJualAsal: m['mode_jual_asal']?.toString(),
+      desimal: _bool(m['desimal']),
+      bolehNominal: _bool(m['boleh_nominal']),
+      langkah: m['langkah'] == null ? null : _double(m['langkah']),
     );
   }
 }

@@ -60,4 +60,50 @@ void main() {
     expect(labelKuantitas(2, 'pcs'), '2', reason: 'barang hitungan tanpa satuan');
     expect(labelKuantitas(3, null), '3');
   });
+
+  // Server 2026-09-14 mengirim perilaku jual per produk (mode jual master,
+  // satuan terukur, bidang usaha toko) — padanan test JS satuan-terukur.test.js.
+  test('perilaku jual dari server menang atas tebakan nama satuan', () {
+    final karung = PerilakuJual.dari(
+      satuan: 'Karung', modeJual: 'UKUR', desimal: true, bolehNominal: false, langkah: 0.5,
+    );
+    expect(karung.terukur, isTrue, reason: 'satuan tak dikenal tetap terukur bila server bilang UKUR');
+    expect(karung.bolehNominal, isFalse);
+    expect(karung.langkah, 0.5);
+    expect(karung.bulatkan(1.3), 1.5);
+    expect(karung.label(1.5), '1,5 Karung');
+
+    final kgSatuan = PerilakuJual.dari(
+      satuan: 'kg', modeJual: 'SATUAN', desimal: false, bolehNominal: false, langkah: 1,
+    );
+    expect(kgSatuan.terukur, isFalse, reason: 'produk kg yang dipaksa per satuan tidak membuka lembar ukuran');
+    expect(kgSatuan.label(2), '2');
+
+    final laundry = PerilakuJual.dari(
+      satuan: 'Kg', modeJual: 'UKUR_NOMINAL', desimal: true, bolehNominal: true, langkah: 0.01,
+    );
+    expect(laundry.bolehNominal, isTrue);
+    // Sama dengan server PosModeJualProduk::kuantitasDariNominal: Rp 20.000 @ Rp 7.000/kg → 2,85 kg.
+    expect(laundry.dariNominal(20000, 7000), 2.85);
+    expect(totalBaris(2.85, 7000), 19950);
+  });
+
+  test('produk tanpa mode_jual (server lama) memakai tabel satuan; ekor float tak menjatuhkan satu langkah', () {
+    expect(PerilakuJual.dari(satuan: 'kg').terukur, isTrue);
+    expect(PerilakuJual.dari(satuan: 'pcs').bolehNominal, isFalse);
+    expect(PerilakuJual.dari(satuan: 'kg').bolehNominal, isTrue);
+    final ons = PerilakuJual.dari(
+      satuan: 'ons', modeJual: 'UKUR_NOMINAL', desimal: true, bolehNominal: true, langkah: 0.1,
+    );
+    expect(ons.dariNominal(3000, 10000), 0.3, reason: '0.3 / 0.1 = 2.9999999999999996 tetap 3 langkah');
+    expect(bulatkanKuantitas(0.3, 'ons', keBawah: true), 0.3);
+  });
+
+  test('mode terukur tanpa langkah sah jatuh ke 1; mode SATUAN tak pernah boleh nominal', () {
+    final tanpaLangkah = PerilakuJual.dari(satuan: 'Ikat', modeJual: 'UKUR', desimal: true, langkah: 0);
+    expect(tanpaLangkah.langkah, 1);
+    final aneh = PerilakuJual.dari(satuan: 'Pcs', modeJual: 'SATUAN', desimal: false, bolehNominal: true);
+    expect(aneh.bolehNominal, isFalse, reason: 'nominal hanya untuk barang terukur');
+    expect(aneh.langkah, 1);
+  });
 }

@@ -89,6 +89,9 @@ class CheckoutRepository {
           'id_produk': e.product.id,
           'kuantitas': e.qty,
           'harga': e.product.harga,
+          // Baris per rupiah: server 2026-09-14 menghitung ulang kuantitas dari
+          // nominal (harga katalog) & mencatatnya; server lama mengabaikannya.
+          'nominal': ?e.nominalCheckout,
           if (diskonPersen > 0) 'diskon_persen': diskonPersen,
         },
     ];

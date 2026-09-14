@@ -6,6 +6,7 @@ class TrxItem {
     required this.harga,
     required this.subtotal,
     this.satuan,
+    this.nominalDiminta,
   });
 
   final String nama;
@@ -15,6 +16,10 @@ class TrxItem {
 
   /// Satuan dari server — cetak ulang struk lama tetap menyebut "0,74 Kg".
   final String? satuan;
+
+  /// Rupiah yang diminta pelanggan pada baris per nominal (server
+  /// 2026-09-14: `nominal_diminta`); null untuk baris biasa / server lama.
+  final double? nominalDiminta;
 }
 
 /// Detail transaksi lengkap (`/transaksi/{id}`) — dipakai tampilan struk.

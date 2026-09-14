@@ -86,6 +86,9 @@ class StrukEscPos {
           fmtIDR(baris.subtotal),
         ),
       );
+      if ((baris.nominalDiminta ?? 0) > 0) {
+        b.addAll(g.text('  (diminta ${fmtIDR(baris.nominalDiminta!)})'));
+      }
     }
     b.addAll(g.hr());
 
@@ -217,6 +220,7 @@ class StrukEscPos {
           '  ${b.labelKuantitas} x ${fmtIDR(b.harga)}',
           fmtIDR(b.subtotal),
         ),
+        if ((b.nominalDiminta ?? 0) > 0) '  (diminta ${fmtIDR(b.nominalDiminta!)})',
       ],
       '-' * _kolom,
       _pasangan('TOTAL', fmtIDR(s.total)),

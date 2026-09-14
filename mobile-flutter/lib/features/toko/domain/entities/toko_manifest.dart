@@ -34,6 +34,7 @@ class TokoManifest {
     this.lifecycleStates = const [],
     this.stationTypes = const [],
     this.paymentModes = const [],
+    this.jenisItem,
   });
 
   final String? verticalCode;
@@ -45,6 +46,11 @@ class TokoManifest {
   final List<String> lifecycleStates;
   final List<StationType> stationTypes;
   final List<String> paymentModes;
+
+  /// Jenis item katalog kasir menurut bidang usaha (`item_config.jenis_item`,
+  /// dari master server 2026-09-14): `["PRODUK"]` atau `["JASA","PRODUK"]`.
+  /// null = server lama belum mengirimnya.
+  final List<String>? jenisItem;
 
   /// Route_key menu yang membuka papan pesanan (KDS / Antrian / Papan Proses).
   static const papanRouteKeys = {'dapur', 'antrian', 'proses'};
@@ -104,6 +110,9 @@ class TokoManifest {
       }
     }
 
+    final itemConfig = raw['item_config'];
+    final rawJenis = itemConfig is Map ? itemConfig['jenis_item'] : null;
+
     return TokoManifest(
       verticalCode: raw['vertical_code']?.toString(),
       menus: menus,
@@ -112,6 +121,9 @@ class TokoManifest {
       lifecycleStates: states,
       stationTypes: stations,
       paymentModes: _strings(raw['payment_modes']),
+      jenisItem: rawJenis is List
+          ? [for (final e in rawJenis) if (e != null) e.toString().toUpperCase()]
+          : null,
     );
   }
 

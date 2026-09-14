@@ -8,6 +8,8 @@ class StrukBaris {
     required this.kuantitas,
     required this.harga,
     this.satuan,
+    this.nominalDiminta,
+    this.dijualPerUkuran,
   });
 
   final String nama;
@@ -18,11 +20,25 @@ class StrukBaris {
   /// "0,74 Kg", bukan "0,74" yang menggantung. Null untuk barang hitungan.
   final String? satuan;
 
+  /// Rupiah yang diminta pelanggan (baris per nominal) — dicetak
+  /// "(diminta Rp 20.000)" di bawah barisnya. Null untuk baris biasa.
+  final double? nominalDiminta;
+
+  /// Penanda terukur dari mode jual produk (server 2026-09-14): satuan yang
+  /// tak ada di tabel ("Karung") tetap dicetak sebagai ukuran. Null = tebak
+  /// dari [satuan].
+  final bool? dijualPerUkuran;
+
   /// Baris yang dijual per ukuran (satuannya ikut dicetak).
-  bool get terukur => ukur.apakahTerukur(satuan);
+  bool get terukur => dijualPerUkuran ?? ukur.apakahTerukur(satuan);
 
   /// "0,74 Kg" atau "2" — dipakai struk teks & ESC/POS.
-  String get labelKuantitas => ukur.labelKuantitas(kuantitas, satuan);
+  String get labelKuantitas => ukur.PerilakuJual(
+    terukur: terukur,
+    bolehNominal: false,
+    langkah: 1,
+    satuan: satuan ?? '',
+  ).label(kuantitas);
 
   double get subtotal => harga * kuantitas;
 }
@@ -91,7 +107,14 @@ class Struk {
     'kasir': kasir,
     'baris': [
       for (final b in baris)
-        {'nama': b.nama, 'kuantitas': b.kuantitas, 'harga': b.harga},
+        {
+          'nama': b.nama,
+          'kuantitas': b.kuantitas,
+          'harga': b.harga,
+          'satuan': ?b.satuan,
+          'terukur': ?b.dijualPerUkuran,
+          'nominal_diminta': ?b.nominalDiminta,
+        },
     ],
     'total': total,
     'metode': metode,
@@ -122,6 +145,9 @@ class Struk {
                 nama: (b['nama'] ?? '-').toString(),
                 kuantitas: (b['kuantitas'] as num?) ?? 0,
                 harga: d(b['harga']) ?? 0,
+                satuan: b['satuan']?.toString(),
+                nominalDiminta: d(b['nominal_diminta']),
+                dijualPerUkuran: b['terukur'] is bool ? b['terukur'] as bool : null,
               ),
       ],
       total: d(j['total']) ?? 0,

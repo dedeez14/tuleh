@@ -5,6 +5,13 @@ sebagai isi Release GitHub (workflow flutter-release.yml), dan empat baris
 pertamanya tampil di banner pembaruan dalam aplikasi. Tulis untuk kasir, bukan
 untuk programmer.
 
+## 2.28.0
+
+- **Produk di kasir mengikuti toko yang dipilih.** Toko laundry, salon, atau bengkel langsung menampilkan layanan jasa; minimarket hanya barang. Produk yang ditugaskan ke toko lain tidak muncul — produk tanpa pengaturan toko tetap tampil di semua toko.
+- **Cara input jumlah mengikuti produknya.** Cuci kiloan atau beras bisa diisi per kg atau per rupiah ("beli Rp 20.000"); barang satuan tetap per jumlah bulat. Pemilik bisa mengubahnya per produk di Produk & Jasa → Cara input di kasir.
+- Form Produk & Jasa kini bisa memilih satuan dan toko yang menjual produk.
+- Struk dan riwayat menampilkan nominal yang diminta pelanggan, mis. "2,85 kg (diminta Rp 20.000)".
+
 ## 2.27.0
 
 - **Jualan per kilo & "beli sekian rupiah".** Untuk barang bersatuan Kg / liter / meter / ons, mengetuk produk kini menanyakan ukurannya — atau berapa rupiah yang diminta pelanggan. Contoh: mangga Rp 27.000/kg, pelanggan minta Rp 20.000 → aplikasi menghitung 0,74 kg dan menagih Rp 19.980, ditampilkan lengkap sebelum masuk keranjang sehingga kasir bisa langsung menyebutkannya.

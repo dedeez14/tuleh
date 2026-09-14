@@ -71,7 +71,7 @@ class _KasirScreenState extends ConsumerState<KasirScreen> {
   Future<void> _tambah(Product p) async {
     // Barang yang dijual per kilo/liter/meter tidak masuk akal ditambah "1"
     // sekali ketuk — tanyakan ukurannya (atau nominal yang diminta pelanggan).
-    if (apakahTerukur(p.satuan)) {
+    if (p.perilaku.terukur) {
       final isian = await tanyaUkuran(context, p);
       if (isian == null || !mounted) return;
       ref.read(cartControllerProvider.notifier).tambahUkuran(
@@ -112,7 +112,7 @@ class _KasirScreenState extends ConsumerState<KasirScreen> {
     await PindaiBarcodeScreen.beruntun(context, onKode: (kode) async {
       final produk = await _cariBarcode(kode);
       if (produk == null) return null;
-      if (apakahTerukur(produk.satuan)) {
+      if (produk.perilaku.terukur) {
         perluUkuran = produk;
         if (mounted) Navigator.of(context, rootNavigator: true).pop();
         return '${produk.nama} · isi ukurannya';
@@ -132,7 +132,8 @@ class _KasirScreenState extends ConsumerState<KasirScreen> {
     for (final p in termuat) {
       if (cocok(p)) return p;
     }
-    final r = await ref.read(productRepositoryProvider).list(query: k);
+    final tipe = ref.read(tipeKatalogKasirProvider).valueOrNull;
+    final r = await ref.read(productRepositoryProvider).list(query: k, tipe: tipe);
     return r.when(
       ok: (list) {
         for (final p in list) {
@@ -581,10 +582,10 @@ class _KartuProduk extends StatelessWidget {
               AnimatedSwitcher(
                 duration: Gerak.cepat,
                 child: _diKeranjang
-                    ? (apakahTerukur(product.satuan)
+                    ? (product.perilaku.terukur
                           ? _TombolUbahUkuran(
                               key: const ValueKey('ukuran'),
-                              label: '${fmtQtyRingkas(qty)} ${product.satuan}',
+                              label: product.perilaku.label(qty),
                               onTekan: onUbahUkuran,
                             )
                           : _PengaturJumlah(

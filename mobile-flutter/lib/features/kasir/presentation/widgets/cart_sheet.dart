@@ -111,6 +111,8 @@ class _CartSheetState extends ConsumerState<CartSheet> {
               kuantitas: e.qty,
               harga: e.product.harga,
               satuan: e.terukur ? e.product.satuan : null,
+              dijualPerUkuran: e.terukur,
+              nominalDiminta: e.nominalCheckout,
             ),
         ],
         total: total,

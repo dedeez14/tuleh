@@ -332,12 +332,12 @@ class _AddPesananSheetState extends ConsumerState<_AddPesananSheet> {
   /// Baris terukur dihitung satu item — "0,74 kg" bukan nol item.
   int get _count => _qty.entries.fold(0, (s, e) {
     if (e.value <= 0) return s;
-    return s + (apakahTerukur(_prod[e.key]?.satuan) ? 1 : e.value.round());
+    return s + ((_prod[e.key]?.perilaku.terukur ?? false) ? 1 : e.value.round());
   });
 
   /// Barang per kilo/liter/meter: tanya ukurannya, jangan menambah "1".
   Future<void> _pilih(Product p) async {
-    if (!apakahTerukur(p.satuan)) {
+    if (!p.perilaku.terukur) {
       setState(() => _qty[p.id] = (_qty[p.id] ?? 0) + 1);
       return;
     }
@@ -423,10 +423,11 @@ class _AddPesananSheetState extends ConsumerState<_AddPesananSheet> {
                     final p = list[i];
                     _prod[p.id] = p;
                     final q = _qty[p.id] ?? 0;
+                    final terukur = p.perilaku.terukur;
                     return ListTile(
                       contentPadding: EdgeInsets.zero,
                       title: Text(p.nama),
-                      subtitle: Text(apakahTerukur(p.satuan)
+                      subtitle: Text(terukur
                           ? '${fmtIDR(p.harga)} / ${p.satuan}'
                           : fmtIDR(p.harga)),
                       trailing: q == 0
@@ -434,10 +435,10 @@ class _AddPesananSheetState extends ConsumerState<_AddPesananSheet> {
                               icon: const Icon(Icons.add_circle, color: AppColors.mint600),
                               onPressed: () => _pilih(p),
                             )
-                          : apakahTerukur(p.satuan)
+                          : terukur
                           ? ActionChip(
                               avatar: const Icon(Icons.scale_outlined, size: 16, color: AppColors.mint600),
-                              label: Text(labelKuantitas(q, p.satuan),
+                              label: Text(p.perilaku.label(q),
                                   style: const TextStyle(fontWeight: FontWeight.w700)),
                               onPressed: () => _pilih(p),
                               tooltip: 'Ubah ukuran',

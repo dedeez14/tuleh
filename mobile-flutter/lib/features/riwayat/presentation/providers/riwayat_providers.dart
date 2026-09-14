@@ -89,6 +89,7 @@ final transaksiDetailProvider =
             harga: b.harga,
             subtotal: b.subtotal,
             satuan: b.satuan,
+            nominalDiminta: b.nominalDiminta,
           ),
       ],
     );

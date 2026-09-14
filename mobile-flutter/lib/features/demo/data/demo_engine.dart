@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import '../../../core/utils/format.dart';
+import '../../../core/utils/satuan_terukur.dart';
 
 import 'demo_data.dart';
 
@@ -420,6 +421,22 @@ class DemoEngine {
     if (seg.length == 2 && seg[0] == 'produk' && m == 'PATCH') {
       return _ubahProduk(toko, seg[1], data);
     }
+    if (path == '/satuan') return _ok(demoSatuan);
+    if (path == '/mode-jual') return _ok(demoModeJual);
+    // Toko yang menjual produk. Katalog demo sudah per toko, jadi hanya toko
+    // aktif yang ditampilkan dan PUT tidak memindahkan apa pun (sama dengan desktop).
+    if (seg.length == 2 && seg[0] == 'produk-toko') {
+      final p = _cariProduk(toko, Uri.decodeComponent(seg[1]));
+      if (p == null) return _err(404, 'Produk tidak ditemukan.');
+      if (m == 'PUT') return _ok(p);
+      return _ok({
+        'semua_toko': true,
+        'tokos': [
+          for (final t in demoTokos)
+            if (t['id'] == toko) {'id': t['id'], 'nama': t['nama'], 'dijual': false},
+        ],
+      });
+    }
 
     // --- pelanggan ---
     if (path == '/pelanggan' && m == 'GET') return _ok(_pelanggan);
@@ -702,6 +719,8 @@ class DemoEngine {
       'stok': 0,
       'gambar': null,
     };
+    _terapkanSatuan(baru, data['satuan_id']);
+    _terapkanModeJual(baru, data['mode_jual']);
     katalog.add(baru);
     return _ok(baru, status: 201);
   }
@@ -712,8 +731,65 @@ class DemoEngine {
     for (final k in ['nama', 'harga_jual', 'harga_beli', 'barcode']) {
       if (data.containsKey(k)) p[k] = data[k];
     }
+    _terapkanSatuan(p, data['satuan_id']);
+    if (data.containsKey('mode_jual')) {
+      _terapkanModeJual(p, data['mode_jual']); // null = kembali otomatis
+    } else if (p['mode_jual_asal'] == 'PRODUK') {
+      _terapkanModeJual(p, p['mode_jual']); // satuan berganti → langkah ikut
+    }
     return _ok(p);
   }
+
+  static void _terapkanSatuan(Map<String, dynamic> p, Object? satuanId) {
+    for (final s in demoSatuan) {
+      if (s['id'] == satuanId) {
+        p['satuan'] = s['nama'];
+        p['satuan_id'] = s['id'];
+      }
+    }
+  }
+
+  static const _kunciModeJual = [
+    'mode_jual',
+    'mode_jual_nama',
+    'mode_jual_asal',
+    'desimal',
+    'boleh_nominal',
+    'langkah',
+  ];
+
+  /// Pilihan mode jual produk (null/tak dikenal = otomatis ikut satuan) —
+  /// bentuk sama dengan ProdukResource server. Langkah dari tabel satuan
+  /// seperti server `PosModeJualProduk::langkahSatuan` (bawaan 0,01).
+  static void _terapkanModeJual(Map<String, dynamic> p, Object? kode) {
+    Map<String, Object>? mode;
+    for (final x in demoModeJual) {
+      if (x['kode'] == kode) mode = x;
+    }
+    if (mode == null) {
+      _kunciModeJual.forEach(p.remove);
+      return;
+    }
+    final desimal = mode['desimal'] == true;
+    final dariSatuan = PerilakuJual.dariSatuan(p['satuan']?.toString());
+    p.addAll({
+      'mode_jual': mode['kode'],
+      'mode_jual_nama': mode['nama'],
+      'mode_jual_asal': 'PRODUK',
+      'desimal': desimal,
+      'boleh_nominal': mode['boleh_nominal'] == true,
+      'langkah': desimal ? (dariSatuan.terukur ? dariSatuan.langkah : 0.01) : 1,
+    });
+  }
+
+  /// Perilaku jual produk demo: mode pilihan bila ada, selain itu dari satuan.
+  static PerilakuJual _perilaku(Map<String, dynamic> p) => PerilakuJual.dari(
+    satuan: p['satuan']?.toString(),
+    modeJual: p['mode_jual']?.toString(),
+    desimal: p['desimal'] as bool?,
+    bolehNominal: p['boleh_nominal'] as bool?,
+    langkah: (p['langkah'] as num?)?.toDouble(),
+  );
 
   DemoResponse _checkout(String toko, Map<String, dynamic> data) {
     if (_sesiAktif(toko) == null) {
@@ -734,10 +810,28 @@ class DemoEngine {
       if (raw is! Map) continue;
       final p = _cariProduk(toko, '${raw['id_produk']}');
       if (p == null) return _err(422, 'Item tidak ditemukan di katalog.');
-      final qty = (raw['kuantitas'] as num?)?.toDouble() ?? 0;
-      if (qty <= 0) return _err(422, 'Kuantitas "${p['nama']}" tidak valid.');
-      final harga = (raw['harga'] as num?)?.toDouble() ??
+      var qty = (raw['kuantitas'] as num?)?.toDouble() ?? 0;
+      var harga = (raw['harga'] as num?)?.toDouble() ??
           (p['harga_jual'] as num).toDouble();
+      // Sama dengan server 2026-09-14: baris per nominal dihitung ulang dari
+      // harga katalog; mode per satuan menolak jumlah pecahan.
+      final perilaku = _perilaku(p);
+      final nominal = (raw['nominal'] as num?)?.toDouble();
+      if (nominal != null && nominal > 0) {
+        if (!perilaku.bolehNominal) {
+          return _err(422, 'Produk ${p['nama']} tidak dapat dijual per nominal.');
+        }
+        harga = (p['harga_jual'] as num).toDouble();
+        qty = perilaku.dariNominal(nominal, harga);
+        if (qty <= 0) {
+          return _err(422,
+              'Nominal untuk ${p['nama']} terlalu kecil (minimal ${fmtIDR(perilaku.minimalNominal(harga))}).');
+        }
+      }
+      if (qty <= 0) return _err(422, 'Kuantitas "${p['nama']}" tidak valid.');
+      if (!perilaku.terukur && qty != qty.roundToDouble()) {
+        return _err(422, 'Jumlah ${p['nama']} harus bilangan bulat.');
+      }
       final diskonPersen = (raw['diskon_persen'] as num?)?.toDouble() ?? 0;
       final bruto = harga * qty;
       final diskon = (bruto * diskonPersen / 100 * 100).round() / 100;
@@ -751,6 +845,8 @@ class DemoEngine {
         'harga': harga,
         'diskon_persen': diskonPersen,
         'subtotal': subtotal,
+        'satuan': p['satuan'],
+        'nominal_diminta': nominal != null && nominal > 0 ? nominal : null,
       });
       // Sparepart/produk berstok berkurang; jasa tidak. Server menolak bila
       // stok tidak cukup, jadi demo harus menolak juga — bukan menjepit ke 0
