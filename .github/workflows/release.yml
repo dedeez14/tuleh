@@ -137,7 +137,12 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - uses: android-actions/setup-android@v3
+      # setup-android kadang gagal sementara (unduhan SDK); coba sekali lagi sebelum menyerah.
+      - id: sdk1
+        uses: android-actions/setup-android@v3
+        continue-on-error: true
+      - if: steps.sdk1.outcome == 'failure'
+        uses: android-actions/setup-android@v3
       - name: Rakit www/ (renderer + qrcode + demo shim + overlay mobile)
         run: |
           set -e

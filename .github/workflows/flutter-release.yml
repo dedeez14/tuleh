@@ -152,7 +152,12 @@ jobs:
           channel: stable
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
-      - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
+      # setup-android kadang gagal sementara (unduhan SDK); coba sekali lagi sebelum menyerah.
+      - id: sdk1
+        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
+        continue-on-error: true
+      - if: steps.sdk1.outcome == 'failure'
+        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
       - name: Pasang platform Android 36 (override compileSdk 36 utk flutter_secure_storage 11)
         run: yes | sdkmanager "platforms;android-36" "build-tools;36.0.0" >/dev/null || true
       - name: flutter pub get
