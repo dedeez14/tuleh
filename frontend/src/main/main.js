@@ -2,9 +2,25 @@
 
 const fs = require('node:fs')
 const path = require('node:path')
-const { app, BrowserWindow, Menu, shell } = require('electron')
+const { app, BrowserWindow, Menu, shell, session } = require('electron')
+// Log berkas SEDINI mungkin: galat saat memuat modul lain pun tercatat.
+const diagnostik = require('./diagnostik')
+diagnostik.mulaiLog()
 const { registerIpcHandlers } = require('./ipc')
 const gateway = require('./gateway')
+const { urlHttpsAman } = require('./lib/url-aman')
+const { izinkan } = require('./lib/izin')
+
+// Galat proses utama yang lolos → log + laporan dukungan (antre bila offline).
+// Aplikasi tetap berjalan: kasir di tengah transaksi tidak boleh tertutup mendadak.
+process.on('uncaughtException', (err) => {
+  console.error('[crash] uncaughtException:', err)
+  diagnostik.lapor({ jenis: 'crash', pesan: (err && err.message) || String(err), stack: (err && err.stack) || '', konteks: { sumber: 'main' } })
+})
+process.on('unhandledRejection', (alasan) => {
+  console.error('[galat] unhandledRejection:', alasan)
+  diagnostik.lapor({ jenis: 'error', pesan: (alasan && alasan.message) || String(alasan), stack: (alasan && alasan.stack) || '', konteks: { sumber: 'main' } })
+})
 
 const IS_SMOKE = process.env.IPOS_SMOKE === '1'
 
@@ -42,13 +58,30 @@ if (!app.requestSingleInstanceLock()) {
 
     mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'))
     mainWindow.once('ready-to-show', () => mainWindow.show())
+
+    // Log renderer → logs/renderer.log (Electron ≥35: properti di objek event; lama: argumen posisi).
+    mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+      const e = event && typeof event === 'object' ? event : {}
+      const lv = e.level !== undefined ? e.level : level
+      const teks = e.message !== undefined ? e.message : message
+      const tingkat = ['info', 'info', 'warn', 'error'][Number(lv)] || String(lv)
+      diagnostik.log('renderer', tingkat, `${teks} (${e.sourceId || sourceId || ''}:${e.lineNumber || line || ''})`)
+    })
+    mainWindow.webContents.on('render-process-gone', (_event, details) => {
+      diagnostik.lapor({
+        jenis: 'crash',
+        pesan: `Renderer berhenti: ${details && details.reason} (kode ${details && details.exitCode})`,
+        konteks: { sumber: 'renderer', layar: 'jendela-kasir' }
+      })
+    })
     // Tutup Display Pelanggan bila window kasir ditutup (agar app bisa quit).
     mainWindow.on('closed', () => { require('./customer-window').close() })
 
     // Keamanan: tidak ada navigasi keluar dari aplikasi & tidak ada window baru.
     // Tautan https eksternal dibuka di browser OS.
     mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-      if (url.startsWith('https://')) shell.openExternal(url)
+      const aman = urlHttpsAman(url)
+      if (aman) shell.openExternal(aman)
       return { action: 'deny' }
     })
     mainWindow.webContents.on('will-navigate', (event) => event.preventDefault())
@@ -114,16 +147,23 @@ if (!app.requestSingleInstanceLock()) {
   if (process.platform === 'win32') app.setAppUserModelId('com.movera.mpos')
   app.whenReady().then(() => {
     Menu.setApplicationMenu(null)
+
+    // Izin Chromium: tolak semua kecuali yang dipakai (lib/izin.js).
+    const asalPeminta = (wc, details) => (details && (details.requestingUrl || details.embeddingOrigin)) || (wc && !wc.isDestroyed() ? wc.getURL() : '')
+    session.defaultSession.setPermissionRequestHandler((wc, permission, callback, details) => {
+      const boleh = izinkan(permission, { asalUrl: asalPeminta(wc, details), webContentsId: wc ? wc.id : null })
+      if (!boleh) console.warn('[izin] ditolak:', permission, asalPeminta(wc, details))
+      callback(boleh)
+    })
+    session.defaultSession.setPermissionCheckHandler((wc, permission, requestingOrigin, details) => {
+      return izinkan(permission, { asalUrl: (details && details.requestingUrl) || requestingOrigin || (wc && !wc.isDestroyed() ? wc.getURL() : ''), webContentsId: wc ? wc.id : null })
+    })
+
     registerIpcHandlers(() => mainWindow)
     createWindow()
 
-    // Buka akses LAN (firewall) OTOMATIS — agar TV/HP di jaringan bisa membuka
-    // Display Pelanggan (/display) & Papan Antrian (/antrian). UAC muncul sekali
-    // saja bila aturan belum ada; setelah disetujui, permanen. Hanya di build
-    // terpasang (dev dilewati agar tak mengganggu). Tak memblokir startup.
-    if (app.isPackaged) {
-      setTimeout(() => { require('./firewall').ensure().catch(() => {}) }, 1500)
-    }
+    // Akses LAN (firewall) TIDAK lagi diminta saat start: firewall.js meminta hanya
+    // saat pengguna memakai tampilan LAN (Papan Antrian / tombol "Buka akses jaringan").
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow()

@@ -180,3 +180,25 @@
   .upd-banner { flex-wrap: wrap; border-radius: var(--radius-lg); }
   .upd-banner__txt { flex-basis: 100%; }
 }
+
+/* ---------- Tombol sekunder (layar Langganan berakhir) ---------- */
+.upd__btn--outline {
+  margin-top: 0;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  box-shadow: none;
+}
+.upd__btn--outline:hover { background: var(--surface-3); }
+.upd__btn--outline:active { background: var(--surface-3); }
+
+/* ---------- Ajakan migrasi aplikasi lama (kontrak #4) — tidak bisa ditutup ---------- */
+.upd-banner--migrasi {
+  border-radius: var(--radius-lg);
+  align-items: flex-start;
+}
+.upd-banner__judul {
+  display: block;
+  font-weight: 700;
+  margin-bottom: 2px;
+}

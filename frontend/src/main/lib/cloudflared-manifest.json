@@ -1,0 +1,14 @@
+{
+  "versi": "2026.9.1",
+  "berkas": "cloudflared-windows-amd64.exe",
+  "url": "https://github.com/cloudflare/cloudflared/releases/download/2026.9.1/cloudflared-windows-amd64.exe",
+  "sha256": "2837888cc0f5d58f15b6dc478376de90b4d3ba5241c7947455d1e0a0df429712",
+  "sumber_checksum": "https://github.com/cloudflare/cloudflared/releases/tag/2026.9.1 (bagian \"SHA256 Checksums\" catatan rilis)",
+  "cara_memperbarui": [
+    "1. Buka https://github.com/cloudflare/cloudflared/releases dan pilih rilis stabil terbaru (bukan pre-release).",
+    "2. Salin nilai SHA256 untuk cloudflared-windows-amd64.exe dari bagian \"SHA256 Checksums\" catatan rilis.",
+    "3. Unduh berkasnya sendiri dan cocokkan: sha256sum cloudflared-windows-amd64.exe (Linux/macOS) atau Get-FileHash -Algorithm SHA256 (PowerShell) — harus sama persis dengan catatan rilis.",
+    "4. Ubah \"versi\", \"url\" (ganti KEDUA angka versi), \"sha256\", dan \"sumber_checksum\" di berkas ini, lalu jalankan: cd frontend && node --test tests/*.test.js",
+    "Aplikasi menolak binary yang hash-nya tidak cocok; binary lama yang sudah terunduh diganti otomatis saat tunnel dinyalakan."
+  ]
+}

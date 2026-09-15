@@ -1,9 +1,12 @@
 {
   "name": "ipos-frontend",
   "productName": "Tuléh",
-  "version": "0.9.35",
+  "version": "0.9.36",
   "description": "Tuléh — aplikasi Point of Sale desktop (Electron) untuk TATREPORT POS API",
   "main": "src/main/main.js",
+  "tuleh": {
+    "serverBawaan": "https://tatreport.com"
+  },
   "license": "MIT",
   "scripts": {
     "start": "electron .",

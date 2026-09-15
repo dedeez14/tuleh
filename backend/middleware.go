@@ -33,7 +33,7 @@ func withRecover(logger *slog.Logger, next http.Handler) http.Handler {
 		defer func() {
 			if rec := recover(); rec != nil {
 				logger.Error("panic tertangkap", "path", r.URL.Path, "panic", rec)
-				writeError(w, http.StatusInternalServerError, "Terjadi kesalahan internal gateway.")
+				writeGatewayError(w, http.StatusInternalServerError, gatewayInternal, "Terjadi kesalahan internal gateway.")
 			}
 		}()
 		next.ServeHTTP(w, r)
@@ -76,7 +76,7 @@ func withBodyLimit(maxBytes int64, next http.Handler) http.Handler {
 func withRateLimit(limiter *rateLimiter, ratePerSec, burst float64, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !limiter.allow("ip:"+clientIP(r), ratePerSec, burst) {
-			writeError(w, http.StatusTooManyRequests, "Terlalu banyak permintaan. Coba lagi sebentar.")
+			writeGatewayError(w, http.StatusTooManyRequests, gatewayRateLimited, "Terlalu banyak permintaan. Coba lagi sebentar.")
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -87,7 +87,7 @@ func withRateLimit(limiter *rateLimiter, ratePerSec, burst float64, next http.Ha
 func loginRateLimit(limiter *rateLimiter, perMinute float64, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !limiter.allow("login:"+clientIP(r), perMinute/60.0, perMinute) {
-			writeError(w, http.StatusTooManyRequests, "Terlalu banyak percobaan masuk. Tunggu satu menit.")
+			writeGatewayError(w, http.StatusTooManyRequests, gatewayRateLimited, "Terlalu banyak percobaan masuk. Tunggu satu menit.")
 			return
 		}
 		next.ServeHTTP(w, r)

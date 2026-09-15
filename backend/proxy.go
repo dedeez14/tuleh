@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -15,12 +16,32 @@ const (
 	upstreamTimeout = 20 * time.Second
 	maxUpstreamBody = 10 << 20 // 10 MB
 	retryBackoff    = 200 * time.Millisecond
-	userAgentHeader = appName + "/" + appVersion
 )
 
+// Penanda galat yang DIBUAT gateway sendiri (bukan jawaban server). Aplikasi membedakan
+// "server menolak" dari "server tak terjangkau" lewat header ini: upstream-unreachable
+// = gangguan jaringan → antre & sajikan salinan, bukan penolakan.
+const (
+	gatewayHeader            = "X-Tuleh-Gateway"
+	gatewayUpstreamUnreached = "upstream-unreachable"
+	gatewayRateLimited       = "rate-limited"
+	gatewayRouteUnknown      = "route-unknown"
+	gatewayBodyTooLarge      = "body-too-large"
+	gatewayInternal          = "internal"
+)
+
+// Pesan galat gateway sengaja netral merek: gateway melayani server tenant mana pun.
+const (
+	pesanUpstreamTakTerjangkau = "Server tidak dapat dihubungi. Periksa koneksi internet."
+	pesanBodyTerlaluBesar      = "Data yang dikirim terlalu besar."
+)
+
+func userAgentHeader() string { return appName + "/" + appVersion }
+
 // Header yang diteruskan ke upstream — selain ini dibuang (hop-by-hop dsb.)
-// X-Tuleh-Version wajib diteruskan agar server bisa menegakkan versi minimum (426).
-var forwardedHeaders = []string{"Authorization", "Content-Type", "Accept", "Accept-Language", "X-Tuleh-Version"}
+// X-Tuleh-Version wajib diteruskan agar server bisa menegakkan versi minimum (426);
+// X-Tuleh-Platform memilih jalur rilis & kebijakan per platform di server.
+var forwardedHeaders = []string{"Authorization", "Content-Type", "Accept", "Accept-Language", "X-Tuleh-Version", "X-Tuleh-Platform"}
 
 type proxy struct {
 	upstream *url.URL
@@ -82,8 +103,13 @@ func (p *proxy) handler(rt route) http.Handler {
 
 		status, contentType, body, err := p.forward(r)
 		if err != nil {
+			var tooLarge *http.MaxBytesError
+			if errors.As(err, &tooLarge) {
+				writeGatewayError(w, http.StatusRequestEntityTooLarge, gatewayBodyTooLarge, pesanBodyTerlaluBesar)
+				return
+			}
 			p.log.Warn("upstream tidak terjangkau", "path", r.URL.Path, "error", err)
-			writeError(w, http.StatusBadGateway, "Server MOVERA tidak dapat dihubungi. Periksa koneksi internet.")
+			writeGatewayError(w, http.StatusBadGateway, gatewayUpstreamUnreached, pesanUpstreamTakTerjangkau)
 			return
 		}
 
@@ -155,7 +181,7 @@ func (p *proxy) doOnce(orig *http.Request, targetURL string, reqBody []byte) (in
 	if req.Header.Get("Accept") == "" {
 		req.Header.Set("Accept", "application/json")
 	}
-	req.Header.Set("User-Agent", userAgentHeader)
+	req.Header.Set("User-Agent", userAgentHeader())
 	if id := orig.Header.Get("X-Request-Id"); id != "" {
 		req.Header.Set("X-Request-Id", id)
 	}

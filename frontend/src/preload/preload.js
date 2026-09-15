@@ -103,7 +103,19 @@ contextBridge.exposeInMainWorld('iposAPI', {
   langganan: {
     status: invoke('langganan:status'),
     bayar: invoke('langganan:bayar'),
-    jendelaBayar: invoke('langganan:jendelaBayar')
+    jendelaBayar: invoke('langganan:jendelaBayar'),
+    // HTTP 402 dari endpoint tulis mana pun → { pesan, status, perpanjang_url } (kontrak #2)
+    onTerkunci(callback) {
+      const listener = (_event, info) => callback(info || {})
+      ipcRenderer.on('langganan:terkunci', listener)
+      return () => ipcRenderer.removeListener('langganan:terkunci', listener)
+    }
+  },
+  // Laporan galat renderer & laporan log ke dukungan (kontrak #1). Token tidak pernah lewat sini.
+  diagnostik: {
+    laporGalat: invoke('diagnostik:laporGalat'),
+    pratinjauLog: invoke('diagnostik:pratinjauLog'),
+    kirimLog: invoke('diagnostik:kirimLog')
   },
   cs: {
     kontak: invoke('cs:kontak')

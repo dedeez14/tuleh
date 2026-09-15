@@ -313,7 +313,7 @@ function renderPos(container) {
         <div class="field">
           <label class="field__label">Akses jaringan (TV/monitor lain)</label>
           <button type="button" class="btn btn--outline btn--block" id="cd-fw">Buka akses jaringan (firewall)</button>
-          <div class="field__hint">Dibuka OTOMATIS saat app dijalankan. Tekan ini hanya bila TV masih tak bisa membuka URL (minta izin admin sekali).</div>
+          <div class="field__hint">Diminta saat Anda membuka Papan Antrian di TV/monitor lain. Tekan ini bila TV masih tak bisa membuka URL (Windows meminta izin admin sekali).</div>
         </div>` : ''}`
     const footer = document.createElement('div')
     footer.innerHTML = `<button type="button" class="btn btn--primary btn--block" id="cd-save">Simpan</button>`
@@ -1337,9 +1337,11 @@ function renderPos(container) {
       })
 
       if (result.ok && result.tertunda) {
-        toast(result.perluTinjau
-          ? 'Server tidak menjawab setelah data dikirim. Periksa Pengaturan → Sinkronisasi.'
-          : 'Offline — transaksi disimpan di komputer ini dan dikirim otomatis saat internet kembali.', 'info', 6000)
+        toast(result.peringatan
+          ? result.peringatan
+          : result.perluTinjau
+            ? 'Server tidak menjawab setelah data dikirim. Periksa Pengaturan → Sinkronisasi.'
+            : 'Offline — transaksi disimpan di komputer ini dan dikirim otomatis saat internet kembali.', result.peringatan ? 'error' : 'info', result.peringatan ? 10000 : 6000)
       }
 
       if (!result.ok) {

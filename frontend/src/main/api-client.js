@@ -1,262 +1,43 @@
 'use strict'
 
+// Klien POS API proses utama: merakit inti lib/klien-http.js dengan transport
+// Electron (net.fetch) dan versi aplikasi. Logika klasifikasi jawaban (gangguan
+// jaringan vs penolakan, 401/402/426) & salinan offline tinggal di inti agar teruji.
+
 const { net, app } = require('electron')
 const offline = require('./offline')
+const { buatKlienHttp } = require('./lib/klien-http')
 
-// Jalur GET yang TIDAK disalin untuk offline (status pembayaran, masa coba,
-// versi): jawaban lama justru menyesatkan.
-const TANPA_SALINAN = ['/qris', '/demo', '/ping', '/app/versi', '/langganan']
-function bolehDisalin(endpoint) {
-  return !TANPA_SALINAN.some((p) => endpoint.startsWith(p))
-}
-// Identitas (/auth/me) berlaku lintas toko → kunci salinan tanpa toko/query,
-// agar masuk otomatis saat offline tetap bekerja walau toko aktif berganti.
-function kunciSalinanUntuk(endpoint, query) {
-  return endpoint === '/auth/me' ? [null, endpoint, {}] : [activeTokoId, endpoint, query]
-}
+// Nilai X-Tuleh-Platform & `platform` laporan diagnostik untuk aplikasi desktop.
+const PLATFORM = 'desktop'
 
-const API_PREFIX = '/api/pos/v1'
-const TIMEOUT_MS = 15000
-const MAX_BODY_BYTES = 5 * 1024 * 1024
-
-let baseUrl = 'https://tatreport.com'
-let gatewayUrl = null // bila di-set, transport lewat gateway lokal (mpos-backend)
-let token = null
-let activeTokoId = null // "toko aktif" utk disambiguasi multi-toko (MOVERA §1.3)
-
-// Versi app (satu sumber: package.json via Electron) — dikirim di header tiap
-// request sebagai X-Tuleh-Version. Auto-Update Tahap 1.
+// Versi app (satu sumber: package.json via Electron) — header X-Tuleh-Version.
 function appVersion() {
   try { return app.getVersion() } catch { return '0.0.0' }
 }
 
-// Handler "update wajib" (HTTP 426 dari endpoint mana pun) — di-set oleh ipc.js
-// untuk mengirim sinyal ke renderer (buka layar update). Dipanggil sekali/deteksi.
-let upgradeHandler = null
-function setUpgradeHandler(fn) { upgradeHandler = typeof fn === 'function' ? fn : null }
-function notifyUpgrade(message) {
-  if (upgradeHandler) { try { upgradeHandler(message || '') } catch { /* abaikan */ } }
-}
-
-function setBaseUrl(url) {
-  baseUrl = url
-}
-
-/** Alirkan permintaan lewat gateway lokal (null = koneksi langsung). */
-function setGateway(url) {
-  gatewayUrl = url || null
-}
-
-function setToken(value) {
-  token = typeof value === 'string' && value.length > 0 ? value : null
-}
-
-function hasToken() {
-  return token !== null
-}
-
-/** Set/hapus "toko aktif" — otomatis disisipkan sebagai ?toko_id pada tiap
- *  permintaan terautentikasi (MOVERA §1.3: cara paling pasti, tanpa rebuild). */
-function setActiveTokoId(id) {
-  activeTokoId = typeof id === 'string' && id.length > 0 ? id : null
-}
-
-function getActiveTokoId() {
-  return activeTokoId
-}
-
-function statusMessage(status) {
-  const messages = {
-    0: 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.',
-    401: 'Sesi Anda telah berakhir. Silakan masuk kembali.',
-    403: 'Anda tidak memiliki akses untuk aksi ini.',
-    404: 'Data tidak ditemukan.',
-    409: 'Aksi bentrok dengan kondisi saat ini.',
-    422: 'Data yang dikirim tidak valid.',
-    426: 'Aplikasi Anda perlu diperbarui ke versi terbaru.',
-    429: 'Terlalu banyak permintaan. Coba lagi sebentar.',
-    500: 'Terjadi kesalahan pada server.'
-  }
-  return messages[status] || `Terjadi kesalahan (HTTP ${status}).`
-}
-
-function buildUrl(endpoint, query) {
-  const url = new URL((gatewayUrl || baseUrl) + API_PREFIX + endpoint)
-  if (query && typeof query === 'object') {
-    for (const [key, value] of Object.entries(query)) {
-      if (value === undefined || value === null || value === '') continue
-      url.searchParams.set(key, String(value))
-    }
-  }
-  return url.toString()
-}
-
-async function readJsonSafe(response) {
-  const text = await response.text()
-  if (text.length > MAX_BODY_BYTES) return null
-  try {
-    return text ? JSON.parse(text) : null
-  } catch {
-    return null
-  }
-}
-
-/**
- * Semua respons dinormalisasi ke:
- *   sukses → { ok: true,  status, data, meta, message }
- *   gagal  → { ok: false, status, message, errors }
- */
-async function request(method, endpoint, { query, body, auth = true } = {}) {
-  // Sisipkan toko aktif untuk permintaan terautentikasi (MOVERA §1.3),
-  // kecuali pemanggil sudah menentukan toko_id sendiri.
-  if (auth && activeTokoId && !(query && Object.prototype.hasOwnProperty.call(query, 'toko_id'))) {
-    query = { ...(query || {}), toko_id: activeTokoId }
-  }
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
-
-  const headers = { Accept: 'application/json', 'X-Tuleh-Version': appVersion() }
-  if (body !== undefined) headers['Content-Type'] = 'application/json'
-  if (auth && token) headers.Authorization = `Bearer ${token}`
-
-  let response
-  try {
-    // Jalur uji: pura-pura jaringan putus (IPOS_SMOKE_OFFLINE=1) untuk
-    // memverifikasi salinan baca & antrean tanpa mencabut kabel.
-    if (process.env.IPOS_SMOKE_OFFLINE === '1') throw new TypeError('smoke offline')
-    response = await net.fetch(buildUrl(endpoint, query), {
-      method,
-      headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-      signal: controller.signal
-    })
-  } catch (err) {
-    const timedOut = err && err.name === 'AbortError'
-    // Offline fase 1: GET terautentikasi yang gagal jaringan → sajikan salinan
-    // terakhir (bila ada) dan tandai aplikasi offline.
-    if (method === 'GET' && auth && offline.salinan && bolehDisalin(endpoint)) {
-      const s = offline.salinan.ambil(...kunciSalinanUntuk(endpoint, query))
-      if (s) {
-        offline.koneksi.tandaiOffline(s.ditarikPada)
-        return { ok: true, status: 200, data: s.data, meta: s.meta, message: '', offline: true, ditarikPada: s.ditarikPada }
-      }
-      offline.koneksi.tandaiOffline()
-    }
-    return {
-      ok: false,
-      status: 0,
-      timeout: timedOut,
-      message: timedOut ? 'Server tidak merespons (timeout).' : statusMessage(0),
-      errors: null
-    }
-  } finally {
-    clearTimeout(timer)
-  }
-
-  const payload = await readJsonSafe(response)
-  // Server terjangkau (apa pun jawabannya) → online.
-  if (auth) offline.koneksi.tandaiOnline()
-
-  if (!response.ok || !payload || payload.success === false) {
-    const message = (payload && payload.message) || statusMessage(response.status)
-    // 426 dari endpoint mana pun = versi di bawah minimum → wajib update.
-    if (response.status === 426) notifyUpgrade(message)
-    return { ok: false, status: response.status, message, errors: (payload && payload.errors) || null }
-  }
-
-  const hasil = {
-    ok: true,
-    status: response.status,
-    data: payload.data !== undefined ? payload.data : null,
-    meta: payload.meta !== undefined ? payload.meta : null,
-    message: payload.message || ''
-  }
-  if (method === 'GET' && auth && offline.salinan && bolehDisalin(endpoint)) {
-    offline.salinan.simpan(...kunciSalinanUntuk(endpoint, query), hasil)
-  }
-  return hasil
-}
-
-const get = (endpoint, options) => request('GET', endpoint, options)
-const post = (endpoint, options) => request('POST', endpoint, options)
-const put = (endpoint, options) => request('PUT', endpoint, options)
-const hapus = (endpoint, options) => request('DELETE', endpoint, options)
-
-/**
- * Unggah file multipart (field selalu `logo`). `file` = { bytes, filename, mime }.
- * Content-Type TIDAK di-set manual — fetch mengisi boundary multipart otomatis.
- */
-async function upload(endpoint, { query, file, auth = true } = {}) {
-  if (auth && activeTokoId && !(query && Object.prototype.hasOwnProperty.call(query, 'toko_id'))) {
-    query = { ...(query || {}), toko_id: activeTokoId }
-  }
-  if (!file || !file.bytes) return { ok: false, status: 0, message: 'File tidak ada.', errors: null }
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS * 2) // unggah bisa lebih lama
-
-  const bytes = file.bytes instanceof ArrayBuffer ? new Uint8Array(file.bytes) : file.bytes
-  const form = new FormData()
-  form.append(file.field || 'logo', new Blob([bytes], { type: file.mime || 'application/octet-stream' }), file.filename || 'upload.png')
-
-  const headers = { Accept: 'application/json', 'X-Tuleh-Version': appVersion() }
-  if (auth && token) headers.Authorization = `Bearer ${token}`
-
-  let response
-  try {
-    response = await net.fetch(buildUrl(endpoint, query), {
-      method: 'POST', headers, body: form, signal: controller.signal
-    })
-  } catch (err) {
-    const timedOut = err && err.name === 'AbortError'
-    return { ok: false, status: 0, message: timedOut ? 'Server tidak merespons (timeout).' : statusMessage(0), errors: null }
-  } finally {
-    clearTimeout(timer)
-  }
-
-  const payload = await readJsonSafe(response)
-  if (!response.ok || !payload || payload.success === false) {
-    const message = (payload && payload.message) || statusMessage(response.status)
-    if (response.status === 426) notifyUpgrade(message)
-    return { ok: false, status: response.status, message, errors: (payload && payload.errors) || null }
-  }
-  return {
-    ok: true,
-    status: response.status,
-    data: payload.data !== undefined ? payload.data : null,
-    meta: payload.meta !== undefined ? payload.meta : null,
-    message: payload.message || ''
-  }
-}
-
-/**
- * Waktu server (header `Date` dari endpoint publik /app/versi). Dipakai masa
- * coba Mode Demo agar jam perangkat tidak menentukan. null bila tak terjangkau.
- * Langsung ke MOVERA (bukan lewat gateway) supaya cap waktu benar-benar dari server.
- */
-async function waktuServer() {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 6000)
-  try {
-    const response = await net.fetch(buildUrl('/app/versi', { versi: appVersion() }), {
-      method: 'GET',
-      headers: { Accept: 'application/json', 'X-Tuleh-Version': appVersion() },
-      signal: controller.signal
-    })
-    const date = response.headers.get('date')
-    const d = date ? new Date(date) : null
-    return d && Number.isFinite(d.getTime()) ? d : null
-  } catch {
-    return null
-  } finally {
-    clearTimeout(timer)
-  }
-}
+const klien = buatKlienHttp({
+  fetch: (url, init) => net.fetch(url, init),
+  versiApp: appVersion,
+  platform: PLATFORM,
+  offline,
+  // Jalur uji: pura-pura jaringan putus (IPOS_SMOKE_OFFLINE=1).
+  pura2Offline: () => process.env.IPOS_SMOKE_OFFLINE === '1'
+})
 
 // ---- Masa coba Mode Demo: pendaftaran perangkat & OTP (publik, tanpa Bearer).
 // 404 = server belum memasang endpoint → pemanggil jatuh ke lapis lokal.
-const demoPerangkatDaftar = (body) => request('POST', '/demo/perangkat', { body, auth: false })
-const demoPerangkatStatus = (perangkatId) => request('GET', `/demo/perangkat/${encodeURIComponent(perangkatId)}`, { auth: false })
-const demoOtpKirim = (body) => request('POST', '/demo/otp/kirim', { body, auth: false })
-const demoOtpVerifikasi = (body) => request('POST', '/demo/otp/verifikasi', { body, auth: false })
+const demoPerangkatDaftar = (body) => klien.request('POST', '/demo/perangkat', { body, auth: false })
+const demoPerangkatStatus = (perangkatId) => klien.request('GET', `/demo/perangkat/${encodeURIComponent(perangkatId)}`, { auth: false })
+const demoOtpKirim = (body) => klien.request('POST', '/demo/otp/kirim', { body, auth: false })
+const demoOtpVerifikasi = (body) => klien.request('POST', '/demo/otp/verifikasi', { body, auth: false })
 
-module.exports = { request, get, post, put, hapus, upload, setBaseUrl, setGateway, setToken, hasToken, setActiveTokoId, getActiveTokoId, setUpgradeHandler, appVersion, waktuServer, demoPerangkatDaftar, demoPerangkatStatus, demoOtpKirim, demoOtpVerifikasi }
+module.exports = {
+  ...klien,
+  PLATFORM,
+  appVersion,
+  demoPerangkatDaftar,
+  demoPerangkatStatus,
+  demoOtpKirim,
+  demoOtpVerifikasi
+}

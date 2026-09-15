@@ -54,11 +54,16 @@ test('langganan kedaluwarsa → notif langganan berwarna danger', () => {
   assert.equal(l.warna, 'danger')
 })
 
-test('langganan segera berakhir → notif berwarna warn', () => {
-  const notifs = N.hitungNotifikasi({ langganan: { status: 'AKTIF', sisa_hari: 3 } })
+test('langganan segera berakhir (ambang dari server) → notif berwarna warn', () => {
+  const notifs = N.hitungNotifikasi({ langganan: { status: 'AKTIF', sisa_hari: 3, ambang_peringatan_hari: 7 } })
   const l = notifs.find((n) => n.id === 'langganan')
   assert.ok(l)
   assert.equal(l.warna, 'warn')
+})
+
+test('langganan sisa sedikit tapi server tak mengirim ambang → tanpa notif langganan', () => {
+  const notifs = N.hitungNotifikasi({ langganan: { status: 'AKTIF', sisa_hari: 3 } })
+  assert.ok(!notifs.some((n) => n.id === 'langganan'))
 })
 
 test('panel: empty state + tombol Hubungi CS selalu ada', () => {

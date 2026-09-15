@@ -18,7 +18,7 @@
  *     struk?: true,                        // hasil bisa membawa token_lacak → platform menyisipkan QR lacak
  *     antrean?: { jenis, deltaStok? }      // desktop boleh mengantrekan saat offline (Android: kirim langsung)
  *   }
- * konteks = { tokoAktif: string|null, versiApp: string }
+ * konteks = { tokoAktif: string|null, versiApp: string, platform?: 'desktop'|'android-legacy' }
  *
  * Kode sengaja kompatibel WebView lama (ditranspilasi es2017 saat build Android) dan tanpa
  * dependensi Node/DOM.
@@ -83,6 +83,8 @@
     if ('email' in f) b.email = teksNull(f.email, 150)
     if ('struk_footer' in f) b.struk_footer = teksNull(f.struk_footer, 300)
     if ('struk_tampil_logo' in f) b.struk_tampil_logo = !!f.struk_tampil_logo
+    // Satuan bawaan produk (id satuan terenkripsi dari /satuan); kosong → null = belum diatur.
+    if ('satuan_bawaan_id' in f) b.satuan_bawaan_id = teksNull(f.satuan_bawaan_id, 200)
     return b
   }
 
@@ -139,7 +141,8 @@
 
   const KANAL = {
     // Aplikasi & koneksi
-    'app:checkUpdate': { permukaan: 'app.checkUpdate', buat: function (p, k) { return { metode: 'GET', jalur: '/app/versi', auth: false, query: { versi: k.versiApp } } } },
+    // `platform` memilih jalur rilis & blok `migrasi` (kontrak #4: android-legacy) di server.
+    'app:checkUpdate': { permukaan: 'app.checkUpdate', buat: function (p, k) { return { metode: 'GET', jalur: '/app/versi', auth: false, query: { versi: k.versiApp, platform: k.platform || undefined } } } },
     'net:ping': { permukaan: 'net.ping', buat: function () { return { metode: 'GET', jalur: '/ping', auth: false } } },
     'auth:me': { permukaan: 'auth.me', buat: function () { return GET('/auth/me') } },
     'config:get': { permukaan: 'config.get', buat: function () { return GET('/config') } },

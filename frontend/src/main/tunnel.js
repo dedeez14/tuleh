@@ -9,13 +9,14 @@
 // Catatan: Quick Tunnel memberi URL BERBEDA setiap kali dinyalakan. QR yang
 // dibuat aplikasi (struk, modal meja, papan TV) selalu memakai URL terbaru;
 // untuk QR meja CETAK permanen dibutuhkan domain tetap (tunnel ber-akun atau
-// halaman publik server MOVERA — Blueprint §16).
+// halaman publik server — Blueprint §16).
 
-const fs = require('node:fs')
 const path = require('node:path')
 const { spawn } = require('node:child_process')
+const { pastikanCloudflared } = require('./lib/cloudflared')
 
-const DOWNLOAD_URL = 'https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe'
+// Versi & SHA-256 cloudflared TIDAK ditulis di sini: lib/cloudflared-manifest.json
+// (satu tempat, berisi langkah memperbarui). Binary yang hash-nya tak cocok ditolak.
 const URL_RE = /https:\/\/[a-z0-9-]+\.trycloudflare\.com/
 const START_TIMEOUT_MS = 45000
 
@@ -36,19 +37,8 @@ function candidatePaths() {
 }
 
 async function ensureBinary() {
-  const candidates = candidatePaths()
-  for (const p of candidates) {
-    if (fs.existsSync(p)) return p
-  }
-  // Unduh sekali ke lokasi pertama yang bisa ditulis (userData / LOCALAPPDATA)
-  const target = candidates[0]
-  if (!target) throw new Error('Lokasi binary tidak tersedia.')
-  fs.mkdirSync(path.dirname(target), { recursive: true })
-  const res = await fetch(DOWNLOAD_URL)
-  if (!res.ok) throw new Error(`Gagal mengunduh cloudflared (HTTP ${res.status}).`)
-  const buf = Buffer.from(await res.arrayBuffer())
-  fs.writeFileSync(target, buf)
-  return target
+  // Unduh (bila perlu) ke lokasi pertama yang bisa ditulis (userData / LOCALAPPDATA), terverifikasi.
+  return pastikanCloudflared({ lokasi: candidatePaths(), fetch })
 }
 
 /** Nyalakan tunnel ke port lokal. Resolve { ok, url } atau { ok:false, reason }. */

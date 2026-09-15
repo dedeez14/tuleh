@@ -180,7 +180,7 @@ function openFormHTML(gudang, gudangError) {
   const warnEmpty = gudangError
     ? `<div class="ses-open__warn">
          Daftar gudang gagal dimuat dari server (${esc(gudangError)}).
-         Ini masalah yang dikenal di sisi server MOVERA — hubungi admin server,
+         Ini masalah yang dikenal di sisi server — hubungi admin server,
          lalu keluar dan masuk kembali setelah diperbaiki.
        </div>`
     : `<div class="ses-open__warn">

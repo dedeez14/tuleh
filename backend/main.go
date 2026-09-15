@@ -9,9 +9,10 @@
 //
 // Konfigurasi lewat environment:
 //
-//	MPOS_LISTEN   alamat dengar     (default "127.0.0.1:8787")
-//	MPOS_UPSTREAM base URL MOVERA   (default "https://tatreport.com")
-//	MPOS_LOG      level log         ("debug" | "info", default "info")
+//	MPOS_LISTEN   alamat dengar          (default "127.0.0.1:8787")
+//	MPOS_UPSTREAM base URL server tenant (WAJIB — aplikasi mengisinya dari Pengaturan; tanpa nilai bawaan)
+//	MPOS_VERSION  versi aplikasi         (dipakai bila build tanpa -ldflags "-X main.appVersion=…")
+//	MPOS_LOG      level log              ("debug" | "info", default "info")
 package main
 
 import (
@@ -29,13 +30,30 @@ import (
 
 const (
 	appName          = "mpos-backend"
-	appVersion       = "0.1.0"
 	shutdownTimeout  = 10 * time.Second
 	cacheMaxEntries  = 2048
 	rateGlobalPerSec = 20
 	rateGlobalBurst  = 40
 	rateLoginPerMin  = 5
 )
+
+// appVersion diisi saat build: go build -ldflags "-X main.appVersion=<versi package.json>".
+// Build tanpa ldflags (pengembangan) memakai MPOS_VERSION dari aplikasi yang menyalakannya.
+// Versi ini dilaporkan /healthz agar aplikasi tidak memakai ulang gateway dari versi lain.
+var appVersion = ""
+
+// versiTidakDikenal dilaporkan bila build tanpa ldflags dan tanpa MPOS_VERSION.
+const versiTidakDikenal = "tidak-diketahui"
+
+func resolveVersion() string {
+	if appVersion != "" {
+		return appVersion
+	}
+	if v := os.Getenv("MPOS_VERSION"); v != "" {
+		return v
+	}
+	return versiTidakDikenal
+}
 
 type config struct {
 	listenAddr string
@@ -59,13 +77,16 @@ func loadConfig() (config, error) {
 		cfg.logLevel = slog.LevelDebug
 	}
 
-	raw := envOr("MPOS_UPSTREAM", "https://tatreport.com")
+	raw := os.Getenv("MPOS_UPSTREAM")
+	if raw == "" {
+		return cfg, errors.New("MPOS_UPSTREAM wajib diisi (URL server tenant)")
+	}
 	u, err := url.Parse(raw)
 	if err != nil {
 		return cfg, fmt.Errorf("MPOS_UPSTREAM tidak valid: %w", err)
 	}
 	isLocal := u.Hostname() == "localhost" || u.Hostname() == "127.0.0.1"
-	if u.Scheme != "https" && !(u.Scheme == "http" && isLocal) {
+	if u.Host == "" || (u.Scheme != "https" && !(u.Scheme == "http" && isLocal)) {
 		return cfg, errors.New("MPOS_UPSTREAM harus https (http hanya untuk localhost)")
 	}
 	u.Path, u.RawQuery, u.Fragment = "", "", ""
@@ -74,6 +95,7 @@ func loadConfig() (config, error) {
 }
 
 func main() {
+	appVersion = resolveVersion()
 	cfg, err := loadConfig()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Konfigurasi salah:", err)

@@ -6,7 +6,7 @@ import { api } from '../api.js'
 import { esc, fmtIDR, fmtDateTime } from '../utils/format.js'
 import { toast, confirmDialog, icons } from './ui.js'
 
-let statusTerakhir = { online: true, ditarikPada: null, menunggu: 0, tinjau: 0, total: 0 }
+let statusTerakhir = { online: true, ditarikPada: null, menunggu: 0, tinjau: 0, total: 0, penyimpanan: null, macet: 0, tinjauOtomatis: false }
 const pendengar = new Set()
 
 export function statusOffline() { return statusTerakhir }
@@ -38,19 +38,22 @@ function jam(ms) {
 export function pasangPitaOffline(el, { onTinjau }) {
   let sibuk = false
   function render(s) {
-    const tampil = !s.online || s.total > 0
+    // penyimpanan: antrean gagal ditulis ke disk / berkas antrean pernah rusak (dari main).
+    const masalah = s.penyimpanan && s.penyimpanan.pesan ? s.penyimpanan : null
+    const tampil = !s.online || s.total > 0 || !!masalah
     el.hidden = !tampil
     if (!tampil) return
     const bagian = []
+    if (masalah) bagian.push(masalah.pesan)
     if (!s.online) bagian.push(s.ditarikPada ? `Offline · menampilkan data terakhir ${jam(s.ditarikPada)}` : 'Offline · server tidak terjangkau')
     else bagian.push('Tersambung')
     if (s.menunggu > 0) bagian.push(`${s.menunggu} menunggu dikirim`)
     if (s.tinjau > 0) bagian.push(`${s.tinjau} perlu ditinjau`)
-    el.className = `pita-offline${s.online ? ' pita-offline--sinkron' : ''}${s.tinjau > 0 ? ' pita-offline--tinjau' : ''}`
+    el.className = `pita-offline${s.online && !masalah ? ' pita-offline--sinkron' : ''}${s.tinjau > 0 || masalah ? ' pita-offline--tinjau' : ''}`
     el.innerHTML = `
       <span class="pita-offline__ikon">${s.online ? icons.check || '' : ''}</span>
       <span class="pita-offline__teks">${esc(bagian.join(' · '))}</span>
-      ${s.tinjau > 0 ? '<button type="button" class="btn btn--sm btn--outline" data-act="tinjau">Tinjau</button>' : ''}
+      ${s.tinjau > 0 || masalah ? '<button type="button" class="btn btn--sm btn--outline" data-act="tinjau">Tinjau</button>' : ''}
       <button type="button" class="btn btn--sm btn--ghost" data-act="coba" ${sibuk ? 'disabled' : ''}>${sibuk ? 'Menyambung…' : (s.online ? 'Sinkron sekarang' : 'Coba lagi')}</button>`
   }
   el.addEventListener('click', async (e) => {
@@ -73,6 +76,19 @@ export function pasangPitaOffline(el, { onTinjau }) {
   return langganStatusOffline(render)
 }
 
+/**
+ * Peringatan menetap untuk baris yang terus ditolak server (5xx). Batas pindah otomatis ke
+ * "perlu ditinjau" datang dari server; bila server belum mengirimnya, baris tetap menunggu.
+ */
+export function pesanMacet(s) {
+  const n = Number(s && s.macet) || 0
+  if (n <= 0) return ''
+  const dasar = `${n} data berulang kali ditolak server (galat server) dan belum terkirim; penjualan lain tetap dikirim.`
+  return s.tinjauOtomatis
+    ? `${dasar} Data ini akan dipindah ke "Perlu ditinjau" setelah batas percobaan dari server.`
+    : `${dasar} Batas tinjau otomatis belum diatur di server — hubungi dukungan dan jangan hapus data aplikasi.`
+}
+
 const LABEL_STATUS = { MENUNGGU: 'Menunggu', MENGIRIM: 'Mengirim…', TINJAU: 'Perlu ditinjau', TERKIRIM: 'Terkirim' }
 
 function ringkasBaris(p) {
@@ -93,7 +109,10 @@ export async function renderPanelSinkronisasi(container) {
     const rows = daftar.ok ? daftar.data : []
     const aktif = rows.filter((p) => p.status !== 'TERKIRIM')
     const terkirim = rows.filter((p) => p.status === 'TERKIRIM').slice(-10).reverse()
+    const masalah = s.penyimpanan && s.penyimpanan.pesan ? s.penyimpanan : null
     container.innerHTML = `
+      ${masalah ? `<div class="sinkron__galat" role="alert" style="margin-bottom:10px">${esc(masalah.pesan)}${masalah.berkasRusak && masalah.berkasRusak.length ? `<br><span class="mono">${esc(masalah.berkasRusak.join(', '))}</span>` : ''}</div>` : ''}
+      ${s.macet > 0 ? `<div class="sinkron__galat" role="alert" style="margin-bottom:10px">${esc(pesanMacet(s))}</div>` : ''}
       <div class="sinkron__status">
         <span class="badge ${s.online ? 'badge--success' : 'badge--warn'}">${s.online ? 'Server terjangkau' : 'Offline'}</span>
         <span class="sinkron__ringkas">${s.menunggu} menunggu dikirim · ${s.tinjau} perlu ditinjau</span>
@@ -105,7 +124,7 @@ export async function renderPanelSinkronisasi(container) {
           <div class="sinkron__baris${p.status === 'TINJAU' ? ' is-tinjau' : ''}" data-ref="${esc(p.clientRef)}">
             <div class="sinkron__main">
               <div class="sinkron__judul">${esc(p.label)} <span class="badge ${p.status === 'TINJAU' ? 'badge--danger' : 'badge--warn'}">${esc(LABEL_STATUS[p.status] || p.status)}</span></div>
-              <div class="sinkron__desc">${esc(ringkasBaris(p))} · dibuat ${fmtDateTime(new Date(p.dibuat).toISOString())}${p.percobaan ? ` · percobaan ke-${p.percobaan}` : ''}</div>
+              <div class="sinkron__desc">${esc(ringkasBaris(p))} · dibuat ${fmtDateTime(new Date(p.dibuat).toISOString())}${p.percobaan ? ` · percobaan ke-${p.percobaan}` : ''}${p.galatServer ? ` · ditolak server ${p.galatServer}×` : ''}</div>
               ${p.galat ? `<div class="sinkron__galat">${esc(p.galat)}</div>` : ''}
             </div>
             ${p.status === 'TINJAU' ? `

@@ -89,7 +89,7 @@ export function bukaKelolaMeja({ onUbah } = {}) {
     const ya = await confirmDialog({
       title: `Nonaktifkan Meja ${nomorLama}?`,
       message: 'Meja disembunyikan dari peta kasir. Riwayat bon lamanya tetap utuh, '
-        + 'dan meja bisa diaktifkan kembali lewat ERP tatreport.',
+        + 'dan meja bisa diaktifkan kembali lewat ERP.',
       confirmText: 'Ya, nonaktifkan',
       danger: true
     })

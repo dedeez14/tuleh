@@ -74,7 +74,9 @@ function usahaDemo () {
     demoUsaha = {
       nama: COMPANY.nama, alamat: COMPANY.alamat || null, telepon: COMPANY.telepon || null,
       email: COMPANY.email || null, npwp: COMPANY.npwp || null, logo: COMPANY.logo || null,
-      struk: { logo: null, footer: null, tampil_logo: true }
+      struk: { logo: null, footer: null, tampil_logo: true },
+      // Satuan bawaan produk (master per perusahaan di server). Demo: satuan pertama master demo.
+      satuan_bawaan: SATUAN[0] ? { id: SATUAN[0].id, kode: SATUAN[0].kode, nama: SATUAN[0].nama } : null
     }
   }
   return demoUsaha
@@ -301,6 +303,8 @@ function mulberry32(seed) {
 const round2 = (v) => Math.round((v + Number.EPSILON) * 100) / 100
 const ok = (data, meta = null) => ({ ok: true, status: 200, data, meta, message: '' })
 const err = (status, message) => ({ ok: false, status, message, errors: null })
+// Galat validasi per kolom (amplop 422 server: errors.<kolom> = [pesan]).
+const galatKolomDemo = (status, message, kolom) => ({ ok: false, status, message, errors: { [kolom]: [message] } })
 const isoDate = (d) => d.toISOString().slice(0, 10)
 
 function hitungItem(p, kuantitas, diskonPersen) {
@@ -688,8 +692,14 @@ function stop() {
   active = false
 }
 
-// Status langganan demo (bentuk mengikuti §6.5 spec Mitra). Env
-// IPOS_SMOKE_LANGGANAN=segera|grace|kedaluwarsa memaksa keadaan untuk uji tampilan.
+// Status langganan demo (bentuk mengikuti §6.5 spec Mitra + kontrak #3 kesiapan produksi:
+// ambang_peringatan_hari & blokir_tulis dari master server — di demo nilai simulasi).
+// Env IPOS_SMOKE_LANGGANAN=segera|grace|kedaluwarsa|blokir memaksa keadaan untuk uji tampilan;
+// `blokir` juga mensimulasikan HTTP 402 pada kanal tulis (lihat langgananDiblokir).
+// Nilai simulasi server demo (di produksi datang dari master platform_config).
+const DEMO_AMBANG_PERINGATAN_HARI = 7
+const DEMO_ANTREAN_MAKS_PERCOBAAN_GALAT_SERVER = 20
+const DEMO_ANTREAN_MAKS_UMUR_JAM = 72
 const MODUL_AKTIF_DEMO = ['kasir', 'dapur', 'antrian', 'proses', 'meja', 'riwayat', 'sesi', 'stasiun', 'laporan', 'produk', 'pelanggan']
 function demoLangganan() {
   // Setelah "pembayaran" demo + jeda (simulasi webhook): langganan AKTIF, periode baru.
@@ -698,14 +708,17 @@ function demoLangganan() {
     return {
       plan_kode: 'TULEH_PRO', plan_nama: 'Tuléh Pro', status: 'AKTIF',
       periode_mulai: isoDate(new Date()), periode_akhir: isoDate(akhir), sisa_hari: 30,
-      auto_renew: false, modul_aktif: MODUL_AKTIF_DEMO, perpanjang_url: 'https://tatreport.com/langganan'
+      auto_renew: false, modul_aktif: MODUL_AKTIF_DEMO, perpanjang_url: 'https://tatreport.com/langganan',
+      ambang_peringatan_hari: DEMO_AMBANG_PERINGATAN_HARI, blokir_tulis: false
     }
   }
   const base = {
     plan_kode: 'TULEH_PRO', plan_nama: 'Tuléh Pro', periode_mulai: '2026-07-01',
-    modul_aktif: MODUL_AKTIF_DEMO, perpanjang_url: 'https://tatreport.com/langganan'
+    modul_aktif: MODUL_AKTIF_DEMO, perpanjang_url: 'https://tatreport.com/langganan',
+    ambang_peringatan_hari: DEMO_AMBANG_PERINGATAN_HARI, blokir_tulis: false
   }
   switch (readEnv('IPOS_SMOKE_LANGGANAN')) {
+    case 'blokir': return { ...base, status: 'KEDALUWARSA', periode_akhir: '2026-07-18', sisa_hari: 0, blokir_tulis: true }
     case 'kedaluwarsa': return { ...base, status: 'KEDALUWARSA', periode_akhir: '2026-07-18', sisa_hari: 0 }
     case 'grace': return { ...base, status: 'GRACE', periode_akhir: '2026-07-20', sisa_hari: 0 }
     case 'segera': return { ...base, status: 'AKTIF', periode_akhir: '2026-07-27', sisa_hari: 5 }
@@ -774,6 +787,10 @@ const handlers = {
     demoLunasAt = Date.now()
     return ok({ result: 'settlement' })
   },
+
+  // Mode Demo tanpa jaringan: laporan log ke dukungan hanya disimulasikan (galat aplikasi
+  // tetap dilaporkan lewat diagnostik:laporGalat karena itu tentang aplikasi, bukan data demo).
+  'diagnostik:kirimLog': () => ok({ id: null, terkirim: false, tertunda: false, demo: true }),
 
   'cs:kontak': () => ok({
     sumber: 'CS_MITRA',
@@ -1246,7 +1263,10 @@ const handlers = {
       keamanan: { aktif: false, auto_lock_menit: 3 },
       pengaturan: { stok_minimum_tampil: 0, tampilkan_stok_habis: true },
       payment_methods: ['TUNAI', 'TRANSFER', 'QRIS'],
-      modules: { multi_satuan: false }
+      modules: { multi_satuan: false },
+      // Batas tinjau otomatis antrean offline (field aditif server; nilai simulasi demo).
+      antrean_maks_percobaan_galat_server: DEMO_ANTREAN_MAKS_PERCOBAAN_GALAT_SERVER,
+      antrean_maks_umur_jam: DEMO_ANTREAN_MAKS_UMUR_JAM
     })
   },
 
@@ -1317,6 +1337,14 @@ const handlers = {
     if ('email' in f) u.email = teks(f.email)
     if ('struk_footer' in f) u.struk.footer = teks(f.struk_footer)
     if ('struk_tampil_logo' in f) u.struk.tampil_logo = !!f.struk_tampil_logo
+    if ('satuan_bawaan_id' in f) {
+      if (!teks(f.satuan_bawaan_id)) u.satuan_bawaan = null
+      else {
+        const sat = SATUAN.find((x) => x.id === f.satuan_bawaan_id)
+        if (!sat) return galatKolomDemo(422, 'Satuan tidak ditemukan atau sudah tidak aktif.', 'satuan_bawaan_id')
+        u.satuan_bawaan = { id: sat.id, kode: sat.kode, nama: sat.nama }
+      }
+    }
     return ok(usahaDemo())
   },
   'pengaturan:uploadLogo': ({ bytes, mime } = {}) => {
@@ -1377,6 +1405,11 @@ const handlers = {
     const jual = Number(hargaJual)
     if (!Number.isFinite(jual) || jual < 0) return err(422, 'Harga jual tidak valid.')
     const kelola = t === 'JASA' ? false : (kelolaStok !== false) // JASA otomatis tak berstok
+    // Server 2026-09-15: tanpa satuan → satuan bawaan usaha; belum diatur → 422 errors.satuan_id.
+    if (satuanId && !SATUAN.some((x) => x.id === satuanId)) return galatKolomDemo(422, 'Satuan tidak ditemukan atau sudah tidak aktif.', 'satuan_id')
+    const bawaan = usahaDemo().satuan_bawaan
+    const sat = SATUAN.find((x) => x.id === satuanId) || (bawaan ? SATUAN.find((x) => x.id === bawaan.id) : null)
+    if (!sat) return galatKolomDemo(422, 'Pilih satuan untuk item ini — satuan bawaan usaha belum diatur (Pengaturan → Profil Usaha).', 'satuan_id')
     counter.prod = (counter.prod || 0) + 1
     const kat = kategoriToko(activeTokoId)[0]
     const baru = {
@@ -1390,8 +1423,7 @@ const handlers = {
       pajak_persen: 0, satuan: 'Pcs', satuan_id: null,
       kategori: kat ? kat.nama : '-', kelola_stok: kelola, stok: 0, gambar: null
     }
-    const sat = SATUAN.find((x) => x.id === satuanId)
-    if (sat) { baru.satuan = sat.nama; baru.satuan_id = sat.id }
+    baru.satuan = sat.nama; baru.satuan_id = sat.id
     if (modeJual) terapkanModeJualDemo(baru, modeJual)
     produkAktif().unshift(baru)
     return ok(baru)
@@ -1400,6 +1432,7 @@ const handlers = {
   'produk:update': ({ id, nama, hargaBeli, hargaJual, barcode, kelolaStok, satuanId, modeJual } = {}) => {
     const p = produkAktif().find((x) => x.id === id)
     if (!p) return err(404, 'Produk tidak ditemukan.')
+    if (satuanId && !SATUAN.some((x) => x.id === satuanId)) return galatKolomDemo(422, 'Satuan tidak ditemukan atau sudah tidak aktif.', 'satuan_id')
     const sat = SATUAN.find((x) => x.id === satuanId)
     if (sat) { p.satuan = sat.nama; p.satuan_id = sat.id }
     if (modeJual !== undefined) terapkanModeJualDemo(p, modeJual)
@@ -1884,4 +1917,25 @@ function paymentInfo(_kodeMeja) {
   }
 }
 
-module.exports = { isActive, start, stop, handlers, trackingInfo, menuInfo, createTableOrder, queueBoardInfo, paymentInfo }
+// Kanal yang MENULIS (dikenai 402 saat langganan diblokir, kontrak #2). Baca, login/logout,
+// /langganan/*, kontak CS, versi & diagnostik tidak diblokir — sama dengan server.
+const KANAL_TULIS_RE = /:(create|update|remove|delete|simpan|usahaSimpan|midtransSimpan|midtransHapus|upload\w*|tambah|ubah|nonaktifkan|aturToko|quick|buka|tutup|bayar|batal|gabung|tambahRonde|setPax|checkout|stokMasuk|opname|transition|konfirmasiBayar|simpanNota|lunasi|buatTagihan)$/
+
+/**
+ * Simulasi HTTP 402 (IPOS_SMOKE_LANGGANAN=blokir): amplop persis kontrak #2 untuk kanal
+ * tulis, null untuk selainnya. Dipanggil ipc.js / mobile-bridge sebelum handler demo.
+ */
+function langgananDiblokir(kanal) {
+  if (readEnv('IPOS_SMOKE_LANGGANAN') !== 'blokir') return null
+  if (String(kanal).startsWith('langganan:') || !KANAL_TULIS_RE.test(String(kanal))) return null
+  const l = demoLangganan()
+  return {
+    ok: false,
+    status: 402,
+    message: 'Langganan Tuléh Pro (demo) sudah berakhir. Perpanjang untuk menyimpan transaksi baru.',
+    errors: { langganan: ['BERAKHIR'] },
+    meta: { langganan: { status: l.status, perpanjang_url: l.perpanjang_url } }
+  }
+}
+
+module.exports = { isActive, start, stop, handlers, trackingInfo, menuInfo, createTableOrder, queueBoardInfo, paymentInfo, langgananDiblokir }

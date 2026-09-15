@@ -7,10 +7,14 @@
 //  - Android / dev / tak didukung → buka URL unduhan di peramban (Tahap 4 akan
 //    mengganti Android dgn unduh+install in-app).
 // Kontrak /app/versi: { wajib, update_tersedia, versi_terbaru, catatan,
-//   unduhan:{ windows:{url,...}, android:{url,...} }, ukuran }
+//   unduhan:{ windows:{url,...}, android:{url,...} }, ukuran,
+//   migrasi?: { aktif, judul, pesan, url } }  ← kontrak #4, hanya platform android-legacy
+// Aplikasi Android lama (Capacitor) + migrasi.aktif → pita ajakan pindah ke aplikasi
+// utama yang tidak bisa ditutup; judul/pesan/URL dari server (URL wajib https).
 
 import { api } from './api.js'
 import { LOGO_DATA_URI } from './assets/logo.js'
+import { modelMigrasi } from './lib/migrasi.js'
 
 const BANNER_KEY = 'tuleh_update_banner_last' // 1×/hari
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -20,6 +24,7 @@ let overlayEl = null
 let backGuard = null
 let lastCheck = 0
 let platform = null
+let platformApi = null // 'desktop' | 'android-legacy' (app.info) — nilai X-Tuleh-Platform
 let versiApp = ''
 
 // State eksekusi (dibaca oleh handler klik tombol layar wajib).
@@ -35,7 +40,11 @@ function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({
 async function loadInfo() {
   try {
     const r = await api.app.info()
-    if (r && r.ok && r.data) { platform = r.data.platform || 'unknown'; versiApp = r.data.version || '' }
+    if (r && r.ok && r.data) {
+      platform = r.data.platform || 'unknown'
+      platformApi = r.data.platformApi || null
+      versiApp = r.data.version || ''
+    }
   } catch { /* abaikan */ }
 }
 
@@ -62,6 +71,7 @@ export async function checkForUpdate(opts = {}) {
     return
   }
   log('versi Anda', versiApp, '| hasil:', JSON.stringify(info))
+  tampilkanMigrasi(info)
   if (info.wajib || opts.force) showUpdate(info, { block: true })
   else if (info.update_tersedia) maybeBanner(info)
 }
@@ -214,7 +224,7 @@ async function openManual(info) {
   }
   if (!url) { setHint('Info unduhan belum tersedia. Periksa koneksi & coba lagi.'); return }
   log('unduh manual →', url)
-  const r = await api.app.openExternal(url)
+  const r = await api.app.openExternal({ url })
   if (r && !r.ok) { setHint(r.message || 'Gagal membuka unduhan.'); return }
   // Android: peramban mengunduh APK (DownloadManager: progres + resume + notifikasi).
   // Beri panduan pemasangan agar pengguna tak bingung setelah unduhan selesai.
@@ -240,6 +250,27 @@ function maybeBanner(info) {
   try { localStorage.setItem(BANNER_KEY, String(Date.now())) } catch { /* abaikan */ }
   b.querySelector('#ub-x').addEventListener('click', () => b.remove())
   b.querySelector('#ub-go').addEventListener('click', () => { b.remove(); showUpdate(info, { block: false }) })
+}
+
+// ---------- Ajakan migrasi aplikasi Android lama (kontrak #4) ----------
+
+function tampilkanMigrasi(info) {
+  const m = modelMigrasi(info, platformApi)
+  const ada = document.querySelector('.upd-banner--migrasi')
+  if (!m) { if (ada) ada.remove(); return }
+  if (!m.judul && !m.pesan && !m.url) return // server belum mengisi apa pun — jangan mengarang teks
+  const b = ada || document.createElement('div')
+  b.className = 'upd-banner upd-banner--migrasi'
+  b.setAttribute('role', 'status')
+  b.innerHTML = `
+    <span class="upd-banner__txt">
+      ${m.judul ? `<b class="upd-banner__judul">${esc(m.judul)}</b>` : ''}
+      ${m.pesan ? esc(m.pesan) : ''}
+    </span>
+    ${m.url ? '<button type="button" class="upd-banner__go" data-migrasi-go>Pindah sekarang</button>' : ''}`
+  if (!ada) document.body.appendChild(b)
+  const go = b.querySelector('[data-migrasi-go]')
+  if (go) go.addEventListener('click', () => { api.app.openExternal({ url: m.url }) })
 }
 
 // Telan tombol Back saat layar wajib tampil (Android/WebView) — tak boleh keluar.

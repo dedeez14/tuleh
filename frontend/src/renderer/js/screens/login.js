@@ -213,7 +213,7 @@ export function renderLogin(container, { onSuccess }) {
         <input class="input" id="server-url" type="url" value="${esc(current)}"
                placeholder="https://namadomain.com" />
         <div class="field__hint">
-          Wajib HTTPS. Tenant dikenali dari domain — contoh: https://tokosaya.tatreport.com
+          Wajib HTTPS. Usaha Anda dikenali dari domain server yang diberikan penyedia layanan.
         </div>
         <div class="field__error u-hidden" id="server-error"></div>
       </div>`
@@ -281,7 +281,7 @@ export function tampilkanDemoBerakhir(container, pesanKhusus = null) {
   body.innerHTML = `
     <p>${pesanKhusus ? esc(pesanKhusus) : 'Masa coba Mode Demo <b>7 hari</b> di komputer ini sudah berakhir.'}</p>
     <p>Untuk terus memakai Tuléh, masuk dengan akun berlangganan. Belum punya akun?
-       Daftar dan berlangganan di <b>tatreport.com</b>, lalu masuk dengan email &amp; kata sandi Anda di sini.</p>`
+       Daftar dan berlangganan melalui penyedia layanan Tuléh Anda, lalu masuk dengan email &amp; kata sandi Anda di sini.</p>`
   showModal({
     title: 'Masa coba berakhir',
     body,

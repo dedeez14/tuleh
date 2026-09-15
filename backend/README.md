@@ -1,11 +1,10 @@
 # mpos-backend
 
-Gateway Go lokal antara aplikasi **MPos** (Electron) dan **MOVERA POS API**
-(`tatreport.com`). Bukan proxy terbuka — hanya endpoint MOVERA yang dikenal
-yang diteruskan.
+Gateway Go lokal antara aplikasi desktop (Electron) dan **POS API** server tenant.
+Bukan proxy terbuka — hanya endpoint yang dikenal (tabel `routes.go`) yang diteruskan.
 
 ```
-MPos (Electron) ──HTTP──▶ mpos-backend (127.0.0.1:8787) ──HTTPS──▶ tatreport.com
+Aplikasi (Electron) ──HTTP──▶ mpos-backend (127.0.0.1:8787) ──HTTPS──▶ server tenant (MPOS_UPSTREAM)
 ```
 
 ## Kenapa ada gateway?
@@ -17,10 +16,13 @@ MPos (Electron) ──HTTP──▶ mpos-backend (127.0.0.1:8787) ──HTTPS─
 
 ## Menjalankan
 
-**Otomatis (default).** Aplikasi MPos menyalakan gateway ini sendiri saat dibuka
+**Otomatis (default).** Aplikasi menyalakan gateway ini sendiri saat dibuka
 (binary dibundel installer di `resources/backend/`), memakai URL server tenant
-sebagai upstream, dan mematikannya saat aplikasi ditutup. Bila sudah ada
-instance berjalan dengan upstream sama, instance itu dipakai ulang. Status
+sebagai upstream, dan mematikannya saat aplikasi ditutup. Instance yang sudah
+berjalan dipakai ulang HANYA bila upstream **dan versinya** sama dengan aplikasi.
+Bila proses gateway keluar, aplikasi langsung kembali ke koneksi langsung lalu
+mencoba menyalakannya lagi dengan jeda bertahap (1 dtk → 5 mnt). Log gateway
+(stdout/stderr) masuk ke `logs/gateway.log` aplikasi. Status
 terlihat di **Pengaturan → Aplikasi → Gateway lokal**. Biarkan URL server tetap
 domain tenant — JANGAN menunjuk `http://localhost:8787` secara manual (nilai
 lama seperti itu dimigrasikan otomatis kembali ke domain tenant).
@@ -29,7 +31,7 @@ lama seperti itu dimigrasikan otomatis kembali ke domain tenant).
 
 ```powershell
 cd frontend
-powershell -ExecutionPolicy Bypass -File tools\run-backend.ps1
+powershell -ExecutionPolicy Bypass -File tools\run-backend.ps1 -Upstream https://domain-server-anda
 ```
 
 Konfigurasi via environment:
@@ -37,8 +39,26 @@ Konfigurasi via environment:
 | Variabel | Default | Keterangan |
 |---|---|---|
 | `MPOS_LISTEN` | `127.0.0.1:8787` | Alamat dengar |
-| `MPOS_UPSTREAM` | `https://tatreport.com` | Domain tenant MOVERA (wajib HTTPS) |
+| `MPOS_UPSTREAM` | — (**wajib**) | Domain server tenant (wajib HTTPS; http hanya localhost). Tidak ada server bawaan tertanam |
+| `MPOS_VERSION` | — | Versi yang dilaporkan `/healthz` bila build tanpa `-ldflags "-X main.appVersion=…"` (CI selalu memakai ldflags = versi `frontend/package.json`) |
 | `MPOS_LOG` | `info` | `debug` untuk log rinci |
+
+## Galat buatan gateway
+
+Galat yang DIBUAT gateway (bukan jawaban server) diberi header `X-Tuleh-Gateway` agar
+aplikasi membedakan "server tak terjangkau" dari "server menolak":
+
+| Status | `X-Tuleh-Gateway` | Arti bagi aplikasi |
+|---|---|---|
+| 502 | `upstream-unreachable` | Gangguan jaringan → GET dari salinan offline, tulis diantrekan |
+| 429 | `rate-limited` | Gangguan sementara |
+| 500 | `internal` | Gangguan sementara (panic gateway) |
+| 404 | `route-unknown` | Rute tidak ada di allowlist → bug aplikasi (dijaga tes `frontend/tests/rute-gateway.test.js`) |
+| 413 | `body-too-large` | Penolakan (badan > batas) |
+
+Jawaban server (termasuk 5xx) diteruskan apa adanya tanpa header ini. Header permintaan
+yang diteruskan: `Authorization`, `Content-Type`, `Accept`, `Accept-Language`,
+`X-Tuleh-Version`, `X-Tuleh-Platform`.
 
 ## Pengembangan
 

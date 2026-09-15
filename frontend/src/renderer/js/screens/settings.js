@@ -3,7 +3,7 @@
 import { api, firstError } from '../api.js'
 import { getState } from '../state.js'
 import { bisa, namaPeran } from '../akses.js'
-import { icons, toast, confirmDialog } from '../components/ui.js'
+import { icons, toast, confirmDialog, showModal } from '../components/ui.js'
 import { esc, fmtDateTime, fmtDate } from '../utils/format.js'
 import { mulaiPembayaran } from '../langganan-bayar.js'
 import { mountProfilUsaha } from './profil-usaha.js'
@@ -67,7 +67,7 @@ function pickServerTime(data) {
   return formatted === '—' ? String(raw) : formatted
 }
 
-// Hak Akses (§4.4) — peran & hak dari server (diatur pemilik usaha di tatreport.com → Role).
+// Hak Akses (§4.4) — peran & hak dari server (diatur pemilik usaha di ERP → Role).
 function hakAksesCardHTML() {
   const { user, akses } = getState()
   const label = namaPeran()
@@ -81,7 +81,7 @@ function hakAksesCardHTML() {
           ${defRow('Peran', `<span class="badge badge--${warna}">${esc(label)}</span>`)}
           ${defRow('Hak akses', `<span class="num">${Array.isArray(akses) ? akses.length : 0} fitur</span>`)}
         </div>
-        <div class="field__hint">Peran &amp; hak aksesnya diatur pemilik usaha di tatreport.com (ERP → Role) dan menentukan menu serta tombol yang tampil.</div>
+        <div class="field__hint">Peran &amp; hak aksesnya diatur pemilik usaha di ERP (menu Role) dan menentukan menu serta tombol yang tampil.</div>
       </div>
     </section>`
 }
@@ -160,7 +160,7 @@ export const SettingsScreen = {
               <div class="field">
                 <label class="field__label" for="set-url">Ubah URL server</label>
                 <input class="input mono" id="set-url" type="url"
-                       placeholder="https://tokosaya.tatreport.com" autocomplete="off" />
+                       placeholder="https://namadomain-usaha-anda" autocomplete="off" />
                 <div class="field__error u-hidden" id="set-url-error"></div>
                 <div class="field__hint">
                   Setelah mengganti server, sebaiknya keluar lalu masuk kembali agar token sesuai server baru.
@@ -217,6 +217,14 @@ export const SettingsScreen = {
                 Jangan menyala-matikan berulang cepat — layanan gratis ini membatasi
                 pembuatan tunnel per beberapa menit.
               </div>
+              <div id="set-lapor-wrap" class="u-hidden">
+                <hr class="divider" />
+                <h3 class="set-keys__title">Dukungan</h3>
+                <div class="field__hint">Kirim log aplikasi ke tim dukungan untuk membantu memeriksa masalah. Token, PIN, dan kata sandi disamarkan otomatis — isi laporan ditampilkan dulu sebelum dikirim.</div>
+                <div class="set-actions">
+                  <button class="btn btn--outline btn--sm" id="set-lapor-btn" type="button">Kirim laporan ke dukungan</button>
+                </div>
+              </div>
               <hr class="divider" />
               <h3 class="set-keys__title">Pintasan keyboard</h3>
               ${keysHTML()}
@@ -239,6 +247,10 @@ export const SettingsScreen = {
     kemampuanPlatform().then((k) => {
       if (k.antreanOffline) renderPanelSinkronisasi(container.querySelector('#set-sinkron'))
       else container.querySelector('#set-sinkron-card')?.remove() // perangkat ini selalu mengirim langsung
+      if (k.laporanLog && api.diagnostik) {
+        container.querySelector('#set-lapor-wrap')?.classList.remove('u-hidden')
+        container.querySelector('#set-lapor-btn')?.addEventListener('click', bukaLaporanDukungan)
+      }
     })
     mountPrinterSetelan(container.querySelector('#set-printer'))
 
@@ -332,7 +344,13 @@ export const SettingsScreen = {
         showUrlError(firstError(res))
         return
       }
-      toast('Server disimpan. Keluar lalu masuk kembali agar sesi mengikuti server baru.', 'success')
+      if (res.data && res.data.keluar) {
+        // Token server lama sudah dihapus di main → muat ulang ke layar masuk.
+        toast('Server diganti. Silakan masuk kembali.', 'success')
+        setTimeout(() => location.reload(), 900)
+        return
+      }
+      toast('Server disimpan.', 'success')
       syncServer()
     })
 
@@ -384,4 +402,76 @@ export const SettingsScreen = {
       }
     }
   }
+}
+
+// ---------- Kirim laporan ke dukungan (kontrak diagnostik, jenis: log) ----------
+// Dua langkah: (1) catatan opsional → pratinjau, (2) tampilkan PERSIS body yang akan
+// dikirim (sudah disamarkan di main) → pengguna menekan Kirim.
+function bukaLaporanDukungan() {
+  const body = document.createElement('div')
+  body.className = 'set-lapor'
+  const footer = document.createElement('div')
+  footer.style.display = 'flex'
+  footer.style.gap = 'var(--sp-3)'
+  footer.style.justifyContent = 'flex-end'
+  const { close } = showModal({ title: 'Kirim laporan ke dukungan', body, footer, size: 'lg' })
+
+  function langkahCatatan(catatan = '') {
+    body.innerHTML = `
+      <div class="field">
+        <label class="field__label" for="lapor-catatan">Ceritakan masalahnya (opsional)</label>
+        <textarea class="input" id="lapor-catatan" rows="4" maxlength="2000" placeholder="Mis. struk tidak tercetak setelah transaksi tunai sejak pagi ini.">${esc(catatan)}</textarea>
+        <div class="field__hint">Langkah berikutnya menampilkan seluruh isi laporan (termasuk log terakhir) sebelum dikirim.</div>
+      </div>`
+    footer.innerHTML = `
+      <button type="button" class="btn btn--ghost" data-modal-close>Batal</button>
+      <button type="button" class="btn btn--primary" data-lapor="pratinjau">Lihat isi laporan</button>`
+    footer.querySelector('[data-lapor="pratinjau"]').addEventListener('click', async (e) => {
+      const btn = e.currentTarget
+      btn.disabled = true
+      btn.textContent = 'Menyiapkan…'
+      const teks = body.querySelector('#lapor-catatan').value
+      const r = await api.diagnostik.pratinjauLog({ catatan: teks, layar: 'Pengaturan' })
+      if (!r.ok || !r.data) {
+        btn.disabled = false
+        btn.textContent = 'Lihat isi laporan'
+        toast(firstError(r), 'error')
+        return
+      }
+      langkahPratinjau(teks, r.data)
+    })
+  }
+
+  function langkahPratinjau(catatan, { id, body: isi }) {
+    const json = JSON.stringify(isi, null, 2)
+    body.innerHTML = `
+      <p class="field__hint">Berikut data yang akan dikirim ke server dukungan (${fmtUkuran(json.length)}). Periksa bila perlu, lalu tekan <b>Kirim</b>.</p>
+      <pre class="set-lapor__isi" tabindex="0" style="max-height:50vh;overflow:auto;white-space:pre-wrap;word-break:break-word;font-size:12px;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius-md);padding:var(--sp-3)">${esc(json)}</pre>`
+    footer.innerHTML = `
+      <button type="button" class="btn btn--ghost" data-lapor="kembali">Kembali</button>
+      <button type="button" class="btn btn--primary" data-lapor="kirim">Kirim</button>`
+    footer.querySelector('[data-lapor="kembali"]').addEventListener('click', () => langkahCatatan(catatan))
+    footer.querySelector('[data-lapor="kirim"]').addEventListener('click', async (e) => {
+      const btn = e.currentTarget
+      btn.disabled = true
+      btn.textContent = 'Mengirim…'
+      const r = await api.diagnostik.kirimLog({ id })
+      if (!r.ok) {
+        btn.disabled = false
+        btn.textContent = 'Kirim'
+        toast(firstError(r), 'error')
+        return
+      }
+      if (r.data && r.data.demo) toast('Mode Demo: laporan hanya disimulasikan, tidak dikirim ke server.', 'info')
+      else if (r.data && r.data.tertunda) toast(r.message || 'Laporan disimpan dan dikirim saat online.', 'info')
+      else toast('Laporan terkirim ke dukungan. Terima kasih.', 'success')
+      close()
+    })
+  }
+
+  langkahCatatan()
+}
+
+function fmtUkuran(karakter) {
+  return karakter >= 1024 ? `${Math.round(karakter / 1024)} KB` : `${karakter} karakter`
 }

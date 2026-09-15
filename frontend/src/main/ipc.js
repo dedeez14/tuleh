@@ -15,6 +15,11 @@ const qr = require('./qr')
 const customerWindow = require('./customer-window')
 const updater = require('./updater')
 const offline = require('./offline')
+const { buatTulisAtauAntre } = require('./offline/tulis')
+const diagnostik = require('./diagnostik')
+const firewall = require('./firewall')
+const { urlHttpsAman, domainServer, hostMilik } = require('./lib/url-aman')
+const { tandaiJendelaBayar, lepasJendelaBayar } = require('./lib/izin')
 
 // Validasi masukan & pemetaan kanal → HTTP tinggal di kontrak bersama (dipakai juga Android).
 const kontrak = require('../shared/kontrak-kanal')
@@ -46,10 +51,19 @@ function enrichTracking(channel, result) {
   return result
 }
 
+// Diisi registerIpcHandlers: pemberitahu layar "Langganan berakhir" (402) untuk simulasi demo.
+let kabarLanggananDemo = null
+
 function handle(channel, handler) {
   ipcMain.handle(channel, async (_event, payload) => {
     try {
       if (demo.isActive() && demo.handlers[channel]) {
+        // Simulasi kontrak #2 (IPOS_SMOKE_LANGGANAN=blokir): kanal tulis → 402 + layar kunci.
+        const blokir = typeof demo.langgananDiblokir === 'function' ? demo.langgananDiblokir(channel) : null
+        if (blokir) {
+          if (kabarLanggananDemo) kabarLanggananDemo({ pesan: blokir.message, status: blokir.meta.langganan.status, perpanjangUrl: blokir.meta.langganan.perpanjang_url })
+          return blokir
+        }
         return enrichTracking(channel, await demo.handlers[channel](payload || {}))
       }
       return enrichTracking(channel, await handler(payload || {}))
@@ -64,8 +78,23 @@ function registerIpcHandlers(getMainWindow) {
   const settings = settingsStore.load()
   api.setBaseUrl(settings.baseUrl)
 
+  const kirimKeRenderer = (kanal, data) => {
+    const win = getMainWindow()
+    if (win && !win.isDestroyed()) win.webContents.send(kanal, data)
+  }
+
+  // ---------- Diagnostik (kontrak #1): laporan galat + log berkas ----------
+  diagnostik.init({
+    api,
+    dir: app.getPath('userData'),
+    konteks: () => {
+      const gw = gateway.status()
+      return { gateway: { running: gw.running, external: gw.external, version: gw.version, versiApp: gw.versiApp } }
+    }
+  })
+
   // ---------- Kanal HTTP bersama (src/shared/kontrak-kanal.js) ----------
-  const konteksKontrak = () => ({ tokoAktif: api.getActiveTokoId(), versiApp: api.appVersion() })
+  const konteksKontrak = () => ({ tokoAktif: api.getActiveTokoId(), versiApp: api.appVersion(), platform: api.PLATFORM })
   function kirimKontrak(kanal, payload) {
     const minta = kontrak.bentuk(kanal, payload, konteksKontrak())
     if (minta.metode === 'UPLOAD') return api.upload(minta.jalur, { file: minta.berkas })
@@ -80,7 +109,8 @@ function registerIpcHandlers(getMainWindow) {
     kirim: async (jalur, body, pesan) => {
       // Kirim atas nama toko saat pesan dibuat, bukan toko aktif sekarang.
       const query = pesan && pesan.tokoId ? { toko_id: pesan.tokoId } : undefined
-      const r = await api.post(jalur, { body, query })
+      // pantauKoneksi:false — satu muatan beracun (5xx berulang) tidak menandai seluruh aplikasi offline.
+      const r = await withAuthWatch(api.post(jalur, { body, query, pantauKoneksi: false }))
       return r.timeout ? { ...r, status: -1 } : r
     },
     // Daftar transaksi server untuk memulihkan baris "mungkin sudah sampai".
@@ -89,6 +119,17 @@ function registerIpcHandlers(getMainWindow) {
         query: { dari, sampai, tanggal_dari: dari, tanggal_sampai: sampai, ...(tokoId ? { toko_id: tokoId } : {}) }
       })
       return r.ok && Array.isArray(r.data) ? r.data : null
+    },
+    // Tanpa token (mis. setelah 401) pengurai tidak mengirim — tidak memukul server tiap detik.
+    siapKirim: () => api.hasToken(),
+    // Antrean gagal ditulis / berkas rusak → pita status (lewat koneksi._siar) + laporan dukungan.
+    onGalatAntrean: (galat) => {
+      diagnostik.lapor({
+        jenis: 'error',
+        pesan: `Antrean offline: ${galat.pesan}`,
+        stack: [galat.detail, ...(galat.berkasRusak || [])].filter(Boolean).join('\n'),
+        konteks: { layar: 'antrean-offline', jenis_galat: galat.jenis }
+      })
     }
   })
   const kirimStatusOffline = () => {
@@ -96,34 +137,26 @@ function registerIpcHandlers(getMainWindow) {
     if (win && !win.isDestroyed()) win.webContents.send('offline:status', offline.status(api.getActiveTokoId()))
   }
   offline.koneksi.langgan(kirimStatusOffline)
-  // Kembali online (dari permintaan mana pun) → uraikan antrean.
+  // Kembali online (dari permintaan mana pun) → uraikan antrean + kirim laporan diagnostik tertunda.
   offline.koneksi.langgan(() => {
-    if (offline.koneksi.online && offline.antrean.ringkas().menunggu > 0) offline.pengurai.jalankan()
+    if (!offline.koneksi.online) return
+    if (offline.antrean.ringkas().menunggu > 0) offline.pengurai.jalankan()
+    diagnostik.kirimAntrean()
   })
   // Jalankan sekali saat start bila ada sisa antrean dari sesi sebelumnya.
   setTimeout(() => { if (api.hasToken()) offline.pengurai.jalankan() }, 3000).unref?.()
 
   /**
-   * Permintaan tulis dengan jalur offline: bila diketahui offline → antrekan
-   * langsung; bila gagal jaringan ATAU timeout setelah kirim → antrekan biasa
-   * dan kirim ulang otomatis (server menolak duplikat lewat `client_ref`).
-   * Server menolak (4xx) → kembalikan apa adanya.
+   * Permintaan tulis dengan jalur offline (offline/tulis.js): offline / gangguan jaringan
+   * (termasuk 5xx/408/429 & galat gateway) → antrekan & kirim ulang otomatis; 402
+   * langganan & penolakan 4xx → kembalikan apa adanya (tidak diantrekan).
    */
-  async function tulisAtauAntre({ jenis, jalur, body, transaksi = null, deltaStok = {} }) {
-    const clientRef = offline.buatClientRef()
-    const badan = { ...body, client_ref: clientRef, waktu_klien: offline.waktuKlien() }
-    if (offline.koneksi.online) {
-      const r = await withAuthWatch(api.post(jalur, { body: badan }))
-      if (r.ok) return { ...r, clientRef }
-      if (r.status !== 0) return r // ditolak server: tampilkan apa adanya
-    }
-    offline.antrean.antrekan({
-      clientRef, jenis, tokoId: api.getActiveTokoId(), path: jalur, body: badan,
-      status: offline.STATUS.MENUNGGU
-    }, { transaksi, deltaStok })
-    kirimStatusOffline()
-    return { ok: true, status: 202, data: null, meta: null, message: '', tertunda: true, clientRef }
-  }
+  const tulisAtauAntre = buatTulisAtauAntre({
+    offline,
+    kirim: (jalur, body) => withAuthWatch(api.post(jalur, { body })),
+    tokoAktif: () => api.getActiveTokoId(),
+    setelahAntre: () => kirimStatusOffline()
+  })
 
   handle('offline:status', () => ({ ok: true, data: offline.status(api.getActiveTokoId()) }))
   handle('offline:daftar', () => ({
@@ -134,7 +167,8 @@ function registerIpcHandlers(getMainWindow) {
     const ping = await api.get('/ping', { auth: false })
     if (!ping.ok) { offline.koneksi.tandaiOffline(); kirimStatusOffline(); return { ok: false, status: 0, message: 'Server belum terjangkau.' } }
     offline.koneksi.tandaiOnline()
-    const n = await offline.pengurai.jalankan()
+    // Manual: lewati jeda global (mis. setelah langganan diperpanjang) lalu kirim yang siap.
+    const n = await offline.pengurai.sinkronSekarang()
     kirimStatusOffline()
     return { ok: true, data: { terkirim: n, ...offline.status(api.getActiveTokoId()) } }
   })
@@ -153,8 +187,14 @@ function registerIpcHandlers(getMainWindow) {
 
   // Nyalakan gateway lokal di latar belakang (best-effort). Sebelum siap,
   // permintaan berjalan langsung ke server — lalu otomatis pindah ke gateway.
+  // Gateway mati / tak menjawab → langsung kembali ke koneksi langsung; pengawas
+  // menyalakannya lagi dengan mundur (lib/pengawas-gateway.js).
+  gateway.onBerubah((st) => {
+    api.setGateway(st.running && st.port ? `http://127.0.0.1:${st.port}` : null)
+    console.log('[gateway] status', JSON.stringify(st))
+  })
+  api.setGatewayGagalHandler(() => gateway.laporGagal())
   gateway.ensureRunning(settings.baseUrl).then((st) => {
-    api.setGateway(st.ok ? `http://127.0.0.1:${st.port}` : null)
     console.log('[gateway]', JSON.stringify(st))
   }).catch((err) => {
     console.error('[gateway] gagal:', err)
@@ -181,6 +221,22 @@ function registerIpcHandlers(getMainWindow) {
     console.log('[update] 426 diterima —', message || '(tanpa pesan)')
   })
 
+  // Kontrak #2: HTTP 402 dari endpoint tulis mana pun → layar "Langganan berakhir".
+  // Pesan & URL perpanjang dari server; URL divalidasi (https) — kosong = tanpa tombol.
+  let perpanjangUrlTerakhir = null
+  function kabarkanLanggananTerkunci(info) {
+    const url = urlHttpsAman(info && info.perpanjangUrl)
+    if (url) perpanjangUrlTerakhir = url
+    kirimKeRenderer('langganan:terkunci', {
+      pesan: (info && info.pesan) || '',
+      status: (info && info.status) || null,
+      perpanjang_url: url
+    })
+    console.log('[langganan] 402 diterima —', (info && info.pesan) || '(tanpa pesan)')
+  }
+  api.setLanggananHandler(kabarkanLanggananTerkunci)
+  kabarLanggananDemo = kabarkanLanggananTerkunci
+
   // Auto-Update Tahap 3: relay progres/selesai/error electron-updater ke renderer.
   updater.init((channel, payload) => {
     const win = getMainWindow()
@@ -195,7 +251,9 @@ function registerIpcHandlers(getMainWindow) {
       version: app.getVersion(),
       hostname: os.hostname(),
       platform: process.platform,
-      kemampuan: { antreanOffline: true, printerSistem: true },
+      // Nilai X-Tuleh-Platform / `platform` diagnostik (renderer bersama membedakan desktop vs Android lama).
+      platformApi: api.PLATFORM,
+      kemampuan: { antreanOffline: true, printerSistem: true, laporanLog: true },
       gateway: gateway.status(),
       tracking: tracker.status(),
       // Jalur uji tampilan otomatis (screenshot smoke) — tidak dipakai produksi
@@ -223,16 +281,18 @@ function registerIpcHandlers(getMainWindow) {
 
   // Buka URL di browser sistem (halaman pembayaran Midtrans — WAJIB browser penuh,
   // bukan webview: 3-D Secure & deep link e-wallet kerap gagal di webview).
-  handle('app:openExternal', async ({ url }) => {
-    const u = str(url, { required: true, max: 2000 })
-    if (!/^https:\/\//i.test(u)) return fail('Hanya URL https yang boleh dibuka.')
+  handle('app:openExternal', async (payload) => {
+    // Kompatibel: renderer lama mengirim string, yang baru { url }.
+    const mentah = typeof payload === 'string' ? payload : payload && payload.url
+    const u = urlHttpsAman(str(mentah, { required: true, max: 2000 }))
+    if (!u) return fail('Hanya URL https yang boleh dibuka.')
     await shell.openExternal(u)
     return { ok: true, data: null }
   })
 
-  // Buka akses LAN (firewall) manual — fallback bila auto-open saat start ditolak.
+  // Buka akses LAN (firewall) — tombol eksplisit pengguna (boleh meminta lagi walau tadi ditolak).
   handle('firewall:ensure', async () => {
-    const r = await require('./firewall').ensure()
+    const r = await firewall.ensure({ paksa: true })
     if (r && r.ok) return { ok: true, data: r }
     return fail('Gagal membuka akses jaringan (izin admin ditolak?). Coba lagi & pilih “Ya” pada dialog Windows.')
   })
@@ -243,6 +303,9 @@ function registerIpcHandlers(getMainWindow) {
     const ts = tracker.status()
     if (!ts.running || !ts.baseUrl) return fail('Server LAN belum aktif — papan antrian belum bisa dibuka.')
     const url = `${ts.baseUrl}/antrian`
+    // Tampilan LAN benar-benar dipakai → baru minta aturan firewall (sekali; tidak diulang
+    // bila ditolak di sesi ini). Tidak menunggu dialog UAC agar papan langsung terbuka.
+    firewall.ensure().catch(() => {})
     await shell.openExternal(url)
     return { ok: true, data: { url } }
   })
@@ -428,16 +491,43 @@ function registerIpcHandlers(getMainWindow) {
   handle('settings:get', () => ({ ok: true, data: settingsStore.load() }))
 
   handle('settings:setBaseUrl', ({ baseUrl }) => {
+    const lama = api.getBaseUrl()
+    const cek = settingsStore.normalisasiBaseUrl(baseUrl)
+    if (!cek.ok) return fail(cek.message)
+    const berganti = cek.baseUrl !== lama
+    // Antrean berisi penjualan milik server lama — jangan sampai terkirim ke server lain.
+    if (berganti && offline.antrean.ringkas().total > 0) {
+      return { ok: false, status: 409, code: 'ANTREAN', message: `${offline.antrean.ringkas().total} data offline belum terkirim ke server saat ini. Kirim dulu (Pengaturan → Sinkronisasi) atau batalkan sebelum mengganti server.`, errors: null }
+    }
     const result = settingsStore.setBaseUrl(baseUrl)
     if (!result.ok) return fail(result.message)
     api.setBaseUrl(result.baseUrl)
-    // Ganti server → gateway di-restart dengan upstream baru (best-effort)
+    if (berganti) {
+      // Token & salinan offline milik server lama tidak boleh terbawa ke server baru.
+      api.setToken(null)
+      authStore.clear()
+      api.setActiveTokoId(null)
+      if (offline.salinan) offline.salinan.hapusSemua()
+      perpanjangUrlTerakhir = null
+    }
+    // Ganti server → gateway di-restart dengan upstream baru (best-effort; status via onBerubah)
     api.setGateway(null)
-    gateway.restart(result.baseUrl).then((st) => {
-      api.setGateway(st.ok ? `http://127.0.0.1:${st.port}` : null)
-    })
-    return { ok: true, data: { baseUrl: result.baseUrl } }
+    gateway.restart(result.baseUrl)
+    return { ok: true, data: { baseUrl: result.baseUrl, keluar: berganti } }
   })
+
+  // ---------- Diagnostik: galat renderer & laporan log ke dukungan ----------
+  handle('diagnostik:laporGalat', (p) => {
+    diagnostik.lapor({
+      jenis: p && p.jenis === 'crash' ? 'crash' : 'error',
+      pesan: str(p && p.pesan, { max: 4000 }) || 'Galat renderer tanpa pesan',
+      stack: str(p && p.stack, { max: 40000 }) || '',
+      konteks: { layar: str(p && p.layar, { max: 80 }) || '', sumber: 'renderer' }
+    })
+    return { ok: true, data: null }
+  })
+  handle('diagnostik:pratinjauLog', (p) => ({ ok: true, data: diagnostik.pratinjauLog({ catatan: str(p && p.catatan, { max: 2000 }), layar: str(p && p.layar, { max: 80 }) }) }))
+  handle('diagnostik:kirimLog', (p) => diagnostik.kirimLog({ id: str(p && p.id, { required: true, max: 80 }) }))
 
   handle('net:ping', async () => {
     const r = await kirimKontrak('net:ping')
@@ -467,6 +557,8 @@ function registerIpcHandlers(getMainWindow) {
       // Identitas disalin sebagai /auth/me agar masuk otomatis tetap bisa
       // saat internet mati (bentuknya sama dengan jawaban /auth/me).
       if (offline.salinan) offline.salinan.simpan(null, '/auth/me', {}, { data: result.data, meta: null })
+      // Antrean yang tertahan karena sesi berakhir dilanjutkan dengan token baru.
+      if (offline.antrean.ringkas().menunggu > 0) offline.pengurai.sinkronSekarang()
     }
     return result
   })
@@ -489,7 +581,12 @@ function registerIpcHandlers(getMainWindow) {
   const KANAL_KHUSUS_DESKTOP = new Set(['net:ping', 'inventory:stokMasuk', 'pengeluaran:create', 'trx:checkout', 'trx:list', 'trx:detail'])
   for (const kanal of Object.keys(kontrak.KANAL)) {
     if (KANAL_KHUSUS_DESKTOP.has(kanal)) continue
-    handle(kanal, (payload) => withAuthWatch(kirimKontrak(kanal, payload)))
+    handle(kanal, async (payload) => {
+      const r = await withAuthWatch(kirimKontrak(kanal, payload))
+      // /config membawa batas tinjau otomatis antrean (juga saat disajikan dari salinan offline).
+      if (kanal === 'config:get' && r.ok && r.data) offline.aturKebijakanAntrean(r.data)
+      return r
+    })
   }
 
   // Tulis yang boleh diantrekan saat offline (kontrak menandai `antrean`).
@@ -503,12 +600,15 @@ function registerIpcHandlers(getMainWindow) {
 
   // Buka halaman pembayaran Midtrans DI DALAM aplikasi (BrowserWindow modal,
   // Chromium penuh → 3-D Secure & QRIS jalan). Pantau navigasi: saat Midtrans
-  // mengarahkan ke URL selesai (mengandung transaction_status atau ke domain
-  // tatreport.com/bayar), kembalikan hasilnya. result:
+  // mengarahkan ke URL selesai (mengandung transaction_status atau ke halaman
+  // bayar/selesai di domain server), kembalikan hasilnya. result:
   // settlement|capture|pending|deny|cancel|expire|finished|closed.
   handle('langganan:jendelaBayar', ({ url }) => {
-    const u = str(url, { required: true, max: 2000 })
-    if (!/^https:\/\//i.test(u)) return fail('URL pembayaran tidak valid.')
+    const u = urlHttpsAman(str(url, { required: true, max: 2000 }))
+    if (!u) return fail('URL pembayaran tidak valid.')
+    // Halaman "selesai" milik server: domain server yang dipakai aplikasi (+ domain URL
+    // perpanjang dari server) — bukan domain tertanam.
+    const domainSelesai = [domainServer(api.getBaseUrl()), domainServer(perpanjangUrlTerakhir)]
     const parent = getMainWindow()
     return new Promise((resolve) => {
       const win = new BrowserWindow({
@@ -517,6 +617,8 @@ function registerIpcHandlers(getMainWindow) {
         modal: !!parent, title: 'Pembayaran Langganan', autoHideMenuBar: true,
         webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true }
       })
+      const idKonten = win.webContents.id
+      tandaiJendelaBayar(idKonten) // izin salin (nomor VA) hanya untuk jendela ini
       let done = false
       const finish = (result) => {
         if (done) return
@@ -529,19 +631,22 @@ function registerIpcHandlers(getMainWindow) {
           const p = new URL(navUrl)
           const ts = p.searchParams.get('transaction_status')
           if (ts) return finish(ts) // sinyal Midtrans langsung
-          // Halaman selesai merchant (mis. pos.tatreport.com/bayar/selesai)
-          if (/(^|\.)tatreport\.com$/i.test(p.host) && /bayar|selesai|finish|callback|return/i.test(p.pathname)) return finish('finished')
+          // Halaman selesai milik server (mis. pos.<domain server>/bayar/selesai)
+          if (hostMilik(navUrl, domainSelesai) && /bayar|selesai|finish|callback|return/i.test(p.pathname)) return finish('finished')
         } catch { /* abaikan URL non-standar */ }
       }
       win.webContents.on('will-redirect', (_e, navUrl) => inspect(navUrl))
       win.webContents.on('did-navigate', (_e, navUrl) => inspect(navUrl))
       win.webContents.on('did-navigate-in-page', (_e, navUrl) => inspect(navUrl))
-      win.on('closed', () => { if (!done) { done = true; resolve({ ok: true, data: { result: 'closed' } }) } })
+      win.on('closed', () => {
+        lepasJendelaBayar(idKonten)
+        if (!done) { done = true; resolve({ ok: true, data: { result: 'closed' } }) }
+      })
       win.loadURL(u).catch(() => finish('error'))
     })
   })
 
-  // Konteks toko aktif (MOVERA §1.3): simpan id terpilih agar api-client
+  // Konteks toko aktif (§1.3): simpan id terpilih agar api-client
   // menyisipkannya sebagai ?toko_id di tiap permintaan terautentikasi —
   // menyingkirkan 409 "Pilih toko aktif" pada perusahaan multi-toko.
   // Mode Demo meng-intersep channel ini (demo.js) sehingga tak sampai sini.

@@ -1,13 +1,14 @@
 'use strict'
 
-// Buka akses LAN otomatis: pastikan aturan firewall inbound untuk port tracker
-// (Display Pelanggan /display & Papan Antrian /antrian) ada, agar TV/HP lain di
-// jaringan bisa mengaksesnya. Windows memblokir inbound di jaringan "Public"
-// secara default — inilah penyebab umum "URL tak terbuka di TV".
+// Akses LAN: pastikan aturan firewall inbound untuk port tracker (Display Pelanggan
+// /display & Papan Antrian /antrian) ada, agar TV/HP lain di jaringan bisa mengaksesnya.
+// Windows memblokir inbound di jaringan "Public" secara default.
 //
-// Strategi anti-UAC-berulang: CEK dulu (tanpa admin); hanya bila aturan belum
-// ada → tambahkan (netsh dijalankan elevated via PowerShell → UAC SEKALI).
-// Setelah disetujui, aturan permanen → start berikutnya tak memunculkan prompt.
+// Kapan meminta: HANYA saat pengguna benar-benar memakai tampilan LAN (membuka Papan
+// Antrian, atau menekan "Buka akses jaringan") — BUKAN setiap aplikasi dibuka.
+// CEK dulu (tanpa admin); hanya bila aturan belum ada → tambahkan (UAC). Permintaan
+// otomatis yang ditolak pengguna TIDAK diulang dalam sesi aplikasi yang sama; tombol
+// eksplisit ("paksa") tetap boleh meminta lagi karena itu kehendak pengguna.
 
 const { spawn, execFile } = require('node:child_process')
 
@@ -48,18 +49,35 @@ function addRuleElevated() {
 }
 
 /**
- * Pastikan aturan firewall LAN ada. Aman dipanggil tiap start: bila sudah ada,
- * TIDAK ada prompt. Mengembalikan { ok, added, already }.
+ * Inti keputusan (tersuntik agar teruji): { platform, ruleExists, addRule }.
+ * ensure({ paksa }) → { ok, added?, already?, reason? }
  */
-async function ensure() {
-  if (process.platform !== 'win32') return { ok: false, reason: 'not-windows' }
-  try {
-    if (await ruleExists()) return { ok: true, added: false, already: true }
-    const added = await addRuleElevated()
-    return { ok: added, added, already: false }
-  } catch {
-    return { ok: false }
+function buatFirewall({ platform = process.platform, cekAturan = ruleExists, tambahAturan = addRuleElevated } = {}) {
+  let ditolakSesiIni = false
+  let sedangMeminta = null
+
+  async function ensure({ paksa = false } = {}) {
+    if (platform !== 'win32') return { ok: false, reason: 'not-windows' }
+    if (sedangMeminta) return sedangMeminta // satu dialog UAC pada satu waktu
+    sedangMeminta = (async () => {
+      try {
+        if (await cekAturan()) return { ok: true, added: false, already: true }
+        if (ditolakSesiIni && !paksa) return { ok: false, reason: 'ditolak-sesi-ini' }
+        const added = await tambahAturan()
+        if (!added) ditolakSesiIni = true
+        return { ok: added, added, already: false }
+      } catch {
+        return { ok: false }
+      } finally {
+        sedangMeminta = null
+      }
+    })()
+    return sedangMeminta
   }
+
+  return { ensure, sudahDitolak: () => ditolakSesiIni }
 }
 
-module.exports = { ensure, ruleExists, PORT, RULE }
+const bawaan = buatFirewall()
+
+module.exports = { ensure: bawaan.ensure, buatFirewall, ruleExists, PORT, RULE }

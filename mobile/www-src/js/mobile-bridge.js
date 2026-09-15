@@ -1,6 +1,6 @@
 /* ============================================================================
  * Tuléh Android — jembatan window.iposAPI (pengganti preload/main Electron).
- * Memanggil MOVERA POS API langsung. CapacitorHttp mem-patch fetch → native
+ * Memanggil POS API langsung. CapacitorHttp mem-patch fetch → native
  * (bypass CORS). Token & pengaturan disimpan via Capacitor Preferences.
  * Mode Demo: demo.js (di-load via shim CJS → window.__demo) meng-intersep
  * channel data — mirror perilaku handle() di ipc.js desktop.
@@ -21,12 +21,16 @@
   // dengan versi di frontend/package.json. Angka di sini hanya cadangan bila
   // seseorang membuka www-src langsung.
   var APP_VERSION = '0.9.25'
+  // Nilai X-Tuleh-Platform / ?platform= / `platform` diagnostik: server memakai ini untuk
+  // jalur rilis & ajakan migrasi ke aplikasi utama (kontrak #4).
+  var APP_PLATFORM = 'android-legacy'
 
   var baseUrl = DEFAULT_BASE
   var token = null
   var activeTokoId = null
   var expiredCb = null
   var updateReqCb = null // Auto-Update: dipanggil saat HTTP 426 (update wajib)
+  var langgananCb = null // HTTP 402 langganan diblokir (kontrak #2)
   // Auto-Update Tahap 4 (Android in-app installer via plugin native ApkUpdater)
   var apkProgressCb = null
   var apkDownloadedCb = null
@@ -86,6 +90,7 @@
     return ({
       0: 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.',
       401: 'Sesi Anda telah berakhir. Silakan masuk kembali.',
+      402: 'Langganan berakhir. Perpanjang langganan untuk melanjutkan.',
       403: 'Anda tidak memiliki akses untuk aksi ini.',
       404: 'Data tidak ditemukan.',
       409: 'Aksi bentrok dengan kondisi saat ini.',
@@ -103,7 +108,12 @@
         if (res.status === 401) { token = null; prefSet('token', null); if (expiredCb) { try { expiredCb() } catch (e) {} } }
         // 426 dari endpoint mana pun = wajib update → beri sinyal ke renderer.
         if (res.status === 426 && updateReqCb) { try { updateReqCb({ message: (payload && payload.message) || 'Aplikasi Anda perlu diperbarui.' }) } catch (e) {} }
-        return { ok: false, status: res.status, message: (payload && payload.message) || statusMessage(res.status), errors: (payload && payload.errors) || null }
+        // 402 = langganan diblokir → layar "Langganan berakhir" (pesan & URL dari server).
+        if (res.status === 402 && langgananCb) {
+          var ml = (payload && payload.meta && payload.meta.langganan) || {}
+          try { langgananCb({ pesan: (payload && payload.message) || statusMessage(402), status: ml.status || null, perpanjang_url: /^https:\/\//i.test(ml.perpanjang_url || '') ? ml.perpanjang_url : null }) } catch (e) {}
+        }
+        return { ok: false, status: res.status, message: (payload && payload.message) || statusMessage(res.status), errors: (payload && payload.errors) || null, meta: (payload && payload.meta) || null }
       }
       return { ok: true, status: res.status, data: payload.data !== undefined ? payload.data : null, meta: payload.meta !== undefined ? payload.meta : null, message: payload.message || '' }
     })
@@ -122,7 +132,7 @@
     var timer = setTimeout(function () { ctrl.abort() }, TIMEOUT_MS)
     return ready
       .then(function () {
-        var headers = { Accept: 'application/json', 'X-Tuleh-Version': APP_VERSION }
+        var headers = { Accept: 'application/json', 'X-Tuleh-Version': APP_VERSION, 'X-Tuleh-Platform': APP_PLATFORM }
         if (hasBody) headers['Content-Type'] = 'application/json'
         if (auth && token) headers.Authorization = 'Bearer ' + token
         var query = auth ? denganToko(opts.query) : opts.query
@@ -148,12 +158,23 @@
     form.append(berkas.field || 'logo', new Blob([bytes], { type: berkas.mime || 'application/octet-stream' }), berkas.filename || 'upload.png')
     return ready
       .then(function () {
-        var headers = { Accept: 'application/json', 'X-Tuleh-Version': APP_VERSION }
+        var headers = { Accept: 'application/json', 'X-Tuleh-Version': APP_VERSION, 'X-Tuleh-Platform': APP_PLATFORM }
         if (token) headers.Authorization = 'Bearer ' + token
         return fetch(buildUrl(jalur, denganToko({})), { method: 'POST', headers: headers, body: form })
       })
       .then(amplop)
       .catch(function () { return { ok: false, status: 0, message: statusMessage(0), errors: null } })
+  }
+
+  // Hash teks sederhana (djb2, hex) untuk client_ref laporan — tanpa crypto.subtle di WebView lama.
+  function refSederhana (teks) {
+    var h1 = 5381; var h2 = 52711
+    for (var i = 0; i < teks.length; i++) {
+      var c = teks.charCodeAt(i)
+      h1 = ((h1 << 5) + h1) ^ c
+      h2 = ((h2 << 5) + h2) ^ c
+    }
+    return (h1 >>> 0).toString(16) + (h2 >>> 0).toString(16)
   }
 
   // ---- QR (window.qrcode) → data URI SVG (port qr.js) ----
@@ -189,6 +210,12 @@
     var dh = demo && demo.handlers
     if (demoActive && dh && dh[channel]) {
       if (typeof demo.isActive === 'function') demo.isActive() // picu reset TTL 24 jam
+      // Simulasi kontrak #2 (langganan diblokir) — sama dengan ipc.js desktop.
+      var blokir = typeof demo.langgananDiblokir === 'function' ? demo.langgananDiblokir(channel) : null
+      if (blokir) {
+        if (langgananCb) { try { langgananCb({ pesan: blokir.message, status: blokir.meta.langganan.status, perpanjang_url: blokir.meta.langganan.perpanjang_url }) } catch (e) {} }
+        return Promise.resolve(blokir)
+      }
       try { return Promise.resolve(dh[channel](payload || {})) }
       catch (e) { return Promise.resolve({ ok: false, status: 0, message: (e && e.message) || 'Kesalahan Mode Demo.', errors: null }) }
     }
@@ -200,7 +227,7 @@
   function kirimKontrak (kanal, payload) {
     return ready.then(function () {
       var minta
-      try { minta = Kontrak.bentuk(kanal, payload || {}, { tokoAktif: activeTokoId, versiApp: APP_VERSION }) }
+      try { minta = Kontrak.bentuk(kanal, payload || {}, { tokoAktif: activeTokoId, versiApp: APP_VERSION, platform: APP_PLATFORM }) }
       catch (e) { return notAvailable((e && e.message) || 'Permintaan tidak valid.') }
       if (minta.metode === 'UPLOAD') return unggah(minta.jalur, minta.berkas)
       return request(minta.metode, minta.jalur, { query: minta.query, body: minta.body, auth: minta.auth !== false })
@@ -227,7 +254,7 @@
     app: {
       // kemampuan: fitur yang bergantung perangkat — renderer menyembunyikan yang tak didukung
       // (antrean offline & gateway lokal, printer sistem/cetak senyap hanya di desktop).
-      info: function () { return ok({ version: APP_VERSION, platform: 'android', kemampuan: { antreanOffline: false, printerSistem: false }, gateway: { ok: false, running: false, external: false }, tracking: { running: false, baseUrl: baseUrl }, smokeDemo: false, smokeTokoIndex: null, smokeScreen: null, smokeTheme: null, smokeOpenBill: false, smokeFlow: null }) },
+      info: function () { return ok({ version: APP_VERSION, platform: 'android', platformApi: APP_PLATFORM, kemampuan: { antreanOffline: false, printerSistem: false, laporanLog: false }, gateway: { ok: false, running: false, external: false }, tracking: { running: false, baseUrl: baseUrl }, smokeDemo: false, smokeTokoIndex: null, smokeScreen: null, smokeTheme: null, smokeOpenBill: false, smokeFlow: null }) },
       print: function () { return printStruk() },
       printers: function () { return ok([]) },
       onUpdateRequired: function (cb) { updateReqCb = cb; return function () { if (updateReqCb === cb) updateReqCb = null } },
@@ -330,7 +357,28 @@
       },
       onExpired: function (cb) { expiredCb = cb; return function () { if (expiredCb === cb) expiredCb = null } }
     },
+    // Laporan galat (kontrak #1) langsung ke server; tanpa log berkas di WebView lama.
+    diagnostik: {
+      laporGalat: function (p) {
+        p = p || {}
+        var pesan = String(p.pesan || 'Galat renderer tanpa pesan').slice(0, 2000)
+        var stack = String(p.stack || '').slice(0, 20000)
+        var sekarang = new Date()
+        var body = {
+          platform: APP_PLATFORM, versi: APP_VERSION, jenis: p.jenis === 'crash' ? 'crash' : 'error',
+          pesan: pesan, stack: stack,
+          konteks: { layar: String(p.layar || '').slice(0, 80), perangkat: typeof navigator !== 'undefined' && navigator.userAgent ? String(navigator.userAgent).slice(0, 200) : '', locale: (typeof navigator !== 'undefined' && navigator.language) || '' },
+          terjadi_pada: sekarang.toISOString(),
+          // Galat sama pada hari yang sama = satu laporan (server menyingkirkan duplikat).
+          client_ref: 'al-' + refSederhana([pesan, stack, APP_VERSION, sekarang.toISOString().slice(0, 10)].join('|'))
+        }
+        return request('POST', '/diagnostik', { body: body, auth: token != null }).then(function () { return ok(null) })
+      },
+      pratinjauLog: function () { return notAvailable('Laporan log hanya tersedia di aplikasi desktop.') },
+      kirimLog: function () { return notAvailable('Laporan log hanya tersedia di aplikasi desktop.') }
+    },
     langganan: {
+      onTerkunci: function (cb) { langgananCb = cb; return function () { if (langgananCb === cb) langgananCb = null } },
       // Android tak punya BrowserWindow → buka di peramban perangkat + tandai 'external'
       // (renderer lanjut ke alur poll + "Saya sudah bayar").
       jendelaBayar: function (p) {

@@ -4,6 +4,7 @@
 // Selalu memuat ?tipe=SEMUA&include_habis=1 (jasa & item berstok-0 ikut tampil).
 
 import { api, firstError } from '../api.js'
+import { galatKolom } from '../lib/galat-form.js'
 import { getState } from '../state.js'
 import { bisa } from '../akses.js'
 import { esc, fmtIDR, fmtNumber, debounce, parseAmount } from '../utils/format.js'
@@ -155,6 +156,7 @@ export const ProductsScreen = {
         <div class="prd-form__row">
           <div class="field"><label class="field__label" for="pf-satuan">Satuan</label>
             <select class="select" id="pf-satuan" disabled><option value="">${esc(cur.satuan && cur.satuan !== '-' ? cur.satuan : 'Memuat…')}</option></select>
+            <div class="field__error u-hidden" id="pf-satuan-error" role="alert"></div>
           </div>
           <div class="field u-hidden" id="pf-mode-wrap"><label class="field__label" for="pf-mode">Cara input di kasir</label>
             <select class="select" id="pf-mode"><option value="">Otomatis (ikut satuan)</option></select>
@@ -181,6 +183,16 @@ export const ProductsScreen = {
       // Satuan, cara input jumlah (master mode jual server), dan toko yang menjual — dimuat setelah modal terbuka.
       // Server lama tanpa /mode-jual atau /produk/{id}/toko → kolomnya tetap tersembunyi.
       const satuanEl = formEl.querySelector('#pf-satuan')
+      const satuanErr = formEl.querySelector('#pf-satuan-error')
+      // Server menolak tanpa satuan (422 errors.satuan_id: satuan bawaan usaha belum diatur) →
+      // pilihan "Bawaan" dibuang dan satuan wajib dipilih sebelum menyimpan lagi.
+      let satuanWajib = false
+      const tampilGalatSatuan = (pesan) => {
+        satuanErr.textContent = pesan || ''
+        satuanErr.classList.toggle('u-hidden', !pesan)
+        satuanEl.classList.toggle('is-invalid', !!pesan)
+      }
+      satuanEl.addEventListener('change', () => tampilGalatSatuan(''))
       const modeEl = formEl.querySelector('#pf-mode')
       const modeHint = formEl.querySelector('#pf-mode-hint')
       let modeList = []
@@ -235,6 +247,7 @@ export const ProductsScreen = {
         const kelola = jasa ? false : formEl.querySelector('#pf-kelola').checked
         if (!nama) { toast('Isi nama item.', 'error'); return }
         if (!(jual > 0)) { toast('Isi harga jual yang valid.', 'error'); return }
+        if (satuanWajib && !satuanEl.value) { tampilGalatSatuan(satuanErr.textContent || 'Pilih satuan untuk item ini.'); satuanEl.focus(); return }
 
         const opsiSatuan = satuanEl.selectedOptions[0]
         const satuanId = !satuanEl.disabled && satuanEl.value ? satuanEl.value : undefined
@@ -265,7 +278,19 @@ export const ProductsScreen = {
             tokoIds: tokoTampil && toko.length ? toko : undefined
           })
         }
-        if (!r.ok) { toast(firstError(r), 'error'); return }
+        if (!r.ok) {
+          const galatSatuan = galatKolom(r, 'satuan_id')
+          if (galatSatuan) {
+            satuanWajib = true
+            const kosong = satuanEl.querySelector('option[value=""]')
+            if (kosong) { kosong.textContent = 'Pilih satuan…'; satuanEl.value = '' }
+            tampilGalatSatuan(galatSatuan)
+            satuanEl.focus()
+            return
+          }
+          toast(firstError(r), 'error')
+          return
+        }
         toast(isEdit ? 'Item diperbarui.' : `"${nama}" ditambahkan.`, 'success')
         modal.close()
         muat()

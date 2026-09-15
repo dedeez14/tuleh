@@ -1,9 +1,10 @@
 name: Build & Release
 
 # Setiap push ke main: baca versi dari frontend/package.json. Bila belum ada
-# Release untuk versi itu, build installer Windows (.exe) + Android (.apk) lalu
-# terbitkan Release vX.Y.Z otomatis. Idempoten — versi yang sudah dirilis dilewati,
-# jadi hanya kenaikan versi yang memicu Release baru.
+# Release untuk versi itu, jalankan SEMUA tes (Node + Go) lalu build installer
+# Windows (.exe) + Android (.apk) dan terbitkan Release vX.Y.Z otomatis. Tes gagal
+# = tidak ada build/rilis. Idempoten — versi yang sudah dirilis dilewati, jadi hanya
+# kenaikan versi yang memicu Release baru.
 
 on:
   push:
@@ -41,34 +42,62 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-  desktop:
+  # Gerbang mutu: tes Node (renderer/main/kontrak, termasuk rute gateway ⇄ kontrak kanal
+  # dan paritas desktop ↔ Android) + go vet/go test gateway. Build & rilis butuh job ini lulus.
+  tests:
     needs: version-check
+    if: needs.version-check.outputs.exists == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+      - name: Tes Node (frontend — tanpa npm install; tes tak bergantung node_modules)
+        working-directory: frontend
+        run: node --test tests/*.test.js
+      - name: go vet + go test (gateway)
+        working-directory: backend
+        run: |
+          go vet ./...
+          go test -count=1 ./...
+
+  desktop:
+    needs: [version-check, tests]
     if: needs.version-check.outputs.exists == 'false'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - name: Setup Go
-        continue-on-error: true
         uses: actions/setup-go@v5
         with:
           go-version-file: backend/go.mod
-      - name: Build gateway Go (best-effort)
-        continue-on-error: true
+      - name: Build gateway Go (wajib — versi aplikasi ditanam lewat ldflags)
         shell: bash
         run: |
+          set -euo pipefail
+          VER="${{ needs.version-check.outputs.version }}"
           mkdir -p frontend/build/backend
-          if command -v go >/dev/null 2>&1; then
-            (cd backend && go build -o ../frontend/build/backend/mpos-backend.exe .)
-            echo "Gateway dibundel."
-          else
-            echo "Go tidak tersedia — build tanpa gateway lokal."
+          (cd backend && go build -trimpath -ldflags "-s -w -X main.appVersion=$VER" -o ../frontend/build/backend/mpos-backend.exe .)
+      - name: Pastikan binary gateway ada sebelum dikemas
+        shell: bash
+        run: |
+          set -euo pipefail
+          BIN=frontend/build/backend/mpos-backend.exe
+          if [ ! -s "$BIN" ]; then
+            echo "::error::$BIN tidak ada/kosong — installer tanpa gateway lokal tidak boleh terbit."
+            exit 1
           fi
+          ls -la "$BIN"
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Install deps (frontend)
+      - name: Install deps (frontend, dari package-lock.json)
         working-directory: frontend
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
       - name: Build installer Windows
         working-directory: frontend
         env:
@@ -96,7 +125,7 @@ jobs:
           if-no-files-found: error
 
   android:
-    needs: version-check
+    needs: [version-check, tests]
     if: needs.version-check.outputs.exists == 'false'
     runs-on: ubuntu-latest
     steps:
@@ -138,6 +167,8 @@ jobs:
           grep -q "var APP_VERSION = '$VER'" "$FILE" || { echo "::error::APP_VERSION gagal disuntik"; exit 1; }
       - name: Install deps (mobile)
         working-directory: mobile
+        # mobile/ belum punya package-lock.json → belum bisa `npm ci`. Tambahkan lockfile
+        # (npm install lokal lalu commit) agar build Android juga reprodusibel.
         run: npm install --no-audit --no-fund
       - name: Transpile www/js → es2017 (kompatibel Android 10 / WebView Chrome 77)
         working-directory: mobile
@@ -211,7 +242,7 @@ jobs:
           if-no-files-found: error
 
   release:
-    needs: [version-check, desktop, android]
+    needs: [version-check, tests, desktop, android]
     if: needs.version-check.outputs.exists == 'false'
     runs-on: ubuntu-latest
     steps:

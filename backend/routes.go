@@ -6,7 +6,9 @@ import (
 	"time"
 )
 
-// Allowlist endpoint MOVERA POS API — hanya rute di tabel ini yang diteruskan.
+// Allowlist endpoint POS API — hanya rute di tabel ini yang diteruskan.
+// Setiap metode+jalur yang dipakai aplikasi (kontrak kanal & api-client) WAJIB ada di sini:
+// dijaga tes frontend/tests/rute-gateway.test.js (CI gagal bila ada yang tertinggal).
 // cacheTTL > 0 berarti respons 200 GET di-cache per token.
 // purge = prefix cache (per token) yang dihapus setelah mutasi sukses.
 type route struct {
@@ -25,6 +27,15 @@ var routeTable = []route{
 	{method: "GET", pattern: "/config", cache: 5 * time.Minute},
 	{method: "GET", pattern: "/bidang-usaha", cache: 5 * time.Minute},
 	{method: "GET", pattern: "/app/versi", cache: 60 * time.Second}, // Auto-Update: cek versi (tanpa auth)
+	// Laporan galat/crash/log aplikasi (kontrak #1) — tanpa auth wajib, tanpa cache.
+	{method: "POST", pattern: "/diagnostik"},
+
+	// Masa coba Mode Demo (publik): pendaftaran perangkat & OTP identitas. 404 dari server
+	// = endpoint belum dipasang → aplikasi jatuh ke lapis lokal (lihat main/ipc.js).
+	{method: "POST", pattern: "/demo/perangkat"},
+	{method: "GET", pattern: "/demo/perangkat/{id}"},
+	{method: "POST", pattern: "/demo/otp/kirim"},
+	{method: "POST", pattern: "/demo/otp/verifikasi"},
 
 	// Langganan & Kontak CS (Sistem Mitra §6.5) — info tenant
 	{method: "GET", pattern: "/langganan/status", cache: 60 * time.Second},
@@ -45,6 +56,8 @@ var routeTable = []route{
 	{method: "GET", pattern: "/tables", cache: 5 * time.Minute},
 	{method: "POST", pattern: "/tables", purge: []string{apiPrefix + "/tables"}},
 	{method: "GET", pattern: "/tables/{id}", cache: 5 * time.Minute},
+	{method: "PUT", pattern: "/tables/{id}", purge: []string{apiPrefix + "/tables"}},
+	{method: "DELETE", pattern: "/tables/{id}", purge: []string{apiPrefix + "/tables"}}, // nonaktifkan meja
 
 	// Order (F&B/jasa) & sinkronisasi offline — selalu segar
 	{method: "GET", pattern: "/orders"},
@@ -166,7 +179,14 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 }
 
 func writeError(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, map[string]any{"success": false, "message": message})
+	writeJSON(w, status, map[string]any{"success": false, "data": nil, "meta": nil, "message": message, "errors": nil})
+}
+
+// writeGatewayError = galat yang dibuat gateway (bukan jawaban server) — ditandai header
+// X-Tuleh-Gateway agar aplikasi bisa membedakannya dari penolakan server.
+func writeGatewayError(w http.ResponseWriter, status int, penanda, message string) {
+	w.Header().Set(gatewayHeader, penanda)
+	writeError(w, status, message)
 }
 
 func buildMux(p *proxy, limiter *rateLimiter) *http.ServeMux {
@@ -195,7 +215,7 @@ func buildMux(p *proxy, limiter *rateLimiter) *http.ServeMux {
 
 	// Selain allowlist → tolak dengan envelope yang dikenali frontend
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
-		writeError(w, http.StatusNotFound, "Endpoint tidak dikenal.")
+		writeGatewayError(w, http.StatusNotFound, gatewayRouteUnknown, "Endpoint tidak dikenal.")
 	})
 
 	return mux

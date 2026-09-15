@@ -4,7 +4,17 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { app } = require('electron')
 
-const DEFAULT_BASE_URL = 'https://tatreport.com'
+// Server bawaan = konfigurasi distribusi (package.json → "tuleh".serverBawaan), bukan
+// literal di kode. Pengguna menggantinya di layar masuk / Pengaturan.
+function serverBawaan() {
+  try {
+    const nilai = require('../../package.json').tuleh.serverBawaan
+    return typeof nilai === 'string' ? nilai : ''
+  } catch {
+    return ''
+  }
+}
+const DEFAULT_BASE_URL = serverBawaan()
 
 function settingsPath() {
   return path.join(app.getPath('userData'), 'settings.json')
@@ -178,6 +188,14 @@ function setCetak(patch = {}) {
   return baru
 }
 
+/** Validasi + normalisasi tanpa menyimpan (dipakai ipc untuk mendeteksi ganti server). */
+function normalisasiBaseUrl(value) {
+  if (typeof value !== 'string' || !isAllowedBaseUrl(value)) {
+    return { ok: false, message: 'URL server harus HTTPS (atau http://localhost untuk pengembangan).' }
+  }
+  return { ok: true, baseUrl: normalizeBaseUrl(value) }
+}
+
 function setBaseUrl(value) {
   if (typeof value !== 'string' || !isAllowedBaseUrl(value)) {
     return { ok: false, message: 'URL server harus HTTPS (atau http://localhost untuk pengembangan).' }
@@ -188,4 +206,4 @@ function setBaseUrl(value) {
   return { ok: true, baseUrl: next.baseUrl }
 }
 
-module.exports = { load, setBaseUrl, getCetak, setCetak, getDemoTrial, getDemoTrialSemua, setDemoTrial, getDemoIdentitasToken, setDemoIdentitasToken, DEFAULT_BASE_URL, isAllowedBaseUrl }
+module.exports = { load, setBaseUrl, normalisasiBaseUrl, getCetak, setCetak, getDemoTrial, getDemoTrialSemua, setDemoTrial, getDemoIdentitasToken, setDemoIdentitasToken, DEFAULT_BASE_URL, isAllowedBaseUrl }

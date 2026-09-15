@@ -3,6 +3,8 @@
 // dari MANIFEST toko — bakso melihat Dapur & Antrian, laundry melihat Papan
 // Proses, minimarket tetap ringkas. (Blueprint-Universal-POS.md, Fase 1)
 
+// Penangkap galat renderer dipasang PALING AWAL (laporan dukungan, kontrak #1).
+import './diagnostik.js'
 import { api, firstError } from './api.js'
 import { getState, setState, subscribe, resetAuthState } from './state.js'
 import { toast, icons, confirmDialog } from './components/ui.js'
@@ -10,6 +12,7 @@ import { applyTheme, getEffectiveTheme, cycleTheme } from './theme.js'
 import { hitungNotifikasi, renderPanelNotifikasi } from './notif.js'
 import { ringkasLangganan } from './langganan.js'
 import { mulaiPembayaran } from './langganan-bayar.js'
+import { pasangKunciLangganan } from './langganan-kunci.js'
 import { esc, fmtIDR, fmtNumber, toISODate } from './utils/format.js'
 import { LOGO_DATA_URI } from './assets/logo.js'
 import { renderLogin, tampilkanDemoBerakhir } from './screens/login.js'
@@ -939,6 +942,11 @@ if (new URLSearchParams(location.search).get('display') === 'customer') {
   applyTheme()
   // Status offline/antrean dari main (pita di kerangka + panel Sinkronisasi).
   import('./components/sinkronisasi.js').then((m) => m.mulaiPantauOffline())
+  // HTTP 402 dari penulisan mana pun → layar "Langganan berakhir" (kontrak #2).
+  pasangKunciLangganan(() => ({
+    bisaBayar: !!getState().user && !getState().demo && bisa('langganan.kelola'),
+    onBayar: () => mulaiPembayaran()
+  }))
   // Auto-Update: langganan sinyal 426 (update wajib) + cek versi saat start &
   // kembali-ke-foreground. FAIL-OPEN: kegagalan cek tak boleh memblokir aplikasi.
   import('./update.js').then((u) => {
