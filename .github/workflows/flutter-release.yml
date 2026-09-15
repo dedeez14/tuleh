@@ -152,11 +152,25 @@ jobs:
           channel: stable
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
-      # setup-android kadang gagal sementara (unduhan SDK); coba sekali lagi sebelum menyerah.
-      - id: sdk1
-        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
-        continue-on-error: true
-      - if: steps.sdk1.outcome == 'failure'
+      # Android SDK bawaan runner ubuntu-latest (lebih andal); setup-android hanya bila SDK bawaan tak ada.
+      - name: Android SDK bawaan runner
+        id: sdkbawaan
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          if [ -x "$SDK/cmdline-tools/latest/bin/sdkmanager" ]; then
+            echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+            echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+            echo "$SDK/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+            echo "$SDK/platform-tools" >> "$GITHUB_PATH"
+            yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+            echo "ada=true" >> "$GITHUB_OUTPUT"
+            echo "SDK bawaan dipakai: $SDK"
+          else
+            echo "ada=false" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.sdkbawaan.outputs.ada != 'true'
         uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
       - name: Pasang platform Android 36 (override compileSdk 36 utk flutter_secure_storage 11)
         run: yes | sdkmanager "platforms;android-36" "build-tools;36.0.0" >/dev/null || true
