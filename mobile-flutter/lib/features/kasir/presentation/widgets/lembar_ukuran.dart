@@ -68,10 +68,12 @@ class _LembarUkuranState extends State<LembarUkuran> {
   /// membagi dengan nol tidak akan pernah masuk akal.
   bool get _nominalTersedia => _hargaSah && _perilaku.bolehNominal;
 
+  bool get _isJasa => (widget.produk.tipe ?? '').toUpperCase() == 'JASA';
+
   /// Batas atas ukuran. Baris terukur selalu MENGGANTI isi baris, jadi
   /// batasnya stok penuh — bukan stok dikurangi isi keranjang. `null` =
   /// produk tanpa kelola stok (jasa, atau stok tak dilacak).
-  double? get _sisaStok => widget.produk.stok;
+  double? get _sisaStok => _isJasa ? null : widget.produk.stok;
   bool get _lebihStok {
     final sisa = _sisaStok;
     return sisa != null && _qty > sisa;

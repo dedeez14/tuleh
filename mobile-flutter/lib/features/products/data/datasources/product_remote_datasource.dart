@@ -202,6 +202,11 @@ class ProductRemoteDataSource {
     final promo = m['promo_aktif'] == true && m['harga_efektif'] != null;
     final gambar = m['gambar']?.toString();
     final modeJual = m['mode_jual']?.toString();
+    final tipe = m['tipe']?.toString();
+    final isJasa = (tipe ?? '').toUpperCase() == 'JASA';
+    final kelolaStok = m['kelola_stok'] != false && !isJasa;
+    final stokRaw = m['stok'];
+    final stok = kelolaStok && stokRaw != null ? _double(stokRaw) : null;
     return Product(
       id: (m['id'] ?? '').toString(),
       nama: (m['nama'] ?? m['name'] ?? '-').toString(),
@@ -209,12 +214,12 @@ class ProductRemoteDataSource {
       hargaNormal: promo ? hargaJual : null,
       promo: promo,
       gambar: gambar == null || gambar.isEmpty ? null : gambar,
-      tipe: m['tipe']?.toString(),
+      tipe: tipe,
       hargaBeli: m['harga_beli'] == null ? null : _double(m['harga_beli']),
       satuan: satNama?.toString(),
       kategori: katNama?.toString(),
       barcode: m['barcode']?.toString(),
-      stok: m['stok'] == null ? null : _double(m['stok']),
+      stok: stok,
       // Aditif server 2026-09-14; server lama tidak mengirimnya → semua null.
       modeJual: modeJual == null || modeJual.isEmpty ? null : modeJual,
       modeJualNama: m['mode_jual_nama']?.toString(),

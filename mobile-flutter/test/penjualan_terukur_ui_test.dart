@@ -178,6 +178,18 @@ void main() {
       );
     });
 
+    testWidgets('produk jasa / laundry (tipe JASA dan stok 0): tak ada batas stok', (t) async {
+      await buka(t, produk: const Product(id: 'LDR-001', nama: 'Cuci Kering Kiloan', harga: 7000, satuan: 'kg', tipe: 'JASA', stok: 0));
+      expect(find.textContaining('Sisa stok'), findsNothing);
+      await t.enterText(find.byType(TextField).first, '3,5');
+      await _pompa(t);
+      expect(find.textContaining('Sisa stok hanya'), findsNothing);
+      expect(
+        t.widget<FilledButton>(find.widgetWithText(FilledButton, 'Tambah ke keranjang')).onPressed,
+        isNotNull,
+      );
+    });
+
     testWidgets('harga 0: tab Nominal dimatikan', (t) async {
       await buka(t, produk: const Product(id: 'X', nama: 'Sayur', harga: 0, satuan: 'kg'));
       final segmen = t.widget<SegmentedButton<bool>>(find.byType(SegmentedButton<bool>));
