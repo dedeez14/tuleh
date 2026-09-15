@@ -24,9 +24,17 @@ class Outbox extends Table {
   TextColumn get clientRef => text().unique()();
   TextColumn get jenis => text()(); // CHECKOUT | PENGELUARAN | STOK_MASUK
   TextColumn get tokoId => text().nullable()();
+
+  /// Id akun pembuat baris (v3). null = baris versi lama sebelum kolom ada.
+  TextColumn get pemilik => text().nullable()();
   TextColumn get path => text()();
   TextColumn get bodyJson => text()();
   IntColumn get percobaan => integer().withDefault(const Constant(0))();
+
+  /// Berapa kali server menjawab GANGGUAN (5xx/408/429) untuk baris ini (v3)
+  /// — dasar batas "pindah ke perlu ditinjau" dari `/config`. Kegagalan
+  /// jaringan murni tidak dihitung (offline berhari-hari itu sah).
+  IntColumn get galatServer => integer().withDefault(const Constant(0))();
   DateTimeColumn get cobaLagiSetelah => dateTime().nullable()();
   TextColumn get status => text().withDefault(const Constant('MENUNGGU'))();
   TextColumn get galatTerakhir => text().nullable()();
@@ -68,16 +76,20 @@ class SalinanDb extends _$SalinanDb {
   SalinanDb.buka() : super(driftDatabase(name: 'tuleh_salinan'));
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) => m.createAll(),
     onUpgrade: (m, from, to) async {
       if (from < 2) {
+        // Tabel dibuat dengan definisi terbaru (sudah memuat kolom v3).
         await m.createTable(outbox);
         await m.createTable(transaksiLokal);
         await m.createTable(stokDelta);
+      } else if (from < 3) {
+        await m.addColumn(outbox, outbox.pemilik);
+        await m.addColumn(outbox, outbox.galatServer);
       }
     },
   );

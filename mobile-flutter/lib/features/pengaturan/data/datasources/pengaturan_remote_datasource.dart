@@ -1,7 +1,7 @@
 import 'package:dio/dio.dart';
 
 import '../../../../core/network/api_error_mapper.dart';
-import '../../../../core/network/api_exception.dart';
+import '../../../products/domain/entities/pilihan_produk.dart';
 import '../../domain/entities/pengaturan_pembayaran.dart';
 import '../../domain/entities/profil_usaha.dart';
 
@@ -15,7 +15,15 @@ class PengaturanRemoteDataSource {
     final body = await _send(() => _dio.get<dynamic>('/pengaturan/usaha'));
     final d = body['data'] is Map ? Map<String, dynamic>.from(body['data'] as Map) : const <String, dynamic>{};
     final struk = d['struk'] is Map ? Map<String, dynamic>.from(d['struk'] as Map) : const <String, dynamic>{};
+    final sb = d['satuan_bawaan'];
     return ProfilUsaha(
+      satuanBawaan: sb is Map && sb['id'] != null
+          ? SatuanPilihan(
+              id: sb['id'].toString(),
+              nama: (sb['nama'] ?? sb['kode'] ?? '').toString(),
+              kode: sb['kode']?.toString(),
+            )
+          : null,
       nama: (d['nama'] ?? '').toString(),
       alamat: d['alamat']?.toString(),
       telepon: d['telepon']?.toString(),
@@ -53,6 +61,8 @@ class PengaturanRemoteDataSource {
   }
 
   /// PUT /pengaturan/usaha (partial). Teks kosong → null (mengosongkan di server).
+  /// [ubahSatuanBawaan] = kirim `satuan_bawaan_id` ([satuanBawaanId] null =
+  /// kosongkan); false = kunci itu tidak dikirim (tidak diubah).
   Future<void> simpan({
     required String nama,
     String? alamat,
@@ -60,6 +70,8 @@ class PengaturanRemoteDataSource {
     String? email,
     String? strukFooter,
     required bool strukTampilLogo,
+    bool ubahSatuanBawaan = false,
+    String? satuanBawaanId,
   }) async {
     String? tn(String? v) => (v == null || v.trim().isEmpty) ? null : v.trim();
     await _send(() => _dio.put<dynamic>('/pengaturan/usaha', data: {
@@ -69,6 +81,7 @@ class PengaturanRemoteDataSource {
           'email': tn(email),
           'struk_footer': tn(strukFooter),
           'struk_tampil_logo': strukTampilLogo,
+          if (ubahSatuanBawaan) 'satuan_bawaan_id': tn(satuanBawaanId),
         }));
   }
 
@@ -83,11 +96,7 @@ class PengaturanRemoteDataSource {
     final body = res.data is Map ? Map<String, dynamic>.from(res.data as Map) : const <String, dynamic>{};
     final ok = code >= 200 && code < 300 && body['success'] == true;
     if (!ok) {
-      throw ApiException(
-        message: (body['message'] as String?) ?? ApiErrorMapper.statusMessage(code),
-        statusCode: code,
-        errors: ApiErrorMapper.parseErrors(body['errors']),
-      );
+      throw ApiErrorMapper.fromResponse(res);
     }
     return body;
   }

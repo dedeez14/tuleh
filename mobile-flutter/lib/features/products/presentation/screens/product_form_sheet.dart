@@ -40,6 +40,10 @@ class _ProductFormSheetState extends ConsumerState<ProductFormSheet> {
   List<SatuanPilihan>? _satuanList;
   String? _satuanId;
 
+  /// Galat server untuk kolom satuan (`errors.satuan_id`, mis. satuan bawaan
+  /// usaha belum diatur) — ditampilkan di bawah kolomnya, bukan hanya snackbar.
+  String? _galatSatuan;
+
   /// Nama satuan produk saat formulir dibuka (dicocokkan ke master lewat nama).
   String _satuanAwal = '';
 
@@ -140,7 +144,10 @@ class _ProductFormSheetState extends ConsumerState<ProductFormSheet> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _galatSatuan = null;
+    });
     final repo = ref.read(productRepositoryProvider);
     final hargaJual = _num(_hargaJual.text) ?? 0;
     final hargaBeli = _num(_hargaBeli.text);
@@ -187,7 +194,11 @@ class _ProductFormSheetState extends ConsumerState<ProductFormSheet> {
               content: Text(_isEdit ? 'Produk diperbarui.' : 'Produk ditambahkan.')));
       },
       err: (e) {
-        setState(() => _loading = false);
+        final galatSatuan = e.errors?['satuan_id'];
+        setState(() {
+          _loading = false;
+          if (galatSatuan != null && galatSatuan.isNotEmpty) _galatSatuan = galatSatuan.first;
+        });
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
           ..showSnackBar(SnackBar(
@@ -338,9 +349,11 @@ class _ProductFormSheetState extends ConsumerState<ProductFormSheet> {
       key: ValueKey('satuan-${daftar?.length}'),
       initialValue: _satuanId,
       isExpanded: true,
-      decoration: const InputDecoration(
+      decoration: InputDecoration(
         labelText: 'Satuan',
-        prefixIcon: Icon(Icons.straighten_outlined),
+        prefixIcon: const Icon(Icons.straighten_outlined),
+        errorText: _galatSatuan,
+        errorMaxLines: 3,
       ),
       hint: Text(petunjuk),
       disabledHint: Text(petunjuk),
@@ -350,7 +363,10 @@ class _ProductFormSheetState extends ConsumerState<ProductFormSheet> {
       ],
       onChanged: daftar == null || daftar.isEmpty
           ? null
-          : (v) => setState(() => _satuanId = v),
+          : (v) => setState(() {
+                _satuanId = v;
+                _galatSatuan = null;
+              }),
     );
   }
 

@@ -9,16 +9,34 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tuleh_pos/core/offline/rujukan_lokal.dart';
 import 'package:tuleh_pos/core/offline/waktu_klien.dart';
 
+String _offset(DateTime d) {
+  final o = d.timeZoneOffset;
+  final m = o.inMinutes.abs();
+  return '${o.isNegative ? '-' : '+'}${(m ~/ 60).toString().padLeft(2, '0')}:${(m % 60).toString().padLeft(2, '0')}';
+}
+
 void main() {
-  test('memakai waktu lokal kasir, detik penuh, tanpa zona & milidetik', () {
-    expect(waktuKlienIso(DateTime(2026, 9, 12, 14, 25, 41, 635)), '2026-09-12T14:25:41');
-    expect(waktuKlienIso(DateTime(2026, 1, 5, 7, 8, 9)), '2026-01-05T07:08:09');
+  test('waktu lokal kasir + offset zona, detik penuh, tanpa milidetik', () {
+    final a = DateTime(2026, 9, 12, 14, 25, 41, 635);
+    expect(waktuKlienIso(a), '2026-09-12T14:25:41${_offset(a)}');
+    final b = DateTime(2026, 1, 5, 7, 8, 9);
+    expect(waktuKlienIso(b), '2026-01-05T07:08:09${_offset(b)}');
   });
 
-  test('tidak pernah mengandung "Z" maupun offset zona', () {
+  test('uji berjalan dengan TZ=Asia/Jakarta: offset +07:00', () {
+    // CI & docker menjalankan `flutter test` dengan TZ=Asia/Jakarta.
+    expect(waktuKlienIso(DateTime(2026, 9, 12, 14, 25, 41)), '2026-09-12T14:25:41+07:00');
+  }, skip: DateTime(2026, 9, 12).timeZoneOffset != const Duration(hours: 7) ? 'TZ bukan Asia/Jakarta' : false);
+
+  test('tidak pernah "Z" maupun milidetik; offset selalu eksplisit', () {
     final teks = waktuKlienIso();
-    expect(teks, matches(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$'));
+    expect(teks, matches(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$'));
     expect(teks.contains('Z'), isFalse);
+  });
+
+  test('bolak-balik: diurai lagi menjadi instan yang sama', () {
+    final t = DateTime.utc(2026, 9, 12, 7, 25, 40);
+    expect(DateTime.parse(waktuKlienIso(t)).toUtc(), t);
   });
 
   test('waktu UTC diterjemahkan ke jam toko, bukan disalin apa adanya', () {
@@ -36,6 +54,12 @@ void main() {
       // Baris antrean lama harus tetap bisa dikirim setelah aplikasi diperbarui.
       expect(badan['waktu_klien'], waktuKlienIso(DateTime.utc(2026, 9, 12, 7, 25, 40, 635)));
       expect(badan.containsKey('_tampilan'), isFalse);
+    });
+
+    test('baris lama tanpa zona (waktu lokal perangkat) diberi offset', () {
+      final badan = badanKirim({'waktu_klien': '2026-09-12T14:25:41'});
+      expect(badan['waktu_klien'], waktuKlienIso(DateTime(2026, 9, 12, 14, 25, 41)));
+      expect(badan['waktu_klien'], matches(r'[+-]\d{2}:\d{2}$'));
     });
 
     test('nilai tak terbaca dibiarkan apa adanya (server yang menjawab)', () {

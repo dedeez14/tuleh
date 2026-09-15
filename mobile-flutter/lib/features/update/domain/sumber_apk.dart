@@ -1,3 +1,5 @@
+import '../../../core/constants/app_config.dart';
+
 /// Kebijakan sumber APK pembaruan — SATU aturan yang dipakai Dart (memilih
 /// aset, menampilkan tombol unduh) dan diduplikasi di native
 /// (`MainActivity.kt` → `hostAllowed`) sebagai penegakan akhir sebelum
@@ -12,7 +14,10 @@ abstract final class SumberApk {
   static const String repoGithub = 'dedeez14/tuleh';
 
   /// Host server MOVERA (dan subdomainnya) — sumber lewat `/app/versi`.
-  static const String hostServer = 'tatreport.com';
+  /// Diturunkan dari alamat API ([AppConfig.defaultBaseUrl]) agar tidak ada
+  /// dua salinan nama host di kode Dart.
+  static final String hostServer =
+      Uri.tryParse(AppConfig.defaultBaseUrl)?.host.toLowerCase() ?? '';
 
   /// Awalan path aset Release di github.com untuk repo ini.
   static String get awalanRilisGithub => '/$repoGithub/releases/download/';
@@ -26,7 +31,9 @@ abstract final class SumberApk {
     final u = Uri.tryParse(url);
     if (u == null || u.scheme != 'https' || u.host.isEmpty) return false;
     final host = u.host.toLowerCase();
-    if (host == hostServer || host.endsWith('.$hostServer')) return true;
+    if (hostServer.isNotEmpty && (host == hostServer || host.endsWith('.$hostServer'))) {
+      return true;
+    }
     if (host == 'github.com' || host == 'www.github.com') {
       return u.path.startsWith(awalanRilisGithub);
     }

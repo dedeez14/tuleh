@@ -9,6 +9,12 @@ import 'koneksi.dart';
 import 'pengurai.dart';
 import 'rujukan_lokal.dart';
 
+/// Mulai berapa kali gangguan server berturut-turut sebuah baris diberi
+/// peringatan menetap di layar ini, bila server TIDAK menetapkan batas
+/// antrean (`/config`). Mekanika tampilan saja — tidak memindah baris ke
+/// "perlu ditinjau" dan tidak memengaruhi pengiriman.
+const ambangPeringatanPercobaanUi = 10;
+
 /// Pengaturan → Sinkronisasi: antrean transaksi/pengeluaran/stok yang belum
 /// terkirim, status tiap baris, "Sinkron sekarang", dan keputusan untuk baris
 /// yang perlu ditinjau (kirim ulang / batalkan). Istilah untuk kasir, bukan
@@ -74,6 +80,7 @@ class _SinkronisasiScreenState extends ConsumerState<SinkronisasiScreen> {
   Widget build(BuildContext context) {
     final daftar = ref.watch(daftarAntreanProvider);
     final koneksi = ref.watch(koneksiProvider);
+    final akun = ref.watch(akunAktifProvider);
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
@@ -85,7 +92,18 @@ class _SinkronisasiScreenState extends ConsumerState<SinkronisasiScreen> {
           onUlangi: () => ref.invalidate(daftarAntreanProvider),
         ),
         data: (rows) {
-          final aktif = rows.where((p) => p.status != StatusAntrean.terkirim).toList();
+          final belum = rows.where((p) => p.status != StatusAntrean.terkirim);
+          final aktif = belum.where((p) => milikAkun(p, akun)).toList();
+          // Milik akun lain (sesinya berakhir lalu akun ini masuk): tidak
+          // dikirim dengan token akun ini, tidak bisa diubah dari sini.
+          final lain = belum.where((p) => !milikAkun(p, akun)).toList();
+          // Baris yang terus dijawab gangguan server, sementara server tidak
+          // menetapkan batas: tetap dicoba, tapi kasir perlu tahu.
+          final berulang = aktif
+              .where((p) => !p.perluPerhatian && p.galatServer >= ambangPeringatanPercobaanUi)
+              .toList();
+          final tanpaBatas = berulang.isNotEmpty &&
+              !(ref.watch(batasAntreanProvider).valueOrNull?.ditetapkan ?? false);
           final terkirim = rows.where((p) => p.status == StatusAntrean.terkirim).toList().reversed.take(20).toList();
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
@@ -97,6 +115,10 @@ class _SinkronisasiScreenState extends ConsumerState<SinkronisasiScreen> {
                 sibuk: _sibuk,
                 onSinkron: _sinkronSekarang,
               ),
+              if (tanpaBatas) ...[
+                const SizedBox(height: 12),
+                _PeringatanBerulang(jumlah: berulang.length),
+              ],
               const SizedBox(height: 18),
               if (aktif.isEmpty)
                 const KeadaanKosong(
@@ -108,6 +130,23 @@ class _SinkronisasiScreenState extends ConsumerState<SinkronisasiScreen> {
                 Text('Menunggu & perlu ditinjau', style: Theme.of(context).textTheme.titleSmall),
                 const SizedBox(height: 8),
                 for (final p in aktif) _BarisAntrean(p: p, onBatalkan: () => _batalkan(p)),
+              ],
+              if (lain.isNotEmpty) ...[
+                const SizedBox(height: 22),
+                Text(
+                  'Milik akun lain (${lain.length})',
+                  key: const Key('antrean-milik-lain'),
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Dibuat akun lain di perangkat ini sebelum sesinya berakhir. Data ini '
+                  'tetap tersimpan dan dikirim setelah akun tersebut masuk kembali — '
+                  'tidak akan dikirim atas nama akun Anda.',
+                  style: TextStyle(fontSize: 12.5, height: 1.4, color: cs.onSurface.withValues(alpha: 0.65)),
+                ),
+                const SizedBox(height: 8),
+                for (final p in lain) _BarisAntrean(p: p, onBatalkan: null),
               ],
               if (terkirim.isNotEmpty) ...[
                 const SizedBox(height: 22),
@@ -132,6 +171,40 @@ class _SinkronisasiScreenState extends ConsumerState<SinkronisasiScreen> {
   static String _nomorHasil(PesanAntrean p) {
     final n = p.hasil?['nomor'] ?? p.hasil?['no'];
     return n == null ? 'selesai' : '$n';
+  }
+}
+
+class _PeringatanBerulang extends StatelessWidget {
+  const _PeringatanBerulang({required this.jumlah});
+  final int jumlah;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      key: const Key('peringatan-gagal-berulang'),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.danger.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.danger.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.report_problem_outlined, color: AppColors.danger, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              '$jumlah data sudah dicoba $ambangPeringatanPercobaanUi kali atau lebih dan server '
+              'masih bermasalah. Data tetap tersimpan dan terus dicoba otomatis; bila '
+              'berlanjut, kirim laporan ke dukungan dari Pengaturan.',
+              style: TextStyle(fontSize: 13, height: 1.4, color: cs.onSurface),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -206,7 +279,9 @@ class _KartuStatus extends StatelessWidget {
 class _BarisAntrean extends ConsumerWidget {
   const _BarisAntrean({required this.p, required this.onBatalkan});
   final PesanAntrean p;
-  final VoidCallback onBatalkan;
+
+  /// null = baris milik akun lain (hanya ditampilkan).
+  final VoidCallback? onBatalkan;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -277,7 +352,7 @@ class _BarisAntrean extends ConsumerWidget {
                   style: TextStyle(fontSize: 12.5, height: 1.4, color: tinjau ? AppColors.danger : cs.onSurface.withValues(alpha: 0.7)),
                 ),
               ),
-            if (tinjau)
+            if (tinjau && onBatalkan != null)
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [

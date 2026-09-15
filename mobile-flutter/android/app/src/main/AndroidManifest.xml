@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <!-- WAJIB agar build RELEASE punya akses jaringan. Flutter hanya menaruh
          izin ini di manifest debug/profile secara default → tanpa baris ini,
          APK rilis TAK bisa memanggil API (login & semua request gagal senyap). -->
@@ -21,6 +22,14 @@
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30"/>
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30"/>
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
+    <!-- BLUETOOTH_SCAN dideklarasikan plugin printer & diminta saat izin
+         printer; posisi TIDAK pernah diturunkan dari hasil pindai, jadi
+         dinyatakan neverForLocation (Android 12+ tak lagi menganggapnya izin
+         lokasi). -->
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation"
+        tools:targetApi="s"/>
     <uses-feature android:name="android.hardware.bluetooth" android:required="false"/>
 
     <!-- Pemantau pesanan meja (layanan latar depan, flutter_foreground_task):
@@ -33,10 +42,21 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
+    <!-- Cadangan Android DIMATIKAN: token sesi (Keystore), antrean penjualan
+         offline (SQLite), salinan data, dan laporan diagnostik tidak boleh
+         ikut ke cadangan cloud / pindah perangkat. Kunci Keystore tidak ikut
+         dipulihkan, sehingga data terenkripsi hasil pulihan justru merusak
+         aplikasi; antrean yang terpulihkan di perangkat lain bisa mengirim
+         penjualan ganda. allowBackup=false menutup cadangan cloud & adb;
+         dataExtractionRules (Android 12+) juga menutup transfer antarperangkat. -->
     <application
         android:label="Tuléh"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        tools:targetApi="s">
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -71,6 +91,15 @@
             android:foregroundServiceType="dataSync"
             android:stopWithTask="false"
             android:exported="false" />
+        <!-- Penerima boot/pembaruan paket milik flutter_foreground_task diekspor
+             plugin (exported=true) sehingga aplikasi lain bisa mengirim siaran
+             palsu untuk menyalakan layanan latar. Siaran BOOT_COMPLETED /
+             MY_PACKAGE_REPLACED dikirim SISTEM, dan penerima non-ekspor tetap
+             menerima siaran sistem — jadi cukup ditutup dari aplikasi lain. -->
+        <receiver
+            android:name="com.pravera.flutter_foreground_task.service.RebootReceiver"
+            android:exported="false"
+            tools:replace="android:exported" />
         <!-- Auto-Update: berbagi berkas APK yang diunduh ke pemasang sistem. -->
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -91,6 +120,12 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- url_launcher: membuka tautan perpanjang langganan & WhatsApp CS
+             (alamat dari server) di aplikasi luar. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
         </intent>
     </queries>
 </manifest>

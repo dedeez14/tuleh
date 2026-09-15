@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
+import '../../../core/constants/app_config.dart';
 import '../domain/deteksi_pesanan.dart';
 
 /// Kunci data yang dibagikan aplikasi → isolate layanan
@@ -114,6 +115,7 @@ class PemantauTask extends TaskHandler {
           'Accept': 'application/json',
           'Authorization': 'Bearer $token',
           'X-Tuleh-Version': ?versi,
+          AppConfig.platformHeader: AppConfig.platform,
         },
         queryParameters: {
           if (tokoId != null && tokoId.isNotEmpty) 'toko_id': tokoId,

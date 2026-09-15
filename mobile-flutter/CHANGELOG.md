@@ -5,6 +5,15 @@ sebagai isi Release GitHub (workflow flutter-release.yml), dan empat baris
 pertamanya tampil di banner pembaruan dalam aplikasi. Tulis untuk kasir, bukan
 untuk programmer.
 
+## 2.29.0
+
+- **Transaksi tetap aman saat server bermasalah.** Kalau server sedang gangguan, penjualan disimpan di HP dan dikirim otomatis begitu server pulih — tidak lagi hilang atau ditolak. Satu transaksi yang bermasalah tidak lagi menahan transaksi lain.
+- **Sesi berakhir kembali ke layar masuk.** Kalau akun dinonaktifkan atau sesi habis, aplikasi langsung meminta masuk lagi; transaksi yang belum terkirim tetap tersimpan.
+- **Pemberitahuan langganan.** Saat langganan berakhir, aplikasi menampilkan layar perpanjangan dengan tombol ke halaman perpanjang dan kontak CS.
+- Menu Pengaturan → "Kirim laporan ke dukungan" untuk mengirim catatan kendala ke tim Tuléh; galat aplikasi juga dilaporkan otomatis.
+- Profil Usaha kini punya "Satuan bawaan produk"; form produk menandai satuan yang wajib dipilih.
+- Data aplikasi tidak lagi ikut dicadangkan otomatis ke akun Google (menjaga data transaksi & sesi).
+
 ## 2.28.0
 
 - **Produk di kasir mengikuti toko yang dipilih.** Toko laundry, salon, atau bengkel langsung menampilkan layanan jasa; minimarket hanya barang. Produk yang ditugaskan ke toko lain tidak muncul — produk tanpa pengaturan toko tetap tampil di semua toko.

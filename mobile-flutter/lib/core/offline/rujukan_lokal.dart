@@ -22,9 +22,9 @@ String? rujukanDalamPath(String path) => _polaRujukan.firstMatch(path)?.group(1)
 /// Kunci badan yang diawali `_` hanya untuk tampilan lokal (nama & harga item
 /// bon saat offline) dan tidak dikirim ke server.
 ///
-/// `waktu_klien` sekalian dirapikan: baris yang diantrekan versi lama membawa
-/// format yang ditolak MySQL, dan tanpa ini transaksi lama akan terus gagal
-/// walau aplikasinya sudah diperbarui.
+/// `waktu_klien` sekalian dirapikan ke format [waktuKlienIso] (lokal + offset):
+/// baris yang diantrekan versi lama membawa `…Z`/milidetik (ditolak server
+/// lama) atau waktu lokal tanpa zona (diurai sebagai waktu lokal perangkat).
 Map<String, dynamic> badanKirim(Map<String, dynamic> body) => {
   for (final e in body.entries)
     if (!e.key.startsWith('_'))

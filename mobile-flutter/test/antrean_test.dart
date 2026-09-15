@@ -153,7 +153,7 @@ void main() {
       // Format dijaga: "…Z" membuat MySQL menolak seluruh transaksi.
       expect(
         server.badan.single['waktu_klien'],
-        matches(RegExp(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$')),
+        matches(RegExp(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$')),
       );
       expect((await antrean.ringkas()).total, 0);
     });

@@ -22,5 +22,6 @@ final checkoutRepositoryProvider = Provider<CheckoutRepository>(
     nomorLokal: NomorLokal(ref.watch(secureStorageProvider)),
     koneksi: ref.read(koneksiProvider.notifier),
     tokoId: ref.watch(activeTokoIdProvider).valueOrNull,
+    pemilik: ref.watch(akunAktifProvider),
   ),
 );

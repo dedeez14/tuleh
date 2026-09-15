@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:workmanager/workmanager.dart';
 
@@ -71,11 +72,56 @@ void sinkronLatarDispatcher() {
   });
 }
 
+/// Versi aplikasi untuk header `X-Tuleh-Version` di isolate latar: dari
+/// PackageInfo, atau versi yang dicatat aplikasi saat terakhir dibuka.
+Future<String?> versiAplikasiLatar(SecureStorage storage) async {
+  try {
+    final v = (await PackageInfo.fromPlatform()).version;
+    if (v.isNotEmpty) return v;
+  } catch (_) {}
+  try {
+    return await storage.readVersiApp();
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Header permintaan isolate latar — sama dengan klien latar depan.
+Map<String, String> headerSinkronLatar({required String token, String? versi}) => {
+  'Accept': 'application/json',
+  'Authorization': 'Bearer $token',
+  AppConfig.versionHeader: ?versi,
+  AppConfig.platformHeader: AppConfig.platform,
+};
+
 /// Proses antrean dari isolate latar. Mengembalikan true (selesai) —
 /// kegagalan jaringan ditangani mundur oleh pengurai, bukan oleh WorkManager.
-Future<bool> jalankanSinkronLatar({SalinanDb? db, Dio? dio, KunciPengurai? kunci, String? token}) async {
-  token ??= await SecureStorage(const FlutterSecureStorage()).readToken();
+///
+/// Header sama dengan klien latar depan (`X-Tuleh-Version`, `X-Tuleh-Platform`)
+/// agar penegakan versi minimum (426) & jalur rilis server juga berlaku di
+/// sini; dan hanya antrean milik akun token ([pemilik] = akun terakhir yang
+/// masuk) yang dikirim.
+Future<bool> jalankanSinkronLatar({
+  SalinanDb? db,
+  Dio? dio,
+  KunciPengurai? kunci,
+  String? token,
+  String? versi,
+  String? pemilik,
+  bool pemilikDiketahui = false,
+}) async {
+  final storage = SecureStorage(const FlutterSecureStorage());
+  token ??= await storage.readToken();
   if (token == null || token.isEmpty) return true;
+  if (token == 'demo-token') return true; // Mode Demo tak pernah punya antrean server
+  versi ??= await versiAplikasiLatar(storage);
+  if (!pemilikDiketahui) {
+    try {
+      pemilik = await storage.readAkunTerakhir();
+    } catch (_) {
+      pemilik = null;
+    }
+  }
 
   final k = kunci ?? KunciPengurai();
   if (await k.terkunci()) return true; // aplikasi sedang menguraikan sendiri
@@ -90,15 +136,18 @@ Future<bool> jalankanSinkronLatar({SalinanDb? db, Dio? dio, KunciPengurai? kunci
             baseUrl: AppConfig.defaultBaseUrl + AppConfig.apiPrefix,
             connectTimeout: AppConfig.connectTimeout,
             receiveTimeout: AppConfig.receiveTimeout,
-            headers: {'Accept': 'application/json', 'Authorization': 'Bearer $token'},
             validateStatus: (_) => true,
           ),
         );
+    http.options.headers.addAll(headerSinkronLatar(token: token, versi: versi));
+    final akun = pemilik;
     final pengurai = PenguraiAntrean(
       store: store,
       dio: http,
       koneksi: null,
       penyiap: {'SESI_BUKA': (b) => isiGudangId(http, b)},
+      pemilik: () => akun,
+      batas: () => ambilBatasAntrean(http),
     );
     await k.kunci();
     try {

@@ -1,7 +1,6 @@
 import 'package:dio/dio.dart';
 
 import '../../../../core/network/api_error_mapper.dart';
-import '../../../../core/network/api_exception.dart';
 import '../../domain/entities/bill_detail.dart';
 import '../../domain/entities/meja.dart';
 
@@ -130,11 +129,7 @@ class MejaRemoteDataSource {
     final body = res.data is Map ? Map<String, dynamic>.from(res.data as Map) : const <String, dynamic>{};
     final ok = code >= 200 && code < 300 && body['success'] == true;
     if (!ok) {
-      throw ApiException(
-        message: (body['message'] as String?) ?? ApiErrorMapper.statusMessage(code),
-        statusCode: code,
-        errors: ApiErrorMapper.parseErrors(body['errors']),
-      );
+      throw ApiErrorMapper.fromResponse(res);
     }
     return body;
   }

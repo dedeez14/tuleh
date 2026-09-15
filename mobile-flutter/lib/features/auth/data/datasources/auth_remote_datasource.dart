@@ -53,11 +53,7 @@ class AuthRemoteDataSource {
     final body = _map(res.data);
     final ok = code >= 200 && code < 300 && body['success'] == true;
     if (!ok) {
-      throw ApiException(
-        message: (body['message'] as String?) ?? ApiErrorMapper.statusMessage(code),
-        statusCode: code,
-        errors: ApiErrorMapper.parseErrors(body['errors']),
-      );
+      throw ApiErrorMapper.fromResponse(res);
     }
     return body;
   }

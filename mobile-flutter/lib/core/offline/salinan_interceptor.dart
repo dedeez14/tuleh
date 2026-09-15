@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:dio/dio.dart';
 
+import '../network/api_exception.dart';
 import 'koneksi.dart';
 import 'salinan_store.dart';
 
@@ -15,8 +16,12 @@ import 'salinan_store.dart';
 ///
 /// Aturan:
 /// - Hanya GET yang disalin, dan hanya jawaban sukses (2xx + success:true).
-/// - Gagal jaringan (bukan HTTP 4xx/5xx) pada GET → jawab dari salinan bila
-///   ada, tandai koneksi offline. Tanpa salinan → galat asli diteruskan.
+/// - GANGGUAN pada GET — gagal jaringan, atau jawaban HTTP 408/429/5xx
+///   (termasuk 502/503/504 dari gateway) → jawab dari salinan bila ada, tandai
+///   koneksi offline. Tanpa salinan → jawaban/galat asli diteruskan (koneksi
+///   tetap ditandai offline). Tanpa ini, membuka aplikasi saat server sedang
+///   gangguan melempar kasir ke layar masuk walau salinan `/auth/me` ada.
+/// - Jawaban lain (2xx, 4xx) = server terjangkau → online.
 /// - Saat sudah diketahui offline, GET dijawab dari salinan SEGERA tanpa
 ///   menunggu timeout; permintaan tulis tetap dicoba ke jaringan (fase 2:
 ///   antrean).
@@ -106,6 +111,20 @@ class SalinanInterceptor extends Interceptor {
     ResponseInterceptorHandler handler,
   ) async {
     final o = response.requestOptions;
+    final code = response.statusCode ?? 0;
+    final dariSalinan = response.headers.value(headerSalinan) != null;
+    if (!dariSalinan && statusGangguan(code)) {
+      if (_bolehSalin(o)) {
+        final r = await _dariSalinan(o);
+        if (r != null) {
+          handler.resolve(r);
+          return;
+        }
+      }
+      koneksi?.tandaiOffline();
+      handler.next(response);
+      return;
+    }
     if (_bolehSalin(o) && _sukses(response)) {
       try {
         await store.tulis(kunci(o), jsonEncode(response.data), DateTime.now());
@@ -113,9 +132,8 @@ class SalinanInterceptor extends Interceptor {
         // Gagal menulis salinan tidak boleh mengganggu jawaban.
       }
     }
-    // Sampai ke server (kode apa pun) = online.
-    if ((response.statusCode ?? 0) > 0 &&
-        response.headers.value(headerSalinan) == null) {
+    // Server menjawab (bukan gangguan) = online.
+    if (code > 0 && !dariSalinan) {
       koneksi?.tandaiOnline();
     }
     handler.next(response);

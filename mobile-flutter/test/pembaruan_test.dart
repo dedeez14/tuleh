@@ -140,28 +140,43 @@ void main() {
       return dio;
     }
 
-    test('server menjawab "tidak ada" → GitHub dipakai', () async {
-      final github = GithubReleaseSource(dio: dioPalsu({}));
-      // dioPalsu untuk GitHub membalas Map (bukan List) → dianggap gagal → null.
-      // Jadi gunakan sumber yang membalas daftar rilis sungguhan:
-      final githubOk = GithubReleaseSource(
-        dio: Dio(BaseOptions(validateStatus: (_) => true))
-          ..interceptors.add(
-            InterceptorsWrapper(
-              onRequest: (o, h) => h.resolve(
-                Response(requestOptions: o, statusCode: 200, data: _rilis()),
-              ),
-            ),
+    GithubReleaseSource githubDenganRilis(List<String> diminta) => GithubReleaseSource(
+      dio: Dio(BaseOptions(validateStatus: (_) => true))
+        ..interceptors.add(
+          InterceptorsWrapper(
+            onRequest: (o, h) {
+              diminta.add(o.uri.toString());
+              h.resolve(Response(requestOptions: o, statusCode: 200, data: _rilis()));
+            },
           ),
-      );
+        ),
+    );
+
+    test('server menjawab "tidak ada" → dipercaya, GitHub TIDAK ditanya', () async {
+      // Admin bisa menahan rilis bertahap: jawaban "tidak ada" bukan alasan
+      // untuk melompati kebijakan server lewat GitHub anonim.
+      final diminta = <String>[];
       final ds = UpdateRemoteDataSource(
         dioPalsu({'success': true, 'data': {'wajib': false, 'update_tersedia': false}}),
-        github: githubOk,
+        github: githubDenganRilis(diminta),
       );
       final info = await ds.cek('1.4.0', abiPerangkat: ['arm64-v8a']);
+      expect(info.updateTersedia, isFalse);
+      expect(diminta, isEmpty);
+    });
+
+    test('server gangguan (503) → GitHub sebagai cadangan', () async {
+      final diminta = <String>[];
+      final server = Dio(BaseOptions(validateStatus: (_) => true))
+        ..interceptors.add(InterceptorsWrapper(
+          onRequest: (o, h) => h.resolve(Response(requestOptions: o, statusCode: 503, data: {'success': false})),
+        ));
+      final ds = UpdateRemoteDataSource(server, github: githubDenganRilis(diminta));
+      final info = await ds.cek('1.4.0', abiPerangkat: ['arm64-v8a']);
+      expect(diminta, isNotEmpty);
       expect(info.updateTersedia, isTrue);
       expect(info.versiTerbaru, '2.0.0');
-      expect(github, isNotNull);
+      expect(info.wajib, isFalse, reason: 'GitHub tidak pernah mewajibkan');
     });
 
     test('server menawarkan sendiri → server menang (termasuk wajib)', () async {

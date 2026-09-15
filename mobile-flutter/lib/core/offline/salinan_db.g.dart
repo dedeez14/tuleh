@@ -318,6 +318,17 @@ class $OutboxTable extends Outbox with TableInfo<$OutboxTable, BarisOutbox> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _pemilikMeta = const VerificationMeta(
+    'pemilik',
+  );
+  @override
+  late final GeneratedColumn<String> pemilik = GeneratedColumn<String>(
+    'pemilik',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _pathMeta = const VerificationMeta('path');
   @override
   late final GeneratedColumn<String> path = GeneratedColumn<String>(
@@ -344,6 +355,18 @@ class $OutboxTable extends Outbox with TableInfo<$OutboxTable, BarisOutbox> {
   @override
   late final GeneratedColumn<int> percobaan = GeneratedColumn<int>(
     'percobaan',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _galatServerMeta = const VerificationMeta(
+    'galatServer',
+  );
+  @override
+  late final GeneratedColumn<int> galatServer = GeneratedColumn<int>(
+    'galat_server',
     aliasedName,
     false,
     type: DriftSqlType.int,
@@ -409,9 +432,11 @@ class $OutboxTable extends Outbox with TableInfo<$OutboxTable, BarisOutbox> {
     clientRef,
     jenis,
     tokoId,
+    pemilik,
     path,
     bodyJson,
     percobaan,
+    galatServer,
     cobaLagiSetelah,
     status,
     galatTerakhir,
@@ -458,6 +483,12 @@ class $OutboxTable extends Outbox with TableInfo<$OutboxTable, BarisOutbox> {
         tokoId.isAcceptableOrUnknown(data['toko_id']!, _tokoIdMeta),
       );
     }
+    if (data.containsKey('pemilik')) {
+      context.handle(
+        _pemilikMeta,
+        pemilik.isAcceptableOrUnknown(data['pemilik']!, _pemilikMeta),
+      );
+    }
     if (data.containsKey('path')) {
       context.handle(
         _pathMeta,
@@ -478,6 +509,15 @@ class $OutboxTable extends Outbox with TableInfo<$OutboxTable, BarisOutbox> {
       context.handle(
         _percobaanMeta,
         percobaan.isAcceptableOrUnknown(data['percobaan']!, _percobaanMeta),
+      );
+    }
+    if (data.containsKey('galat_server')) {
+      context.handle(
+        _galatServerMeta,
+        galatServer.isAcceptableOrUnknown(
+          data['galat_server']!,
+          _galatServerMeta,
+        ),
       );
     }
     if (data.containsKey('coba_lagi_setelah')) {
@@ -543,6 +583,10 @@ class $OutboxTable extends Outbox with TableInfo<$OutboxTable, BarisOutbox> {
         DriftSqlType.string,
         data['${effectivePrefix}toko_id'],
       ),
+      pemilik: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}pemilik'],
+      ),
       path: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}path'],
@@ -554,6 +598,10 @@ class $OutboxTable extends Outbox with TableInfo<$OutboxTable, BarisOutbox> {
       percobaan: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}percobaan'],
+      )!,
+      galatServer: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}galat_server'],
       )!,
       cobaLagiSetelah: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
@@ -589,9 +637,17 @@ class BarisOutbox extends DataClass implements Insertable<BarisOutbox> {
   final String clientRef;
   final String jenis;
   final String? tokoId;
+
+  /// Id akun pembuat baris (v3). null = baris versi lama sebelum kolom ada.
+  final String? pemilik;
   final String path;
   final String bodyJson;
   final int percobaan;
+
+  /// Berapa kali server menjawab GANGGUAN (5xx/408/429) untuk baris ini (v3)
+  /// — dasar batas "pindah ke perlu ditinjau" dari `/config`. Kegagalan
+  /// jaringan murni tidak dihitung (offline berhari-hari itu sah).
+  final int galatServer;
   final DateTime? cobaLagiSetelah;
   final String status;
   final String? galatTerakhir;
@@ -602,9 +658,11 @@ class BarisOutbox extends DataClass implements Insertable<BarisOutbox> {
     required this.clientRef,
     required this.jenis,
     this.tokoId,
+    this.pemilik,
     required this.path,
     required this.bodyJson,
     required this.percobaan,
+    required this.galatServer,
     this.cobaLagiSetelah,
     required this.status,
     this.galatTerakhir,
@@ -620,9 +678,13 @@ class BarisOutbox extends DataClass implements Insertable<BarisOutbox> {
     if (!nullToAbsent || tokoId != null) {
       map['toko_id'] = Variable<String>(tokoId);
     }
+    if (!nullToAbsent || pemilik != null) {
+      map['pemilik'] = Variable<String>(pemilik);
+    }
     map['path'] = Variable<String>(path);
     map['body_json'] = Variable<String>(bodyJson);
     map['percobaan'] = Variable<int>(percobaan);
+    map['galat_server'] = Variable<int>(galatServer);
     if (!nullToAbsent || cobaLagiSetelah != null) {
       map['coba_lagi_setelah'] = Variable<DateTime>(cobaLagiSetelah);
     }
@@ -645,9 +707,13 @@ class BarisOutbox extends DataClass implements Insertable<BarisOutbox> {
       tokoId: tokoId == null && nullToAbsent
           ? const Value.absent()
           : Value(tokoId),
+      pemilik: pemilik == null && nullToAbsent
+          ? const Value.absent()
+          : Value(pemilik),
       path: Value(path),
       bodyJson: Value(bodyJson),
       percobaan: Value(percobaan),
+      galatServer: Value(galatServer),
       cobaLagiSetelah: cobaLagiSetelah == null && nullToAbsent
           ? const Value.absent()
           : Value(cobaLagiSetelah),
@@ -672,9 +738,11 @@ class BarisOutbox extends DataClass implements Insertable<BarisOutbox> {
       clientRef: serializer.fromJson<String>(json['clientRef']),
       jenis: serializer.fromJson<String>(json['jenis']),
       tokoId: serializer.fromJson<String?>(json['tokoId']),
+      pemilik: serializer.fromJson<String?>(json['pemilik']),
       path: serializer.fromJson<String>(json['path']),
       bodyJson: serializer.fromJson<String>(json['bodyJson']),
       percobaan: serializer.fromJson<int>(json['percobaan']),
+      galatServer: serializer.fromJson<int>(json['galatServer']),
       cobaLagiSetelah: serializer.fromJson<DateTime?>(json['cobaLagiSetelah']),
       status: serializer.fromJson<String>(json['status']),
       galatTerakhir: serializer.fromJson<String?>(json['galatTerakhir']),
@@ -690,9 +758,11 @@ class BarisOutbox extends DataClass implements Insertable<BarisOutbox> {
       'clientRef': serializer.toJson<String>(clientRef),
       'jenis': serializer.toJson<String>(jenis),
       'tokoId': serializer.toJson<String?>(tokoId),
+      'pemilik': serializer.toJson<String?>(pemilik),
       'path': serializer.toJson<String>(path),
       'bodyJson': serializer.toJson<String>(bodyJson),
       'percobaan': serializer.toJson<int>(percobaan),
+      'galatServer': serializer.toJson<int>(galatServer),
       'cobaLagiSetelah': serializer.toJson<DateTime?>(cobaLagiSetelah),
       'status': serializer.toJson<String>(status),
       'galatTerakhir': serializer.toJson<String?>(galatTerakhir),
@@ -706,9 +776,11 @@ class BarisOutbox extends DataClass implements Insertable<BarisOutbox> {
     String? clientRef,
     String? jenis,
     Value<String?> tokoId = const Value.absent(),
+    Value<String?> pemilik = const Value.absent(),
     String? path,
     String? bodyJson,
     int? percobaan,
+    int? galatServer,
     Value<DateTime?> cobaLagiSetelah = const Value.absent(),
     String? status,
     Value<String?> galatTerakhir = const Value.absent(),
@@ -719,9 +791,11 @@ class BarisOutbox extends DataClass implements Insertable<BarisOutbox> {
     clientRef: clientRef ?? this.clientRef,
     jenis: jenis ?? this.jenis,
     tokoId: tokoId.present ? tokoId.value : this.tokoId,
+    pemilik: pemilik.present ? pemilik.value : this.pemilik,
     path: path ?? this.path,
     bodyJson: bodyJson ?? this.bodyJson,
     percobaan: percobaan ?? this.percobaan,
+    galatServer: galatServer ?? this.galatServer,
     cobaLagiSetelah: cobaLagiSetelah.present
         ? cobaLagiSetelah.value
         : this.cobaLagiSetelah,
@@ -738,9 +812,13 @@ class BarisOutbox extends DataClass implements Insertable<BarisOutbox> {
       clientRef: data.clientRef.present ? data.clientRef.value : this.clientRef,
       jenis: data.jenis.present ? data.jenis.value : this.jenis,
       tokoId: data.tokoId.present ? data.tokoId.value : this.tokoId,
+      pemilik: data.pemilik.present ? data.pemilik.value : this.pemilik,
       path: data.path.present ? data.path.value : this.path,
       bodyJson: data.bodyJson.present ? data.bodyJson.value : this.bodyJson,
       percobaan: data.percobaan.present ? data.percobaan.value : this.percobaan,
+      galatServer: data.galatServer.present
+          ? data.galatServer.value
+          : this.galatServer,
       cobaLagiSetelah: data.cobaLagiSetelah.present
           ? data.cobaLagiSetelah.value
           : this.cobaLagiSetelah,
@@ -760,9 +838,11 @@ class BarisOutbox extends DataClass implements Insertable<BarisOutbox> {
           ..write('clientRef: $clientRef, ')
           ..write('jenis: $jenis, ')
           ..write('tokoId: $tokoId, ')
+          ..write('pemilik: $pemilik, ')
           ..write('path: $path, ')
           ..write('bodyJson: $bodyJson, ')
           ..write('percobaan: $percobaan, ')
+          ..write('galatServer: $galatServer, ')
           ..write('cobaLagiSetelah: $cobaLagiSetelah, ')
           ..write('status: $status, ')
           ..write('galatTerakhir: $galatTerakhir, ')
@@ -778,9 +858,11 @@ class BarisOutbox extends DataClass implements Insertable<BarisOutbox> {
     clientRef,
     jenis,
     tokoId,
+    pemilik,
     path,
     bodyJson,
     percobaan,
+    galatServer,
     cobaLagiSetelah,
     status,
     galatTerakhir,
@@ -795,9 +877,11 @@ class BarisOutbox extends DataClass implements Insertable<BarisOutbox> {
           other.clientRef == this.clientRef &&
           other.jenis == this.jenis &&
           other.tokoId == this.tokoId &&
+          other.pemilik == this.pemilik &&
           other.path == this.path &&
           other.bodyJson == this.bodyJson &&
           other.percobaan == this.percobaan &&
+          other.galatServer == this.galatServer &&
           other.cobaLagiSetelah == this.cobaLagiSetelah &&
           other.status == this.status &&
           other.galatTerakhir == this.galatTerakhir &&
@@ -810,9 +894,11 @@ class OutboxCompanion extends UpdateCompanion<BarisOutbox> {
   final Value<String> clientRef;
   final Value<String> jenis;
   final Value<String?> tokoId;
+  final Value<String?> pemilik;
   final Value<String> path;
   final Value<String> bodyJson;
   final Value<int> percobaan;
+  final Value<int> galatServer;
   final Value<DateTime?> cobaLagiSetelah;
   final Value<String> status;
   final Value<String?> galatTerakhir;
@@ -823,9 +909,11 @@ class OutboxCompanion extends UpdateCompanion<BarisOutbox> {
     this.clientRef = const Value.absent(),
     this.jenis = const Value.absent(),
     this.tokoId = const Value.absent(),
+    this.pemilik = const Value.absent(),
     this.path = const Value.absent(),
     this.bodyJson = const Value.absent(),
     this.percobaan = const Value.absent(),
+    this.galatServer = const Value.absent(),
     this.cobaLagiSetelah = const Value.absent(),
     this.status = const Value.absent(),
     this.galatTerakhir = const Value.absent(),
@@ -837,9 +925,11 @@ class OutboxCompanion extends UpdateCompanion<BarisOutbox> {
     required String clientRef,
     required String jenis,
     this.tokoId = const Value.absent(),
+    this.pemilik = const Value.absent(),
     required String path,
     required String bodyJson,
     this.percobaan = const Value.absent(),
+    this.galatServer = const Value.absent(),
     this.cobaLagiSetelah = const Value.absent(),
     this.status = const Value.absent(),
     this.galatTerakhir = const Value.absent(),
@@ -855,9 +945,11 @@ class OutboxCompanion extends UpdateCompanion<BarisOutbox> {
     Expression<String>? clientRef,
     Expression<String>? jenis,
     Expression<String>? tokoId,
+    Expression<String>? pemilik,
     Expression<String>? path,
     Expression<String>? bodyJson,
     Expression<int>? percobaan,
+    Expression<int>? galatServer,
     Expression<DateTime>? cobaLagiSetelah,
     Expression<String>? status,
     Expression<String>? galatTerakhir,
@@ -869,9 +961,11 @@ class OutboxCompanion extends UpdateCompanion<BarisOutbox> {
       if (clientRef != null) 'client_ref': clientRef,
       if (jenis != null) 'jenis': jenis,
       if (tokoId != null) 'toko_id': tokoId,
+      if (pemilik != null) 'pemilik': pemilik,
       if (path != null) 'path': path,
       if (bodyJson != null) 'body_json': bodyJson,
       if (percobaan != null) 'percobaan': percobaan,
+      if (galatServer != null) 'galat_server': galatServer,
       if (cobaLagiSetelah != null) 'coba_lagi_setelah': cobaLagiSetelah,
       if (status != null) 'status': status,
       if (galatTerakhir != null) 'galat_terakhir': galatTerakhir,
@@ -885,9 +979,11 @@ class OutboxCompanion extends UpdateCompanion<BarisOutbox> {
     Value<String>? clientRef,
     Value<String>? jenis,
     Value<String?>? tokoId,
+    Value<String?>? pemilik,
     Value<String>? path,
     Value<String>? bodyJson,
     Value<int>? percobaan,
+    Value<int>? galatServer,
     Value<DateTime?>? cobaLagiSetelah,
     Value<String>? status,
     Value<String?>? galatTerakhir,
@@ -899,9 +995,11 @@ class OutboxCompanion extends UpdateCompanion<BarisOutbox> {
       clientRef: clientRef ?? this.clientRef,
       jenis: jenis ?? this.jenis,
       tokoId: tokoId ?? this.tokoId,
+      pemilik: pemilik ?? this.pemilik,
       path: path ?? this.path,
       bodyJson: bodyJson ?? this.bodyJson,
       percobaan: percobaan ?? this.percobaan,
+      galatServer: galatServer ?? this.galatServer,
       cobaLagiSetelah: cobaLagiSetelah ?? this.cobaLagiSetelah,
       status: status ?? this.status,
       galatTerakhir: galatTerakhir ?? this.galatTerakhir,
@@ -925,6 +1023,9 @@ class OutboxCompanion extends UpdateCompanion<BarisOutbox> {
     if (tokoId.present) {
       map['toko_id'] = Variable<String>(tokoId.value);
     }
+    if (pemilik.present) {
+      map['pemilik'] = Variable<String>(pemilik.value);
+    }
     if (path.present) {
       map['path'] = Variable<String>(path.value);
     }
@@ -933,6 +1034,9 @@ class OutboxCompanion extends UpdateCompanion<BarisOutbox> {
     }
     if (percobaan.present) {
       map['percobaan'] = Variable<int>(percobaan.value);
+    }
+    if (galatServer.present) {
+      map['galat_server'] = Variable<int>(galatServer.value);
     }
     if (cobaLagiSetelah.present) {
       map['coba_lagi_setelah'] = Variable<DateTime>(cobaLagiSetelah.value);
@@ -959,9 +1063,11 @@ class OutboxCompanion extends UpdateCompanion<BarisOutbox> {
           ..write('clientRef: $clientRef, ')
           ..write('jenis: $jenis, ')
           ..write('tokoId: $tokoId, ')
+          ..write('pemilik: $pemilik, ')
           ..write('path: $path, ')
           ..write('bodyJson: $bodyJson, ')
           ..write('percobaan: $percobaan, ')
+          ..write('galatServer: $galatServer, ')
           ..write('cobaLagiSetelah: $cobaLagiSetelah, ')
           ..write('status: $status, ')
           ..write('galatTerakhir: $galatTerakhir, ')
@@ -2047,9 +2153,11 @@ typedef $$OutboxTableCreateCompanionBuilder =
       required String clientRef,
       required String jenis,
       Value<String?> tokoId,
+      Value<String?> pemilik,
       required String path,
       required String bodyJson,
       Value<int> percobaan,
+      Value<int> galatServer,
       Value<DateTime?> cobaLagiSetelah,
       Value<String> status,
       Value<String?> galatTerakhir,
@@ -2062,9 +2170,11 @@ typedef $$OutboxTableUpdateCompanionBuilder =
       Value<String> clientRef,
       Value<String> jenis,
       Value<String?> tokoId,
+      Value<String?> pemilik,
       Value<String> path,
       Value<String> bodyJson,
       Value<int> percobaan,
+      Value<int> galatServer,
       Value<DateTime?> cobaLagiSetelah,
       Value<String> status,
       Value<String?> galatTerakhir,
@@ -2100,6 +2210,11 @@ class $$OutboxTableFilterComposer extends Composer<_$SalinanDb, $OutboxTable> {
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get pemilik => $composableBuilder(
+    column: $table.pemilik,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<String> get path => $composableBuilder(
     column: $table.path,
     builder: (column) => ColumnFilters(column),
@@ -2112,6 +2227,11 @@ class $$OutboxTableFilterComposer extends Composer<_$SalinanDb, $OutboxTable> {
 
   ColumnFilters<int> get percobaan => $composableBuilder(
     column: $table.percobaan,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get galatServer => $composableBuilder(
+    column: $table.galatServer,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2170,6 +2290,11 @@ class $$OutboxTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get pemilik => $composableBuilder(
+    column: $table.pemilik,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get path => $composableBuilder(
     column: $table.path,
     builder: (column) => ColumnOrderings(column),
@@ -2182,6 +2307,11 @@ class $$OutboxTableOrderingComposer
 
   ColumnOrderings<int> get percobaan => $composableBuilder(
     column: $table.percobaan,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get galatServer => $composableBuilder(
+    column: $table.galatServer,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -2232,6 +2362,9 @@ class $$OutboxTableAnnotationComposer
   GeneratedColumn<String> get tokoId =>
       $composableBuilder(column: $table.tokoId, builder: (column) => column);
 
+  GeneratedColumn<String> get pemilik =>
+      $composableBuilder(column: $table.pemilik, builder: (column) => column);
+
   GeneratedColumn<String> get path =>
       $composableBuilder(column: $table.path, builder: (column) => column);
 
@@ -2240,6 +2373,11 @@ class $$OutboxTableAnnotationComposer
 
   GeneratedColumn<int> get percobaan =>
       $composableBuilder(column: $table.percobaan, builder: (column) => column);
+
+  GeneratedColumn<int> get galatServer => $composableBuilder(
+    column: $table.galatServer,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<DateTime> get cobaLagiSetelah => $composableBuilder(
     column: $table.cobaLagiSetelah,
@@ -2293,9 +2431,11 @@ class $$OutboxTableTableManager
                 Value<String> clientRef = const Value.absent(),
                 Value<String> jenis = const Value.absent(),
                 Value<String?> tokoId = const Value.absent(),
+                Value<String?> pemilik = const Value.absent(),
                 Value<String> path = const Value.absent(),
                 Value<String> bodyJson = const Value.absent(),
                 Value<int> percobaan = const Value.absent(),
+                Value<int> galatServer = const Value.absent(),
                 Value<DateTime?> cobaLagiSetelah = const Value.absent(),
                 Value<String> status = const Value.absent(),
                 Value<String?> galatTerakhir = const Value.absent(),
@@ -2306,9 +2446,11 @@ class $$OutboxTableTableManager
                 clientRef: clientRef,
                 jenis: jenis,
                 tokoId: tokoId,
+                pemilik: pemilik,
                 path: path,
                 bodyJson: bodyJson,
                 percobaan: percobaan,
+                galatServer: galatServer,
                 cobaLagiSetelah: cobaLagiSetelah,
                 status: status,
                 galatTerakhir: galatTerakhir,
@@ -2321,9 +2463,11 @@ class $$OutboxTableTableManager
                 required String clientRef,
                 required String jenis,
                 Value<String?> tokoId = const Value.absent(),
+                Value<String?> pemilik = const Value.absent(),
                 required String path,
                 required String bodyJson,
                 Value<int> percobaan = const Value.absent(),
+                Value<int> galatServer = const Value.absent(),
                 Value<DateTime?> cobaLagiSetelah = const Value.absent(),
                 Value<String> status = const Value.absent(),
                 Value<String?> galatTerakhir = const Value.absent(),
@@ -2334,9 +2478,11 @@ class $$OutboxTableTableManager
                 clientRef: clientRef,
                 jenis: jenis,
                 tokoId: tokoId,
+                pemilik: pemilik,
                 path: path,
                 bodyJson: bodyJson,
                 percobaan: percobaan,
+                galatServer: galatServer,
                 cobaLagiSetelah: cobaLagiSetelah,
                 status: status,
                 galatTerakhir: galatTerakhir,

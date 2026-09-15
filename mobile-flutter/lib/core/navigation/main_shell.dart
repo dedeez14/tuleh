@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../features/kasir/presentation/controllers/cart_controller.dart';
 import '../layout/lebar.dart';
 import '../offline/pita_koneksi.dart';
+import '../../features/langganan/presentation/langganan_gate.dart';
 import '../../features/toko/presentation/providers/toko_providers.dart';
 import 'destinasi.dart';
 
@@ -53,13 +54,15 @@ class MainShell extends ConsumerWidget {
                   onPilih: _pindah,
                   onLainnya: () => _bukaLainnya(context, ref),
                 ),
-                Expanded(child: PitaKoneksi(child: navigationShell)),
+                Expanded(
+                  child: PitaKoneksi(child: PitaLangganan(child: navigationShell)),
+                ),
               ],
             ),
           );
         }
         return Scaffold(
-          body: PitaKoneksi(child: navigationShell),
+          body: PitaKoneksi(child: PitaLangganan(child: navigationShell)),
           bottomNavigationBar: _BilahBawah(
             tujuan: tujuan,
             terpilih: navigationShell.currentIndex,

@@ -41,7 +41,9 @@ class PemulihTinjau {
     final diklaim = <String>{};
 
     for (final p in calon) {
-      final waktu = DateTime.tryParse('${p.body['waktu_klien'] ?? ''}') ?? p.dibuat;
+      // `waktu_klien` ber-offset diurai sebagai UTC → kembalikan ke jam lokal
+      // agar rentang tanggal tarikan mengikuti hari kasir.
+      final waktu = DateTime.tryParse('${p.body['waktu_klien'] ?? ''}')?.toLocal() ?? p.dibuat;
       final kunci = '${p.tokoId ?? ''}|${_tgl(waktu)}';
       daftarCache[kunci] ??= await _tarik(p.tokoId, waktu);
       final daftar = daftarCache[kunci];

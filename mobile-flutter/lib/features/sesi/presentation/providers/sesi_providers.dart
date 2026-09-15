@@ -77,7 +77,7 @@ class ActiveSesiNotifier extends AsyncNotifier<Sesi?> {
     try {
       gudang = (await repo.firstGudangId()).when(ok: (v) => v, err: (e) => throw e);
     } on ApiException catch (e) {
-      if (!e.isJaringan) rethrow;
+      if (!e.isGangguan) rethrow;
       offline = true; // /gudang belum tersalin & server tak terjangkau → diisi pengurai
     }
     if ((gudang == null || gudang.isEmpty) && !offline) {
@@ -119,8 +119,12 @@ class ActiveSesiNotifier extends AsyncNotifier<Sesi?> {
   Future<void> tutup({required double kasAkhirFisik, String? catatan}) async {
     final repo = ref.read(sesiRepositoryProvider);
     final toko = ref.read(activeTokoIdProvider).valueOrNull;
+    final akun = ref.read(akunAktifProvider);
     final belum = (await ref.read(antreanStoreProvider).semua())
         .where((p) => p.status != StatusAntrean.terkirim)
+        // Baris akun lain (sesi sebelumnya berakhir lalu akun ini masuk)
+        // tidak bisa dikirim akun ini, jadi tidak boleh menahan tutup sesinya.
+        .where((p) => milikAkun(p, akun))
         .where((p) => toko == null || p.tokoId == null || p.tokoId == toko)
         .length;
     if (belum > 0) {

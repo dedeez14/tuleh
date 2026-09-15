@@ -2,12 +2,15 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../features/demo/demo_session.dart';
+import '../../features/langganan/domain/langganan.dart';
 import '../constants/app_config.dart';
+import '../diagnostik/log_cincin.dart';
 import '../offline/koneksi.dart';
 import '../offline/salinan_db.dart';
 import '../offline/salinan_interceptor.dart';
 import '../offline/salinan_store.dart';
 import '../storage/secure_storage.dart';
+import 'api_error_mapper.dart';
 
 /// Versi aplikasi untuk header `X-Tuleh-Version` (Auto-Update).
 /// Di-override di `main()` setelah membaca PackageInfo.
@@ -31,11 +34,22 @@ final salinanStoreProvider = Provider<SalinanStore>(
 final updateRequiredProvider = StateProvider<bool>((ref) => false);
 
 /// true saat token ditolak (401) → sesi berakhir, arahkan ke login.
+/// Dibaca `SesiBerakhirGate` (app.dart) yang membersihkan sesi.
 final sessionExpiredProvider = StateProvider<bool>((ref) => false);
 
-/// Dio terkonfigurasi: base URL MOVERA, interceptor header versi + token +
-/// toko aktif, deteksi 426/401. validateStatus longgar → envelope
-/// dinormalisasi di lapisan data (bukan lempar DioException untuk 4xx/5xx).
+/// Diisi saat endpoint tulis menjawab 402 (langganan perusahaan diblokir):
+/// pesan & tautan perpanjang dari server. `LanggananGate` menampilkan layar
+/// "Langganan berakhir"; permintaan itu TIDAK diantrekan.
+final langgananTerkunciProvider = StateProvider<LanggananTerkunci?>((ref) => null);
+
+/// Jalur yang 401-nya berarti "kredensial salah", bukan "sesi berakhir".
+const _jalurTanpaSesi = ['/auth/login'];
+
+/// Dio terkonfigurasi: base URL MOVERA, interceptor header versi/platform +
+/// token + toko aktif, deteksi 426/401/402. validateStatus longgar → envelope
+/// dinormalisasi di lapisan data (bukan lempar DioException untuk 4xx/5xx);
+/// klasifikasi gangguan (408/429/5xx) ada di [SalinanInterceptor], antrean,
+/// dan [ApiException.isGangguan].
 final dioProvider = Provider<Dio>((ref) {
   final storage = ref.watch(secureStorageProvider);
   final version = ref.watch(appVersionProvider);
@@ -54,6 +68,8 @@ final dioProvider = Provider<Dio>((ref) {
     InterceptorsWrapper(
       onRequest: (options, handler) async {
         options.headers[AppConfig.versionHeader] = version;
+        options.headers[AppConfig.platformHeader] = AppConfig.platform;
+        options.extra['_mulai'] = DateTime.now().millisecondsSinceEpoch;
         final token = await storage.readToken();
         if (token != null && token.isNotEmpty) {
           options.headers['Authorization'] = 'Bearer $token';
@@ -68,12 +84,32 @@ final dioProvider = Provider<Dio>((ref) {
       },
       onResponse: (response, handler) {
         final code = response.statusCode ?? 0;
+        final o = response.requestOptions;
+        final mulai = o.extra['_mulai'];
+        LogCincin.global.catat(
+          'HTTP ${o.method} ${o.path} → $code'
+          '${mulai is int ? ' (${DateTime.now().millisecondsSinceEpoch - mulai} ms)' : ''}',
+        );
         if (code == 426) {
           ref.read(updateRequiredProvider.notifier).state = true;
         } else if (code == 401) {
-          ref.read(sessionExpiredProvider.notifier).state = true;
+          // Hanya bila token memang dikirim: 401 dari /auth/login berarti
+          // sandi salah, dan permintaan tanpa token bukan "sesi berakhir".
+          final bertoken = o.headers['Authorization'] != null;
+          if (bertoken && !_jalurTanpaSesi.contains(o.path)) {
+            ref.read(sessionExpiredProvider.notifier).state = true;
+          }
+        } else if (code == 402) {
+          ref.read(langgananTerkunciProvider.notifier).state = LanggananTerkunci.dariAmplop(
+            response.data,
+            pesanBawaan: ApiErrorMapper.statusMessage(402),
+          );
         }
         handler.next(response);
+      },
+      onError: (e, handler) {
+        LogCincin.global.catat('HTTP ${e.requestOptions.method} ${e.requestOptions.path} ✕ ${e.type.name}', tingkat: 'W');
+        handler.next(e);
       },
     ),
   );

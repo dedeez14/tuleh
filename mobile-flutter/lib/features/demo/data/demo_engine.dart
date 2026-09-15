@@ -56,6 +56,7 @@ class DemoEngine {
   final Map<String, int> _antrian = {};
   int _nTrx = 0, _nSesi = 0, _nOrder = 0, _nBill = 0, _nExp = 0, _nCust = 0;
   int _nMeja = 0;
+  int _nDiagnostik = 0;
 
   final _rand = Random(20260904);
 
@@ -65,8 +66,10 @@ class DemoEngine {
       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
   static DemoResponse _ok(dynamic data, {int status = 200}) =>
       (status: status, body: {'success': true, 'message': null, 'data': data});
-  static DemoResponse _err(int status, String pesan) =>
-      (status: status, body: {'success': false, 'message': pesan, 'data': null});
+  static DemoResponse _err(int status, String pesan, {Map<String, List<String>>? errors}) => (
+    status: status,
+    body: {'success': false, 'message': pesan, 'data': null, 'errors': errors},
+  );
 
   List<Map<String, dynamic>> _produk(String toko) =>
       _katalog[toko]?['produk'] ?? const [];
@@ -96,6 +99,8 @@ class DemoEngine {
     _usaha = {
       ...demoCompany,
       'struk': {'footer': 'Terima kasih atas kunjungan Anda.', 'tampil_logo': true},
+      // Server 2026-09-15: satuan bawaan produk dari master data per usaha.
+      'satuan_bawaan': {...demoSatuan.first},
     };
 
     for (final toko in demoTokos) {
@@ -540,8 +545,24 @@ class DemoEngine {
       });
     }
     if (path == '/pengaturan/usaha' && (m == 'PUT' || m == 'POST')) {
+      // satuan_bawaan_id: id satuan aktif; null/'' = belum diatur; lain → 422.
+      Map<String, dynamic>? satuanBawaan = _usaha['satuan_bawaan'] as Map<String, dynamic>?;
+      if (data.containsKey('satuan_bawaan_id')) {
+        final id = '${data['satuan_bawaan_id'] ?? ''}'.trim();
+        if (id.isEmpty) {
+          satuanBawaan = null;
+        } else {
+          final s = _satuanDemo(id);
+          if (s == null) {
+            const pesan = 'Satuan tidak ditemukan atau sudah tidak aktif.';
+            return _err(422, pesan, errors: {'satuan_bawaan_id': [pesan]});
+          }
+          satuanBawaan = {...s};
+        }
+      }
       _usaha = {
         ..._usaha,
+        'satuan_bawaan': satuanBawaan,
         'nama': data['nama'] ?? _usaha['nama'],
         'alamat': data['alamat'],
         'telepon': data['telepon'],
@@ -643,12 +664,16 @@ class DemoEngine {
     if (path == '/inventory/stok-masuk' && m == 'POST') {
       final p = _cariProduk(toko, '${data['id_produk']}');
       if (p == null) return _err(422, 'Produk tidak ditemukan.');
+      final tanpaSatuan = _tolakTanpaSatuan(p);
+      if (tanpaSatuan != null) return tanpaSatuan;
       p['stok'] = (p['stok'] as num) + ((data['jumlah'] as num?) ?? 0);
       return _ok(null);
     }
     if (path == '/inventory/opname' && m == 'POST') {
       final p = _cariProduk(toko, '${data['id_produk']}');
       if (p == null) return _err(422, 'Produk tidak ditemukan.');
+      final tanpaSatuan = _tolakTanpaSatuan(p);
+      if (tanpaSatuan != null) return tanpaSatuan;
       if (p['kelola_stok'] != true) {
         return _err(422, 'Item ini tidak mengelola stok (jasa / tanpa gudang).');
       }
@@ -665,6 +690,50 @@ class DemoEngine {
     // --- auto-update: demo tidak pernah menawarkan pembaruan ---
     if (path == '/app/versi') {
       return _ok({'wajib': false, 'update_tersedia': false});
+    }
+
+    // --- konfigurasi aplikasi (bentuk sama dengan ConfigController server) ---
+    if (path == '/config' && m == 'GET') {
+      return _ok({
+        'company': {'id': 'DEMO', 'nama': _usaha['nama'], 'alamat': _usaha['alamat'], 'telepon': _usaha['telepon'], 'npwp': null, 'logo': null},
+        'pengaturan': {'stok_minimum_tampil': 0, 'tampilkan_stok_habis': true},
+        'keamanan': {'aktif': false, 'auto_lock_menit': 0},
+        'struk': _usaha['struk'],
+        'pembayaran': {'qr_statis': null, 'bank': const <dynamic>[], 'midtrans_aktif': false},
+        'payment_methods': const ['TUNAI', 'QRIS', 'TRANSFER'],
+        // Kebijakan antrean: demo tidak punya master platform → tidak ditetapkan
+        // (aplikasi tidak memindah baris ke "perlu ditinjau" sendiri).
+        'antrean_maks_percobaan_galat_server': null,
+        'antrean_maks_umur_jam': null,
+        'modules': {'multi_satuan': false},
+      });
+    }
+
+    // --- langganan & dukungan (kontrak 2026-09-15) ---
+    // Demo tidak punya langganan server: selalu aktif tanpa tenggat, tanpa
+    // tautan perpanjang & tanpa kontak (nilai kosong = belum diisi, bukan
+    // karangan) — layar yang bergantung padanya menampilkan keadaan kosong.
+    if (path == '/langganan/status' && m == 'GET') {
+      return _ok({
+        'plan_kode': 'DEMO',
+        'plan_nama': 'Mode Demo',
+        'status': 'TRIAL',
+        'periode_mulai': null,
+        'periode_akhir': null,
+        'sisa_hari': null,
+        'auto_renew': false,
+        'modul_aktif': const <String>[],
+        'perpanjang_url': null,
+        'ambang_peringatan_hari': null,
+        'blokir_tulis': false,
+      });
+    }
+    if (path == '/kontak-cs' && m == 'GET') {
+      return _ok({'sumber': 'DEMO', 'nama': null, 'wa_link': null});
+    }
+    if (path == '/diagnostik' && m == 'POST') {
+      // Diterima tapi tidak ke mana-mana: demo berjalan tanpa server.
+      return _ok({'id': 'DEMO-${++_nDiagnostik}'}, status: 202);
     }
 
     return _err(404, 'Endpoint "$path" tidak tersedia di Mode Demo.');
@@ -703,6 +772,19 @@ class DemoEngine {
     final katalog = _katalog[toko]?['produk'];
     if (katalog == null) return _err(404, 'Toko tidak ditemukan.');
 
+    // Satuan (sama dengan server): dikirim → wajib satuan aktif; tidak dikirim
+    // → satuan bawaan usaha; belum diatur → 422 minta pilih satuan.
+    final dikirim = '${data['satuan_id'] ?? ''}'.trim();
+    final bawaan = _usaha['satuan_bawaan'] as Map<String, dynamic>?;
+    if (dikirim.isNotEmpty && _satuanDemo(dikirim) == null) {
+      const pesan = 'Satuan tidak ditemukan atau sudah tidak aktif.';
+      return _err(422, pesan, errors: {'satuan_id': [pesan]});
+    }
+    if (dikirim.isEmpty && bawaan == null) {
+      const pesan = 'Pilih satuan produk — satuan bawaan usaha belum diatur.';
+      return _err(422, pesan, errors: {'satuan_id': [pesan]});
+    }
+
     final baru = {
       'id': 'NEW-${katalog.length + 1}',
       'kode': 'NEW-${(katalog.length + 1).toString().padLeft(3, '0')}',
@@ -719,7 +801,7 @@ class DemoEngine {
       'stok': 0,
       'gambar': null,
     };
-    _terapkanSatuan(baru, data['satuan_id']);
+    _terapkanSatuan(baru, dikirim.isNotEmpty ? dikirim : bawaan!['id']);
     _terapkanModeJual(baru, data['mode_jual']);
     katalog.add(baru);
     return _ok(baru, status: 201);
@@ -728,6 +810,11 @@ class DemoEngine {
   DemoResponse _ubahProduk(String toko, String id, Map<String, dynamic> data) {
     final p = _cariProduk(toko, id);
     if (p == null) return _err(404, 'Produk tidak ditemukan.');
+    final satuanBaru = '${data['satuan_id'] ?? ''}'.trim();
+    if (satuanBaru.isNotEmpty && _satuanDemo(satuanBaru) == null && satuanBaru != p['satuan_id']) {
+      const pesan = 'Satuan tidak ditemukan atau sudah tidak aktif.';
+      return _err(422, pesan, errors: {'satuan_id': [pesan]});
+    }
     for (final k in ['nama', 'harga_jual', 'harga_beli', 'barcode']) {
       if (data.containsKey(k)) p[k] = data[k];
     }
@@ -738,6 +825,21 @@ class DemoEngine {
       _terapkanModeJual(p, p['mode_jual']); // satuan berganti → langkah ikut
     }
     return _ok(p);
+  }
+
+  /// Server 2026-09-15: operasi stok pada produk tanpa satuan ditolak 422
+  /// (penolakan biasa — tidak diantrekan).
+  static DemoResponse? _tolakTanpaSatuan(Map<String, dynamic> p) {
+    if ('${p['satuan'] ?? ''}'.trim().isNotEmpty) return null;
+    final pesan = 'Produk "${p['nama']}" belum punya satuan. Atur satuannya dulu di Produk & Jasa.';
+    return _err(422, pesan, errors: {'satuan_id': [pesan]});
+  }
+
+  static Map<String, dynamic>? _satuanDemo(String id) {
+    for (final s in demoSatuan) {
+      if (s['id'] == id) return Map<String, dynamic>.from(s);
+    }
+    return null;
   }
 
   static void _terapkanSatuan(Map<String, dynamic> p, Object? satuanId) {

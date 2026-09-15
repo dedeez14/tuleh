@@ -26,7 +26,9 @@ class PesanAntrean {
     required this.body,
     required this.dibuat,
     this.tokoId,
+    this.pemilik,
     this.percobaan = 0,
+    this.galatServer = 0,
     this.cobaLagiSetelah,
     this.status = StatusAntrean.menunggu,
     this.galatTerakhir,
@@ -39,10 +41,19 @@ class PesanAntrean {
   /// CHECKOUT | PENGELUARAN | STOK_MASUK
   final String jenis;
   final String? tokoId;
+
+  /// Id akun yang membuat baris ini. Antrean hanya dikirim dengan token akun
+  /// yang sama: setelah sesi berakhir (401) lalu akun LAIN masuk di perangkat
+  /// ini, penjualan akun sebelumnya tidak boleh tercatat atas nama akun baru.
+  /// null = baris dari versi aplikasi sebelum penanda ini ada.
+  final String? pemilik;
   final String path;
   final Map<String, dynamic> body;
   final DateTime dibuat;
   final int percobaan;
+
+  /// Jumlah jawaban GANGGUAN server (5xx/408/429) — lihat [BatasAntrean].
+  final int galatServer;
   final DateTime? cobaLagiSetelah;
   final StatusAntrean status;
   final String? galatTerakhir;
@@ -90,12 +101,74 @@ class TransaksiTertunda {
   final String strukJson;
 }
 
+/// Kebijakan antrean dari server (`GET /config`, master platform_config):
+/// setelah [maksPercobaanGalatServer] jawaban gangguan server, atau bila baris
+/// sudah berumur [maksUmurJam] jam dan server masih gangguan, baris pindah ke
+/// TINJAU dengan pesan server terakhir. null = server tidak menetapkan →
+/// aplikasi TIDAK pernah memindahkannya sendiri (tanpa angka karangan).
+class BatasAntrean {
+  const BatasAntrean({this.maksPercobaanGalatServer, this.maksUmurJam});
+
+  final int? maksPercobaanGalatServer;
+  final int? maksUmurJam;
+
+  static const tanpaBatas = BatasAntrean();
+
+  bool get ditetapkan => maksPercobaanGalatServer != null || maksUmurJam != null;
+
+  static int? _positif(Object? v) {
+    final n = v is num ? v.toInt() : int.tryParse('${v ?? ''}'.trim());
+    return n != null && n > 0 ? n : null;
+  }
+
+  /// Dari `data` jawaban `/config`.
+  factory BatasAntrean.dariConfig(Map<String, dynamic>? data) => BatasAntrean(
+    maksPercobaanGalatServer: _positif(data?['antrean_maks_percobaan_galat_server']),
+    maksUmurJam: _positif(data?['antrean_maks_umur_jam']),
+  );
+
+  /// true bila baris yang BARU SAJA gagal karena gangguan server sudah
+  /// melewati batas.
+  bool terlampaui({required int galatServer, required DateTime dibuat, required DateTime sekarang}) {
+    final maks = maksPercobaanGalatServer;
+    if (maks != null && galatServer >= maks) return true;
+    final umur = maksUmurJam;
+    if (umur != null && sekarang.difference(dibuat) >= Duration(hours: umur)) return true;
+    return false;
+  }
+}
+
 /// Ringkasan untuk pita status & layar Sinkronisasi.
 class RingkasAntrean {
-  const RingkasAntrean({this.menunggu = 0, this.tinjau = 0});
+  const RingkasAntrean({this.menunggu = 0, this.tinjau = 0, this.milikLain = 0});
   final int menunggu;
   final int tinjau;
+
+  /// Baris belum terkirim milik akun lain (menunggu akun itu masuk lagi).
+  final int milikLain;
   int get total => menunggu + tinjau;
+}
+
+/// true bila [p] milik akun [pemilik] (null = semua dianggap milik sendiri,
+/// dipakai uji & isolate latar sebelum akun pernah tercatat).
+bool milikAkun(PesanAntrean p, String? pemilik) =>
+    pemilik == null || p.pemilik == pemilik;
+
+/// Ringkasan dari sudut pandang akun [pemilik]: baris akun lain dihitung
+/// terpisah sebagai [RingkasAntrean.milikLain].
+RingkasAntrean ringkasUntuk(Iterable<PesanAntrean> semua, String? pemilik) {
+  var menunggu = 0, tinjau = 0, lain = 0;
+  for (final p in semua) {
+    if (p.status == StatusAntrean.terkirim) continue;
+    if (!milikAkun(p, pemilik)) {
+      lain++;
+    } else if (p.perluPerhatian) {
+      tinjau++;
+    } else {
+      menunggu++;
+    }
+  }
+  return RingkasAntrean(menunggu: menunggu, tinjau: tinjau, milikLain: lain);
 }
 
 /// Penyimpanan antrean — antarmuka kecil (memori di test, SQLite di perangkat).
@@ -119,6 +192,7 @@ abstract interface class AntreanStore {
     String clientRef, {
     StatusAntrean? status,
     int? percobaan,
+    int? galatServer,
     DateTime? cobaLagiSetelah,
     bool hapusCobaLagi = false,
     String? galatTerakhir,
@@ -132,6 +206,10 @@ abstract interface class AntreanStore {
   Future<void> batalkan(String clientRef);
 
   Future<RingkasAntrean> ringkas();
+
+  /// Tandai baris tanpa pemilik (dibuat versi lama) sebagai milik [pemilik].
+  /// Dipanggil saat akun yang sama dengan akun terakhir perangkat masuk.
+  Future<int> klaimTanpaPemilik(String pemilik);
 
   Future<List<TransaksiTertunda>> transaksiTertunda({String? tokoId});
 
@@ -163,8 +241,10 @@ class AntreanMemori implements AntreanStore {
   PesanAntrean _salin(
     PesanAntrean p, {
     int? urut,
+    String? pemilik,
     StatusAntrean? status,
     int? percobaan,
+    int? galatServer,
     DateTime? cobaLagiSetelah,
     bool hapusCobaLagi = false,
     String? galatTerakhir,
@@ -177,7 +257,9 @@ class AntreanMemori implements AntreanStore {
     body: p.body,
     dibuat: p.dibuat,
     tokoId: p.tokoId,
+    pemilik: pemilik ?? p.pemilik,
     percobaan: percobaan ?? p.percobaan,
+    galatServer: galatServer ?? p.galatServer,
     cobaLagiSetelah: hapusCobaLagi ? null : (cobaLagiSetelah ?? p.cobaLagiSetelah),
     status: status ?? p.status,
     galatTerakhir: galatTerakhir ?? p.galatTerakhir,
@@ -209,6 +291,7 @@ class AntreanMemori implements AntreanStore {
     String clientRef, {
     StatusAntrean? status,
     int? percobaan,
+    int? galatServer,
     DateTime? cobaLagiSetelah,
     bool hapusCobaLagi = false,
     String? galatTerakhir,
@@ -220,6 +303,7 @@ class AntreanMemori implements AntreanStore {
       _pesan[i],
       status: status,
       percobaan: percobaan,
+      galatServer: galatServer,
       cobaLagiSetelah: cobaLagiSetelah,
       hapusCobaLagi: hapusCobaLagi,
       galatTerakhir: galatTerakhir,
@@ -246,6 +330,18 @@ class AntreanMemori implements AntreanStore {
     menunggu: _pesan.where((p) => p.belumTerkirim).length,
     tinjau: _pesan.where((p) => p.perluPerhatian).length,
   );
+
+  @override
+  Future<int> klaimTanpaPemilik(String pemilik) async {
+    var n = 0;
+    for (var i = 0; i < _pesan.length; i++) {
+      if (_pesan[i].pemilik == null) {
+        _pesan[i] = _salin(_pesan[i], pemilik: pemilik);
+        n++;
+      }
+    }
+    return n;
+  }
 
   @override
   Future<List<TransaksiTertunda>> transaksiTertunda({String? tokoId}) async => [
@@ -285,10 +381,12 @@ class AntreanDriftStore implements AntreanStore {
     clientRef: b.clientRef,
     jenis: b.jenis,
     tokoId: b.tokoId,
+    pemilik: b.pemilik,
     path: b.path,
     body: Map<String, dynamic>.from(jsonDecode(b.bodyJson) as Map),
     dibuat: b.dibuat,
     percobaan: b.percobaan,
+    galatServer: b.galatServer,
     cobaLagiSetelah: b.cobaLagiSetelah,
     status: statusDari(b.status),
     galatTerakhir: b.galatTerakhir,
@@ -322,6 +420,7 @@ class AntreanDriftStore implements AntreanStore {
             clientRef: pesan.clientRef,
             jenis: pesan.jenis,
             tokoId: Value(pesan.tokoId),
+            pemilik: Value(pesan.pemilik),
             path: pesan.path,
             bodyJson: jsonEncode(pesan.body),
             status: Value(statusKe(pesan.status)),
@@ -382,6 +481,7 @@ class AntreanDriftStore implements AntreanStore {
     String clientRef, {
     StatusAntrean? status,
     int? percobaan,
+    int? galatServer,
     DateTime? cobaLagiSetelah,
     bool hapusCobaLagi = false,
     String? galatTerakhir,
@@ -391,6 +491,7 @@ class AntreanDriftStore implements AntreanStore {
       OutboxCompanion(
         status: status == null ? const Value.absent() : Value(statusKe(status)),
         percobaan: percobaan == null ? const Value.absent() : Value(percobaan),
+        galatServer: galatServer == null ? const Value.absent() : Value(galatServer),
         cobaLagiSetelah: hapusCobaLagi
             ? const Value(null)
             : (cobaLagiSetelah == null ? const Value.absent() : Value(cobaLagiSetelah)),
@@ -423,6 +524,12 @@ class AntreanDriftStore implements AntreanStore {
       tinjau: rows.where((p) => p.perluPerhatian).length,
     );
   }
+
+  @override
+  Future<int> klaimTanpaPemilik(String pemilik) =>
+      (_db.update(_db.outbox)..where((t) => t.pemilik.isNull())).write(
+        OutboxCompanion(pemilik: Value(pemilik)),
+      );
 
   @override
   Future<List<TransaksiTertunda>> transaksiTertunda({String? tokoId}) async {

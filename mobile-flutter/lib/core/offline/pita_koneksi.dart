@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -7,6 +9,7 @@ import '../../features/products/presentation/providers/products_provider.dart';
 import '../../features/riwayat/presentation/providers/riwayat_providers.dart';
 import '../../features/sesi/presentation/providers/sesi_providers.dart';
 import '../../features/toko/presentation/providers/toko_providers.dart';
+import '../diagnostik/diagnostik.dart';
 import '../theme/app_colors.dart';
 import 'antrean.dart';
 import 'koneksi.dart';
@@ -48,6 +51,10 @@ class _PitaKoneksiState extends ConsumerState<PitaKoneksi>
   }
 
   Future<void> _jalankanAntrean() async {
+    // Laporan diagnostik yang tertahan (crash saat tanpa sinyal) ikut dikirim.
+    try {
+      unawaited(ref.read(pelaporDiagnostikProvider).kirimTertunda());
+    } catch (_) {}
     try {
       final terkirim = await ref.read(penguraiProvider).jalankan();
       if (terkirim > 0 && mounted) _segarkanSemua();

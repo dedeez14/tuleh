@@ -65,11 +65,7 @@ class TokoRemoteDataSource {
         : const <String, dynamic>{};
     final ok = code >= 200 && code < 300 && body['success'] == true;
     if (!ok) {
-      throw ApiException(
-        message:
-            (body['message'] as String?) ?? ApiErrorMapper.statusMessage(code),
-        statusCode: code,
-      );
+      throw ApiErrorMapper.fromResponse(res);
     }
     return body;
   }

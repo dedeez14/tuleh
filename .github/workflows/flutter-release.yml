@@ -3,9 +3,16 @@ name: Build & Release (Android Flutter)
 # Rilis khusus aplikasi Android BARU (Flutter, di mobile-flutter/). TERPISAH dari
 # release.yml (desktop .exe + Android Capacitor lama) agar dua alur tak bentrok:
 # tag di sini "flutter-vX.Y.Z" (versi dari mobile-flutter/pubspec.yaml), sedangkan
-# release.yml memakai "vX.Y.Z" (frontend/package.json). Setiap push yang menyentuh
-# mobile-flutter/ → bila versi pubspec belum dirilis, build APK release (split-per-abi,
-# ter-tandatangan keystore rilis) lalu terbitkan Release. Idempoten.
+# release.yml memakai "vX.Y.Z" (frontend/package.json).
+#
+# Setiap push yang menyentuh mobile-flutter/:
+#   1. gerbang mutu (pub get, codegen, analyze, test) — SELALU, rilis atau bukan;
+#   2. bila versi pubspec belum dirilis: pastikan nomor build naik & CHANGELOG
+#      punya bagian versi itu, build APK release (split-per-abi, ter-obfuscate,
+#      ter-tandatangan keystore rilis), lalu terbitkan Release. Idempoten.
+#
+# Aksi pihak ketiga dipatok ke SHA commit (komentar = tag) supaya tag yang
+# dipindahkan tidak bisa menyusupkan kode ke build bertanda tangan rilis.
 
 on:
   push:
@@ -16,65 +23,146 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: flutter-release-${{ github.ref }}
   cancel-in-progress: false
+
+env:
+  FLUTTER_VERSION: '3.44.1'
 
 jobs:
   version-check:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.v.outputs.version }}
+      build: ${{ steps.v.outputs.build }}
       exists: ${{ steps.check.outputs.exists }}
+      prev_tag: ${{ steps.prev.outputs.prev_tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0 # tag flutter-v* lama untuk cek nomor build & tautan perbandingan
       - id: v
-        # Ambil "X.Y.Z" dari "version: X.Y.Z+build" di pubspec.
+        # "X.Y.Z+N" di pubspec → version=X.Y.Z, build=N (versionCode Android).
         run: |
-          RAW=$(grep -E '^version:' mobile-flutter/pubspec.yaml | awk '{print $2}')
-          echo "version=${RAW%%+*}" >> "$GITHUB_OUTPUT"
+          RAW=$(grep -E '^version:' mobile-flutter/pubspec.yaml | awk '{print $2}' | tr -d '\r')
+          VER="${RAW%%+*}"
+          BUILD="${RAW#*+}"
+          if [ "$BUILD" = "$RAW" ] || ! [[ "$BUILD" =~ ^[0-9]+$ ]]; then
+            echo "::error file=mobile-flutter/pubspec.yaml::version harus berbentuk X.Y.Z+N (N = nomor build), sekarang '$RAW'."
+            exit 1
+          fi
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "build=$BUILD" >> "$GITHUB_OUTPUT"
       - id: check
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view "flutter-v${{ steps.v.outputs.version }}" -R "${{ github.repository }}" >/dev/null 2>&1; then
-            echo "Release flutter-v${{ steps.v.outputs.version }} sudah ada — dilewati."
+            echo "Release flutter-v${{ steps.v.outputs.version }} sudah ada — build & rilis dilewati (gerbang mutu tetap jalan)."
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "Release flutter-v${{ steps.v.outputs.version }} belum ada — build."
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
+      - id: prev
+        # Tag flutter-v* tertinggi yang LEBIH RENDAH dari versi ini (bukan tag
+        # desktop v0.9.x yang dipilih GitHub otomatis untuk tautan perbandingan).
+        run: |
+          VER="${{ steps.v.outputs.version }}"
+          PREV=$( (git tag -l 'flutter-v*' | sed 's/^flutter-v//' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$'; echo "$VER") \
+            | sort -V -u | awk -v v="$VER" '$0 == v { print p; exit } { p = $0 }')
+          if [ -n "$PREV" ]; then
+            echo "Rilis Flutter sebelumnya: flutter-v$PREV"
+            echo "prev_tag=flutter-v$PREV" >> "$GITHUB_OUTPUT"
+          else
+            echo "Belum ada rilis Flutter sebelumnya."
+            echo "prev_tag=" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Nomor build wajib naik dari rilis sebelumnya
+        # Android menolak memasang APK dengan versionCode ≤ yang terpasang, jadi
+        # auto-update diam-diam gagal di ponsel pelanggan bila build tidak naik.
+        if: steps.check.outputs.exists == 'false' && steps.prev.outputs.prev_tag != ''
+        run: |
+          PREV_TAG="${{ steps.prev.outputs.prev_tag }}"
+          BUILD="${{ steps.v.outputs.build }}"
+          PREV_RAW=$(git show "$PREV_TAG:mobile-flutter/pubspec.yaml" | grep -E '^version:' | awk '{print $2}' | tr -d '\r')
+          PREV_BUILD="${PREV_RAW#*+}"
+          if ! [[ "$PREV_BUILD" =~ ^[0-9]+$ ]]; then
+            echo "::warning::Nomor build $PREV_TAG tak terbaca ('$PREV_RAW') — pemeriksaan dilewati."
+            exit 0
+          fi
+          if [ "$BUILD" -le "$PREV_BUILD" ]; then
+            echo "::error file=mobile-flutter/pubspec.yaml::Nomor build $BUILD tidak lebih besar dari $PREV_TAG (build $PREV_BUILD). Naikkan angka setelah '+'."
+            exit 1
+          fi
+          echo "Nomor build $BUILD > $PREV_BUILD ($PREV_TAG) — OK."
+      - name: CHANGELOG wajib punya bagian versi ini
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          VER="${{ steps.v.outputs.version }}"
+          if ! tr -d '\r' < mobile-flutter/CHANGELOG.md | awk -v v="$VER" '$1 == "##" && $2 == v { found = 1 } END { exit !found }'; then
+            echo "::error file=mobile-flutter/CHANGELOG.md::Tidak ada bagian '## $VER' di CHANGELOG — catatan rilis & banner pembaruan akan kosong."
+            exit 1
+          fi
+
+  quality:
+    # Gerbang mutu di SETIAP push: rilis tidak pernah dibangun dari kode yang
+    # gagal analyze/test.
+    needs: version-check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile-flutter
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - name: flutter pub get
+        run: flutter pub get --enforce-lockfile
+      - name: Codegen (freezed / json_serializable / drift)
+        run: dart run build_runner build --delete-conflicting-outputs
+      - name: flutter analyze (gagal pada warning & error)
+        run: flutter analyze --no-fatal-infos
+      - name: flutter test (zona Asia/Jakarta, seperti perangkat kasir)
+        env:
+          TZ: Asia/Jakarta
+        run: flutter test
 
   android:
-    needs: version-check
+    needs: [version-check, quality]
     if: needs.version-check.outputs.exists == 'false'
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: mobile-flutter
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           distribution: temurin
           java-version: '21'
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           channel: stable
-          flutter-version: '3.44.1'
-      - uses: android-actions/setup-android@v3
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
       - name: Pasang platform Android 36 (override compileSdk 36 utk flutter_secure_storage 11)
         run: yes | sdkmanager "platforms;android-36" "build-tools;36.0.0" >/dev/null || true
       - name: flutter pub get
-        run: flutter pub get
-      - name: Codegen (freezed / json_serializable)
+        run: flutter pub get --enforce-lockfile
+      - name: Codegen (freezed / json_serializable / drift)
         run: dart run build_runner build --delete-conflicting-outputs
       - name: Cek keystore rilis
         id: ks
         # Tanda tangan STABIL (keystore rilis) wajib agar update bisa dipasang di atas
-        # versi lama. Tanpa secret → jatuh ke debug signing (tak bisa auto-update).
+        # versi lama. build.gradle.kts menolak build release tanpa keystore.
         run: |
           if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then echo "has=true" >> "$GITHUB_OUTPUT"; else echo "has=false" >> "$GITHUB_OUTPUT"; fi
       - name: Decode keystore rilis
@@ -82,9 +170,13 @@ jobs:
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/tuleh-release.keystore"
-      - name: Build APK release (split-per-abi)
+      - name: Build APK release (split-per-abi, obfuscate)
         # build.gradle.kts membaca env ANDROID_KEYSTORE_PATH/KS_PASS/KEY_ALIAS/KEY_PASS
-        # bila key.properties tak ada. Bila keystore kosong → debug signing (peringatan).
+        # bila key.properties tak ada.
+        # --obfuscate menyamarkan nama simbol Dart; peta simbol (--split-debug-info)
+        # disimpan sebagai artefak CI terpisah (BUKAN aset Release publik) supaya
+        # stack crash dari /diagnostik bisa diurai: `flutter symbolize -i stack.txt
+        # -d app.android-arm64.symbols`.
         env:
           ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/tuleh-release.keystore
           ANDROID_KS_PASS: ${{ secrets.ANDROID_KS_PASS }}
@@ -92,9 +184,10 @@ jobs:
           ANDROID_KEY_PASS: ${{ secrets.ANDROID_KEY_PASS }}
         run: |
           if [ "${{ steps.ks.outputs.has }}" != "true" ]; then
-            echo "::warning::Secret ANDROID_KEYSTORE_BASE64 kosong — APK ter-tandatangan debug; auto-update tak akan bisa menimpa versi lama."
+            echo "::warning::Secret ANDROID_KEYSTORE_BASE64 kosong — APK tak bisa ditandatangani rilis."
           fi
-          flutter build apk --release --split-per-abi
+          flutter build apk --release --split-per-abi \
+            --obfuscate --split-debug-info=build/debug-info
       - name: Beri nama APK sesuai versi
         run: |
           VER="${{ needs.version-check.outputs.version }}"
@@ -104,58 +197,56 @@ jobs:
             [ -f "$SRC" ] && cp "$SRC" "Tuleh-$VER-$abi.apk"
           done
           ls -la Tuleh-*.apk
-      - uses: actions/upload-artifact@v4
+          ls -la build/debug-info
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: flutter-android
           path: mobile-flutter/Tuleh-*.apk
           if-no-files-found: error
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: flutter-android-symbols-${{ needs.version-check.outputs.version }}
+          path: mobile-flutter/build/debug-info/
+          if-no-files-found: error
+          retention-days: 90
 
   release:
     needs: [version-check, android]
     if: needs.version-check.outputs.exists == 'false'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          path: artifacts
+          name: flutter-android
+          path: artifacts/flutter-android
       - name: Ambil catatan rilis dari CHANGELOG
-        # Isi Release = SEMUA bagian "## X.Y.Z" sejak rilis terakhir yang terbit,
-        # bukan hanya versi ini. Push beruntun membuat sebagian run rilis
-        # dibatalkan saat masih antre (aturan concurrency GitHub), jadi versi di
-        # tengah tak pernah punya Release sendiri — catatannya tetap harus sampai
-        # ke pengguna. Empat baris pertama tampil di banner pembaruan aplikasi.
-        env:
-          GH_TOKEN: ${{ github.token }}
+        # Isi Release = HANYA bagian "## X.Y.Z" yang sama dengan versi pubspec
+        # (sampai judul "## " berikutnya). Dulu dikumpulkan "sejak rilis terakhir",
+        # dan saat bagian rilis terakhir tidak ada di CHANGELOG seluruh 39 bagian
+        # ikut tercetak. Empat baris pertama tampil di banner pembaruan aplikasi.
         run: |
           VER="${{ needs.version-check.outputs.version }}"
-          # Versi rilis Flutter terakhir yang sudah terbit (kosong bila belum ada).
-          TERAKHIR=$(gh release list -R "${{ github.repository }}" --limit 60 \
-            --json tagName --jq '[.[] | select(.tagName | startswith("flutter-v"))][0].tagName' 2>/dev/null || true)
-          TERAKHIR="${TERAKHIR#flutter-v}"
-          echo "Rilis terakhir: ${TERAKHIR:-(belum ada)} — sekarang: $VER"
-          awk -v v="$VER" -v sejak="$TERAKHIR" '
-            # Kumpulkan bagian dari versi ini ke bawah sampai bertemu versi yang
-            # sudah pernah terbit.
-            /^## /{
-              if ($2 == v) { aktif = 1; print; next }
-              if (aktif && sejak != "" && $2 == sejak) { aktif = 0; next }
-              if (aktif) { print; next }
-              next
-            }
+          tr -d '\r' < mobile-flutter/CHANGELOG.md | awk -v v="$VER" '
+            $1 == "##" { if (aktif) exit; if ($2 == v) { aktif = 1; next } }
             aktif { print }
-          ' mobile-flutter/CHANGELOG.md | sed -e '/./,$!d' > catatan.md
-          # Satu versi saja: judulnya mubazir (nama Release sudah memuat versi).
-          if [ "$(grep -c '^## ' catatan.md || echo 0)" = "1" ]; then
-            sed -i '1{/^## /d}' catatan.md
-            sed -i -e '/./,$!d' catatan.md
+          ' | sed -e '/./,$!d' > catatan.md
+          if [ ! -s catatan.md ] || ! grep -q '[^[:space:]]' catatan.md; then
+            echo "::error file=mobile-flutter/CHANGELOG.md::Bagian '## $VER' kosong atau tidak ada."
+            exit 1
           fi
-          if [ -s catatan.md ]; then echo "Catatan rilis $VER:"; cat catatan.md; else echo "::warning::CHANGELOG tak punya bagian $VER"; fi
+          echo "Catatan rilis $VER:"; cat catatan.md
       - name: Terbitkan Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           tag_name: flutter-v${{ needs.version-check.outputs.version }}
           name: Tuléh Android (Flutter) v${{ needs.version-check.outputs.version }}
           body_path: catatan.md
           generate_release_notes: true
+          # Tautan "Full Changelog" dibandingkan dengan rilis Flutter sebelumnya,
+          # bukan tag desktop (dulu: v0.9.34...flutter-v2.28.0).
+          previous_tag: ${{ needs.version-check.outputs.prev_tag }}
           files: artifacts/flutter-android/*
+          fail_on_unmatched_files: true

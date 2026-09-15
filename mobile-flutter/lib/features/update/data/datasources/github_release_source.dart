@@ -33,9 +33,12 @@ class GithubReleaseSource {
 
   /// Rilis Flutter terbaru yang lebih baru dari [versiSekarang]; null bila
   /// tidak ada atau cek gagal (fail-open, sama seperti cek server).
+  /// [versiTepat] = hanya rilis dengan versi itu (dipakai saat server sudah
+  /// memilih versinya dan GitHub cuma dimintai berkas ABI lain).
   Future<AppVersionInfo?> cek(
     String versiSekarang, {
     required List<String> abiPerangkat,
+    String? versiTepat,
   }) async {
     final sekarang = Versi.parse(versiSekarang);
     if (sekarang == null) return null;
@@ -46,7 +49,7 @@ class GithubReleaseSource {
         queryParameters: {'per_page': 20},
       );
       if ((res.statusCode ?? 0) != 200 || res.data is! List) return null;
-      return pilih(res.data as List, sekarang, abiPerangkat: abiPerangkat);
+      return pilih(res.data as List, sekarang, abiPerangkat: abiPerangkat, versiTepat: versiTepat);
     } catch (_) {
       return null;
     }
@@ -59,9 +62,12 @@ class GithubReleaseSource {
     List<dynamic> rilis,
     Versi sekarang, {
     required List<String> abiPerangkat,
+    String? versiTepat,
   }) {
     Map<String, dynamic>? terbaik;
     Versi? versiTerbaik;
+    final tepat = versiTepat == null ? null : Versi.parse(versiTepat);
+    if (versiTepat != null && tepat == null) return null;
 
     for (final r in rilis) {
       if (r is! Map) continue;
@@ -71,6 +77,7 @@ class GithubReleaseSource {
       if (m == null) continue;
       final v = Versi.parse(m.group(1));
       if (v == null || !(v > sekarang)) continue;
+      if (tepat != null && v.toString() != tepat.toString()) continue;
       if (versiTerbaik == null || v > versiTerbaik) {
         versiTerbaik = v;
         terbaik = Map<String, dynamic>.from(r);

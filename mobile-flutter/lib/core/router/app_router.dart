@@ -19,6 +19,8 @@ import '../../features/riwayat/presentation/screens/riwayat_screen.dart';
 import '../../features/sesi/presentation/screens/sesi_screen.dart';
 import '../../features/stok/presentation/screens/stok_screen.dart';
 import '../../features/toko/presentation/providers/toko_providers.dart';
+import '../diagnostik/diagnostik.dart';
+import '../diagnostik/log_cincin.dart';
 import '../navigation/main_shell.dart';
 import '../widgets/motion.dart';
 import '../widgets/splash_screen.dart';
@@ -35,7 +37,7 @@ final routerProvider = Provider<GoRouter>((ref) {
   ref.listen(authControllerProvider, (_, _) => refresh.value++);
   ref.onDispose(refresh.dispose);
 
-  return GoRouter(
+  final router = GoRouter(
     navigatorKey: _rootKey,
     initialLocation: '/splash',
     refreshListenable: refresh,
@@ -107,6 +109,19 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
     ],
   );
+  // Jejak layar untuk laporan diagnostik & log dukungan (jalur saja, tanpa query).
+  void catatLayar() {
+    try {
+      final lokasi = router.routerDelegate.currentConfiguration.uri.path;
+      if (lokasi.isEmpty || lokasi == KonteksPerangkat.layar) return;
+      KonteksPerangkat.layar = lokasi;
+      LogCincin.global.catat('Layar $lokasi');
+    } catch (_) {}
+  }
+
+  router.routerDelegate.addListener(catatLayar);
+  ref.onDispose(() => router.routerDelegate.removeListener(catatLayar));
+  return router;
 });
 
 const _sekunder = <(String, Widget)>[

@@ -1,7 +1,6 @@
 import 'package:dio/dio.dart';
 
 import '../../../../core/network/api_error_mapper.dart';
-import '../../../../core/network/api_exception.dart';
 import '../../../sesi/domain/entities/sesi_rekap.dart';
 import '../../domain/entities/laporan_keuangan.dart';
 import '../../domain/entities/penjualan_hari.dart';
@@ -90,10 +89,7 @@ class LaporanRemoteDataSource {
     final body = _map(res.data);
     final ok = code >= 200 && code < 300 && body['success'] == true;
     if (!ok) {
-      throw ApiException(
-        message: (body['message'] as String?) ?? ApiErrorMapper.statusMessage(code),
-        statusCode: code,
-      );
+      throw ApiErrorMapper.fromResponse(res);
     }
     return body;
   }

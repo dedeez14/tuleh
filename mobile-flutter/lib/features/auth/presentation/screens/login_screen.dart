@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_config.dart';
 import '../../../../core/network/api_exception.dart';
+import '../../../../core/offline/antrean.dart';
+import '../../../../core/offline/pengurai.dart';
 import '../../../demo/domain/masa_coba.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/app_background.dart' show PolaTitikPainter;
@@ -328,6 +330,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                   color: cs.onSurface.withValues(alpha: 0.62),
                 ),
               ),
+              const _PesanSesi(),
               const SizedBox(height: 22),
               TextFormField(
                 controller: _login,
@@ -673,6 +676,49 @@ class _ServerFooter extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Alasan pengguna berada di layar masuk (mis. sesi berakhir karena token
+/// ditolak server) + penegasan bahwa data yang belum terkirim tidak hilang.
+class _PesanSesi extends ConsumerWidget {
+  const _PesanSesi();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final pesan = ref.watch(pesanMasukProvider);
+    if (pesan == null) return const SizedBox.shrink();
+    final semua = ref.watch(daftarAntreanProvider).valueOrNull ?? const <PesanAntrean>[];
+    final tertunda = semua.where((p) => p.status != StatusAntrean.terkirim).length;
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      key: const Key('pesan-sesi-berakhir'),
+      margin: const EdgeInsets.only(top: 14),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: AppColors.warn.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.warn.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.lock_reset_rounded, size: 20, color: AppColors.warn),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              [
+                pesan,
+                if (tertunda > 0)
+                  '$tertunda data belum terkirim tetap tersimpan di perangkat ini dan '
+                      'dikirim otomatis setelah akun yang sama masuk kembali.',
+              ].join('\n'),
+              style: TextStyle(fontSize: 13.5, height: 1.4, color: cs.onSurface),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

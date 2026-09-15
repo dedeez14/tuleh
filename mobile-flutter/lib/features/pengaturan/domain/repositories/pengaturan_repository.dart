@@ -14,5 +14,7 @@ abstract interface class PengaturanRepository {
     String? email,
     String? strukFooter,
     required bool strukTampilLogo,
+    bool ubahSatuanBawaan = false,
+    String? satuanBawaanId,
   });
 }

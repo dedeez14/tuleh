@@ -1,7 +1,6 @@
 import 'package:dio/dio.dart';
 
 import '../../../../core/network/api_error_mapper.dart';
-import '../../../../core/network/api_exception.dart';
 import '../../domain/entities/transaksi.dart';
 import '../../domain/entities/transaksi_detail.dart';
 
@@ -65,10 +64,7 @@ class RiwayatRemoteDataSource {
     final body = _map(res.data);
     final ok = code >= 200 && code < 300 && body['success'] == true;
     if (!ok) {
-      throw ApiException(
-        message: (body['message'] as String?) ?? ApiErrorMapper.statusMessage(code),
-        statusCode: code,
-      );
+      throw ApiErrorMapper.fromResponse(res);
     }
     return body;
   }

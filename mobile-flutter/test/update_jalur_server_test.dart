@@ -131,12 +131,59 @@ void main() {
     expect(info.hasAndroidDownload, isTrue);
   });
 
-  test('server bilang tidak ada pembaruan: GitHub dipakai sebagai cadangan', () async {
+  test('server bilang tidak ada pembaruan: dipercaya (penahanan rilis admin), GitHub tak disentuh', () async {
     final s = sumber(_jawabanServer(tersedia: false));
+    final info = await s.cek('2.20.0', abiPerangkat: const ['arm64-v8a']);
+    expect(github.permintaan, isEmpty);
+    expect(info.updateTersedia, isFalse);
+  });
+
+  test('server gangguan (502): GitHub dipakai sebagai cadangan tanpa "wajib"', () async {
+    server = _Adapter((_) => _json({'success': false, 'message': 'Bad Gateway'}, 502));
+    github = _Adapter((_) => _json(_rilisGithub));
+    final dioServer = Dio(BaseOptions(baseUrl: 'https://tatreport.com/api/pos/v1', validateStatus: (_) => true))
+      ..httpClientAdapter = server;
+    final dioGithub = Dio(BaseOptions(validateStatus: (_) => true))..httpClientAdapter = github;
+    final s = UpdateRemoteDataSource(dioServer, github: GithubReleaseSource(dio: dioGithub));
     final info = await s.cek('2.20.0', abiPerangkat: const ['arm64-v8a']);
     expect(github.permintaan, isNotEmpty);
     expect(info.versiTerbaru, '2.24.0');
-    expect(info.androidUrl, contains('github.com'));
+    expect(info.wajib, isFalse);
+  });
+
+  test('ABI asing: GitHub hanya dimintai versi yang DITAWARKAN server, bukan versi tertinggi', () async {
+    server = _Adapter((_) => _json(_jawabanServer(wajib: false)));
+    github = _Adapter((_) => _json([
+      {
+        'tag_name': 'flutter-v2.30.0', // lebih tinggi, sengaja ditahan admin
+        'draft': false,
+        'prerelease': false,
+        'assets': [
+          {
+            'name': 'Tuleh-2.30.0-mips.apk',
+            'browser_download_url':
+                'https://github.com/dedeez14/tuleh/releases/download/flutter-v2.30.0/Tuleh-2.30.0-mips.apk',
+          },
+        ],
+      },
+      {
+        ..._rilisGithub.single,
+        'assets': [
+          {
+            'name': 'Tuleh-2.24.0-mips.apk',
+            'browser_download_url':
+                'https://github.com/dedeez14/tuleh/releases/download/flutter-v2.24.0/Tuleh-2.24.0-mips.apk',
+          },
+        ],
+      },
+    ]));
+    final dioServer = Dio(BaseOptions(baseUrl: 'https://tatreport.com/api/pos/v1', validateStatus: (_) => true))
+      ..httpClientAdapter = server;
+    final dioGithub = Dio(BaseOptions(validateStatus: (_) => true))..httpClientAdapter = github;
+    final s = UpdateRemoteDataSource(dioServer, github: GithubReleaseSource(dio: dioGithub));
+    final info = await s.cek('2.20.0', abiPerangkat: const ['mips']);
+    expect(info.versiTerbaru, '2.24.0');
+    expect(info.androidNama, 'Tuleh-2.24.0-mips.apk');
   });
 
   test('server tak terjangkau: fail-open, tidak melempar', () async {

@@ -28,16 +28,19 @@ class HasilBayar {
   /// true = disimpan di perangkat, dikirim otomatis saat online.
   final bool tertunda;
 
-  /// true = server mungkin sudah menerima (timeout setelah kirim); pengguna
+  /// client_ref baris antrean (hanya bila [tertunda]).
   final String? clientRef;
 }
 
 /// Checkout dengan jalur offline (fase 2):
 /// 1. online → kirim langsung seperti biasa;
-/// 2. diketahui offline / gagal jaringan sebelum sampai → simpan transaksi
-///    lokal + antrean + delta stok dalam satu transaksi penyimpanan, beri
-///    nomor lokal, kembalian dihitung di perangkat;
-/// 3. timeout setelah terkirim → sama seperti 2 tetapi status TINJAU.
+/// 2. diketahui offline / GANGGUAN (jaringan putus, timeout, 408, 429, 5xx)
+///    → simpan transaksi lokal + antrean + delta stok dalam satu transaksi
+///    penyimpanan, beri nomor lokal, kembalian dihitung di perangkat. Server
+///    yang sempat mencatat kiriman pertama mengenali `client_ref` saat antrean
+///    mengirim ulang, jadi tidak ada penjualan ganda;
+/// 3. ditolak server (4xx: validasi, 401 sesi, 402 langganan, …) → dilempar
+///    apa adanya, TIDAK diantrekan.
 ///
 /// Setiap kiriman membawa `client_ref` (UUID) dan `waktu_klien` agar server
 /// yang sudah mendukung idempotensi tidak mencatat dua kali.
@@ -48,8 +51,12 @@ class CheckoutRepository {
     required this.nomorLokal,
     this.koneksi,
     this.tokoId,
+    this.pemilik,
     Random? acak,
   }) : _acak = acak ?? Random.secure();
+
+  /// Akun yang sedang masuk — pemilik baris antrean (lihat [PesanAntrean.pemilik]).
+  final String? pemilik;
 
   final TransactionRemoteDataSource remote;
   final AntreanStore antrean;
@@ -110,8 +117,9 @@ class CheckoutRepository {
         final r = await remote.checkoutBody(body);
         return HasilBayar(nomor: r.nomor, kembalian: r.kembalian);
       } on ApiException catch (e) {
-        if (!e.isJaringan) rethrow; // ditolak server: tampilkan apa adanya
+        if (!e.isGangguan) rethrow; // ditolak server: tampilkan apa adanya
         return _antrekan(
+          cobaLagi: e.cobaLagiSetelah,
           body: body,
           clientRef: clientRef,
           items: items,
@@ -136,6 +144,7 @@ class CheckoutRepository {
   }
 
   Future<HasilBayar> _antrekan({
+    Duration? cobaLagi,
     required Map<String, dynamic> body,
     required String clientRef,
     required List<CartItem> items,
@@ -161,10 +170,12 @@ class CheckoutRepository {
         clientRef: clientRef,
         jenis: 'CHECKOUT',
         tokoId: tokoId,
+        pemilik: pemilik,
         path: '/transaksi/checkout',
         body: body,
         dibuat: waktu,
         status: StatusAntrean.menunggu,
+        cobaLagiSetelah: cobaLagi == null ? null : waktu.add(cobaLagi),
       ),
       transaksi: TransaksiTertunda(
         clientRef: clientRef,

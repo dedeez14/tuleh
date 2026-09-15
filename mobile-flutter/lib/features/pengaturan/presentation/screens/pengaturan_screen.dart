@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/diagnostik/diagnostik.dart';
 import '../../../../core/layout/lebar.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/offline/antrean.dart';
@@ -11,6 +12,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/tema_provider.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../../../cetak/presentation/screens/printer_screen.dart';
+import '../../../langganan/presentation/langganan_providers.dart';
 import '../../../pemantau/presentation/pemantau_providers.dart';
 import '../../../toko/domain/entities/toko.dart';
 import '../../../toko/presentation/providers/toko_providers.dart';
@@ -123,6 +125,7 @@ class PengaturanScreen extends ConsumerWidget {
             ),
           ),
           const _EntriTema(),
+          const _EntriDukungan(),
           _tile(context, Icons.storefront_outlined, 'Toko aktif',
               activeToko?.nama ?? '—'),
           _tile(context, Icons.info_outline_rounded, 'Versi aplikasi', version),
@@ -216,7 +219,12 @@ Future<bool?> _konfirmasiKeluarOffline(BuildContext context) => showDialog<bool>
 Future<void> keluarDenganPenjagaAntrean(BuildContext context, WidgetRef ref) async {
   RingkasAntrean ringkas;
   try {
-    ringkas = await ref.read(antreanStoreProvider).ringkas();
+    // Hanya baris milik akun ini: baris akun lain (sesinya berakhir) justru
+    // menunggu akun ini keluar agar pemiliknya bisa masuk dan mengirimnya.
+    ringkas = ringkasUntuk(
+      await ref.read(antreanStoreProvider).semua(),
+      ref.read(akunAktifProvider),
+    );
   } catch (_) {
     ringkas = const RingkasAntrean();
   }
@@ -390,4 +398,117 @@ class _SaklarPemantau extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// Dukungan: kirim laporan (catatan + ekor log dalam aplikasi) ke server lewat
+/// `POST /diagnostik`, dan tautan CS dari `GET /kontak-cs` — tanpa nomor atau
+/// alamat yang tertanam di aplikasi.
+class _EntriDukungan extends ConsumerWidget {
+  const _EntriDukungan();
+
+  Future<void> _kirimLaporan(BuildContext context, WidgetRef ref) async {
+    // null = batal; dialog memiliki controller-nya sendiri (dibuang saat
+    // dialog benar-benar lepas, bukan saat animasi tutup masih berjalan).
+    final teks = await showDialog<String>(
+      context: context,
+      builder: (_) => const _DialogLaporan(),
+    );
+    if (teks == null || !context.mounted) return;
+    final hasil = await ref.read(pelaporDiagnostikProvider).kirimLaporanPengguna(catatan: teks);
+    if (!context.mounted) return;
+    final id = hasil.idServer;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            !hasil.terkirim
+                ? 'Laporan disimpan dan dikirim otomatis saat server terjangkau.'
+                : (id == null || id.isEmpty)
+                ? 'Laporan terkirim ke dukungan.'
+                : 'Laporan terkirim. Sebutkan nomor laporan #$id saat menghubungi CS.',
+          ),
+        ),
+      );
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cs = Theme.of(context).colorScheme;
+    final kontak = ref.watch(kontakCsProvider).valueOrNull;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        children: [
+          ListTile(
+            key: const Key('entri-kirim-laporan'),
+            leading: Icon(Icons.bug_report_outlined, color: cs.primary),
+            title: const Text('Kirim laporan ke dukungan'),
+            subtitle: const Text('Kirim catatan kejadian aplikasi untuk diperiksa'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _kirimLaporan(context, ref),
+          ),
+          if (kontak != null && kontak.ada)
+            ListTile(
+              key: const Key('entri-hubungi-cs'),
+              leading: Icon(Icons.chat_outlined, color: cs.primary),
+              title: Text(kontak.nama == null ? 'Hubungi CS' : 'Hubungi ${kontak.nama}'),
+              subtitle: const Text('WhatsApp layanan pelanggan'),
+              trailing: const Icon(Icons.open_in_new_rounded),
+              onTap: () async {
+                final uri = Uri.tryParse(kontak.waLink!);
+                if (uri != null) await ref.read(pembukaTautanProvider)(uri);
+              },
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DialogLaporan extends StatefulWidget {
+  const _DialogLaporan();
+
+  @override
+  State<_DialogLaporan> createState() => _DialogLaporanState();
+}
+
+class _DialogLaporanState extends State<_DialogLaporan> {
+  final _catatan = TextEditingController();
+
+  @override
+  void dispose() {
+    _catatan.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Kirim laporan ke dukungan'),
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text(
+          'Catatan kejadian terakhir di aplikasi ini (tanpa kata sandi atau token) '
+          'dikirim ke tim dukungan untuk membantu memeriksa masalah.',
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          key: const Key('laporan-catatan'),
+          controller: _catatan,
+          maxLines: 3,
+          maxLength: 500,
+          decoration: const InputDecoration(
+            labelText: 'Apa yang terjadi? (opsional)',
+            border: OutlineInputBorder(),
+          ),
+        ),
+      ],
+    ),
+    actions: [
+      TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
+      FilledButton(onPressed: () => Navigator.pop(context, _catatan.text), child: const Text('Kirim')),
+    ],
+  );
 }

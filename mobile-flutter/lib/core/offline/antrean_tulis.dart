@@ -25,15 +25,19 @@ class HasilTulis {
 }
 
 /// Permintaan tulis sederhana (pengeluaran, stok masuk) dengan jalur offline:
-/// coba kirim; gagal jaringan → antrekan. Server yang menolak (4xx) tetap
-/// dilempar apa adanya agar pengguna melihat pesannya.
+/// coba kirim; GANGGUAN (jaringan putus, 408, 429, 5xx) → antrekan. Server
+/// yang menolak (4xx lain, termasuk 402 langganan & 401 sesi) tetap dilempar
+/// apa adanya agar pengguna melihat pesannya — tidak diantrekan.
 class AntreanTulis {
-  AntreanTulis({required this.antrean, this.koneksi, this.tokoId, Random? acak})
+  AntreanTulis({required this.antrean, this.koneksi, this.tokoId, this.pemilik, Random? acak})
     : _acak = acak ?? Random.secure();
 
   final AntreanStore antrean;
   final PenandaKoneksi? koneksi;
   final String? tokoId;
+
+  /// Akun yang sedang masuk — dicatat sebagai pemilik baris antrean.
+  final String? pemilik;
   final Random _acak;
 
   String _clientRef() {
@@ -64,14 +68,17 @@ class AntreanTulis {
       'client_ref': clientRef,
       'waktu_klien': waktuKlienIso(waktu),
     };
+    Duration? cobaLagi;
     if (!langsungAntre && !(koneksi?.offline ?? false)) {
       try {
         await kirim(badan);
         return HasilTulis.langsung;
       } on ApiException catch (e) {
-        if (!e.isJaringan) rethrow;
-        // Timeout setelah data terkirim pun cukup diantrekan biasa: server
-        // menolak duplikat lewat `client_ref` yang ikut di badan permintaan.
+        if (!e.isGangguan) rethrow;
+        // Timeout setelah data terkirim atau 5xx setelah server mencatatnya
+        // pun cukup diantrekan biasa: server menolak duplikat lewat
+        // `client_ref` yang ikut di badan permintaan.
+        cobaLagi = e.cobaLagiSetelah;
       }
     }
     await antrean.antrekan(
@@ -80,10 +87,13 @@ class AntreanTulis {
         clientRef: clientRef,
         jenis: jenis,
         tokoId: tokoId ?? this.tokoId,
+        pemilik: pemilik,
         path: path,
         body: badan,
         dibuat: waktu,
         status: StatusAntrean.menunggu,
+        // Retry-After dari server dihormati sejak kiriman pertama.
+        cobaLagiSetelah: cobaLagi == null ? null : waktu.add(cobaLagi),
       ),
       deltaStok: deltaStok,
     );
@@ -97,5 +107,6 @@ final antreanTulisProvider = Provider<AntreanTulis>(
     antrean: ref.watch(antreanStoreProvider),
     koneksi: ref.read(koneksiProvider.notifier),
     tokoId: ref.watch(activeTokoIdProvider).valueOrNull,
+    pemilik: ref.watch(akunAktifProvider),
   ),
 );

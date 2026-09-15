@@ -1,3 +1,5 @@
+import '../../../products/domain/entities/pilihan_produk.dart';
+
 /// Profil usaha (toko) + pengaturan struk.
 class ProfilUsaha {
   const ProfilUsaha({
@@ -9,6 +11,7 @@ class ProfilUsaha {
     this.logo,
     this.strukFooter,
     this.strukTampilLogo = true,
+    this.satuanBawaan,
   });
 
   final String nama;
@@ -19,4 +22,9 @@ class ProfilUsaha {
   final String? logo;
   final String? strukFooter;
   final bool strukTampilLogo;
+
+  /// Satuan bawaan produk baru (master data per usaha, server 2026-09-15).
+  /// null = belum diatur → produk baru wajib memilih satuan. Id-nya terenkripsi
+  /// NON-deterministik: cocokkan ke daftar `/satuan` lewat `kode`, bukan `id`.
+  final SatuanPilihan? satuanBawaan;
 }

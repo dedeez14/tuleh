@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../constants/app_config.dart';
+import '../network/api_exception.dart';
 
 /// Keadaan koneksi ke server MOVERA — bukan sekadar "ada jaringan", melainkan
 /// "server terjangkau". Dua sumber: kegagalan permintaan nyata (dari
@@ -137,7 +138,8 @@ class KoneksiNotifier extends Notifier<StatusKoneksi>
         '/app/versi',
         queryParameters: const {'versi': '0.0.0'},
       );
-      final ok = (res.statusCode ?? 0) > 0;
+      // 5xx/429/408 dari server/gateway = masih gangguan, bukan "online".
+      final ok = !statusGangguan(res.statusCode ?? 0);
       if (ok) {
         tandaiOnline();
       } else {

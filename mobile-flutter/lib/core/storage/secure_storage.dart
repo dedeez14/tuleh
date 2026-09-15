@@ -37,12 +37,26 @@ class SecureStorage {
   static const _kActiveToko = 'tuleh_active_toko';
   static const _kUpdateSnooze = 'tuleh_update_snooze';
   static const _kRestokAmbang = 'tuleh_restok_ambang';
+  static const _kAkunTerakhir = 'tuleh_akun_terakhir';
+  static const _kVersiApp = 'tuleh_versi_app';
 
   Future<String?> readToken() => _read(_kToken);
   Future<void> writeToken(String? value) => _write(_kToken, value);
 
   Future<String?> readBaseUrl() => _read(_kBaseUrl);
   Future<void> writeBaseUrl(String value) => _write(_kBaseUrl, value);
+
+  /// Id akun terakhir yang masuk di perangkat ini. SENGAJA tidak dihapus saat
+  /// keluar / sesi berakhir: dipakai untuk memutuskan apakah baris antrean
+  /// tanpa pemilik (versi lama) boleh diklaim akun yang masuk, dan oleh
+  /// isolate sinkron latar untuk hanya mengirim antrean milik akun token.
+  Future<String?> readAkunTerakhir() => _read(_kAkunTerakhir);
+  Future<void> writeAkunTerakhir(String? value) => _write(_kAkunTerakhir, value);
+
+  /// Versi aplikasi yang terpasang — header `X-Tuleh-Version` isolate latar
+  /// bila PackageInfo tidak terbaca di sana.
+  Future<String?> readVersiApp() => _read(_kVersiApp);
+  Future<void> writeVersiApp(String value) => _write(_kVersiApp, value);
 
   Future<String?> readActiveTokoId() => _read(_kActiveToko);
   Future<void> writeActiveTokoId(String? value) => _write(_kActiveToko, value);

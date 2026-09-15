@@ -36,6 +36,8 @@ class PengaturanRepositoryImpl implements PengaturanRepository {
     String? email,
     String? strukFooter,
     required bool strukTampilLogo,
+    bool ubahSatuanBawaan = false,
+    String? satuanBawaanId,
   }) async {
     try {
       await remote.simpan(
@@ -45,6 +47,8 @@ class PengaturanRepositoryImpl implements PengaturanRepository {
         email: email,
         strukFooter: strukFooter,
         strukTampilLogo: strukTampilLogo,
+        ubahSatuanBawaan: ubahSatuanBawaan,
+        satuanBawaanId: satuanBawaanId,
       );
       return const Ok(null);
     } on ApiException catch (e) {
