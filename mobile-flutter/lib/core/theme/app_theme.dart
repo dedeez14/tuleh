@@ -8,7 +8,7 @@ import 'app_colors.dart';
 class AppTheme {
   AppTheme._();
 
-  static const double radius = 14;
+  static const double radius = 16;
 
   static ThemeData light() => _build(Brightness.light);
   static ThemeData dark() => _build(Brightness.dark);
@@ -55,6 +55,7 @@ class AppTheme {
         titleTextStyle: GoogleFonts.plusJakartaSans(
           fontSize: 20,
           fontWeight: FontWeight.w800,
+          letterSpacing: -0.2,
           color: scheme.onSurface,
         ),
       ),
@@ -62,20 +63,20 @@ class AppTheme {
         filled: true,
         fillColor: isDark ? AppColors.surfaceDark2 : AppColors.surfaceLight2,
         contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
+          horizontal: 18,
           vertical: 16,
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radius),
-          borderSide: BorderSide(color: scheme.outline),
+          borderSide: BorderSide(color: scheme.outline.withValues(alpha: 0.8)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radius),
-          borderSide: BorderSide(color: scheme.outline),
+          borderSide: BorderSide(color: scheme.outline.withValues(alpha: 0.8)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radius),
-          borderSide: BorderSide(color: scheme.primary, width: 1.6),
+          borderSide: BorderSide(color: scheme.primary, width: 1.8),
         ),
         labelStyle: TextStyle(color: scheme.onSurface.withValues(alpha: 0.7)),
       ),
@@ -83,10 +84,15 @@ class AppTheme {
         style: FilledButton.styleFrom(
           backgroundColor: AppColors.mint400,
           foregroundColor: AppColors.mint900,
-          minimumSize: const Size(64, 54), // BUKAN fromHeight: lebar tak hingga meledak di Row/dialog
+          minimumSize: const Size(
+            64,
+            54,
+          ), // BUKAN fromHeight: lebar tak hingga meledak di Row/dialog
+          elevation: 0,
           textStyle: GoogleFonts.plusJakartaSans(
-            fontSize: 16,
+            fontSize: 15.5,
             fontWeight: FontWeight.w800,
+            letterSpacing: 0.2,
           ),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(radius),
@@ -126,8 +132,11 @@ class AppTheme {
         color: scheme.surface,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(radius + 4),
-          side: BorderSide(color: scheme.outline),
+          borderRadius: BorderRadius.circular(radius + 2),
+          side: BorderSide(
+            color: scheme.outline.withValues(alpha: isDark ? 0.65 : 0.85),
+            width: 1,
+          ),
         ),
       ),
       listTileTheme: ListTileThemeData(
@@ -142,8 +151,12 @@ class AppTheme {
         backgroundColor: scheme.surface,
         surfaceTintColor: Colors.transparent,
         showDragHandle: true,
+        dragHandleColor: scheme.onSurface.withValues(alpha: 0.26),
+        dragHandleSize: const Size(40, 4.5),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(radius + 8)),
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(radius + 10),
+          ),
         ),
       ),
       dividerTheme: DividerThemeData(
@@ -159,10 +172,15 @@ class AppTheme {
       // Navigasi utama (Material 3): indikator pil mint, label selalu tampak
       // agar tujuan terbaca tanpa menebak ikon.
       navigationBarTheme: NavigationBarThemeData(
-        height: 68,
+        height: 70,
         elevation: 0,
         backgroundColor: scheme.surface,
-        indicatorColor: AppColors.mint400.withValues(alpha: isDark ? 0.28 : 0.4),
+        indicatorColor: AppColors.mint400.withValues(
+          alpha: isDark ? 0.28 : 0.4,
+        ),
+        indicatorShape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         iconTheme: WidgetStateProperty.resolveWith(
           (s) => IconThemeData(
@@ -185,7 +203,9 @@ class AppTheme {
       ),
       navigationRailTheme: NavigationRailThemeData(
         backgroundColor: scheme.surface,
-        indicatorColor: AppColors.mint400.withValues(alpha: isDark ? 0.28 : 0.4),
+        indicatorColor: AppColors.mint400.withValues(
+          alpha: isDark ? 0.28 : 0.4,
+        ),
         selectedIconTheme: IconThemeData(
           color: isDark ? AppColors.mint100 : AppColors.mint900,
         ),
@@ -208,9 +228,7 @@ class AppTheme {
         textColor: Colors.white,
       ),
       chipTheme: ChipThemeData(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(999),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
         side: BorderSide(color: scheme.outline),
         // Warna label WAJIB disebut: tanpa ini label ActionChip (mis. saran
         // nominal uang) tak terlihat karena warna default ikut latar chip.

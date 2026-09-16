@@ -82,7 +82,8 @@ class _LembarUkuranState extends State<LembarUkuran> {
   /// Ukuran hasil isian sekarang (sudah dibulatkan ke langkah satuan).
   double get _qty {
     if (!_modeNominal) {
-      final angka = double.tryParse(_ukuran.text.trim().replaceAll(',', '.')) ?? 0;
+      final angka =
+          double.tryParse(_ukuran.text.trim().replaceAll(',', '.')) ?? 0;
       return _perilaku.bulatkan(angka);
     }
     return _perilaku.dariNominal(parseRupiah(_nominal.text), _harga);
@@ -120,7 +121,9 @@ class _LembarUkuranState extends State<LembarUkuran> {
     return SafeArea(
       top: false,
       child: Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
           child: Column(
@@ -129,7 +132,10 @@ class _LembarUkuranState extends State<LembarUkuran> {
             children: [
               Text(
                 widget.produk.nama,
-                style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
+                style: const TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
               const SizedBox(height: 2),
               Text(
@@ -167,7 +173,8 @@ class _LembarUkuranState extends State<LembarUkuran> {
                   ),
                 ],
                 selected: {_modeNominal},
-                onSelectionChanged: (v) => setState(() => _modeNominal = v.first),
+                onSelectionChanged: (v) =>
+                    setState(() => _modeNominal = v.first),
               ),
               const SizedBox(height: 14),
 
@@ -179,7 +186,9 @@ class _LembarUkuranState extends State<LembarUkuran> {
                 satuan: _satuan,
                 harga: _harga,
                 total: _total,
-                nominalDiminta: _modeNominal && nominalDiminta > 0 ? nominalDiminta.toDouble() : null,
+                nominalDiminta: _modeNominal && nominalDiminta > 0
+                    ? nominalDiminta.toDouble()
+                    : null,
                 peringatan: lebihStok
                     ? 'Sisa stok hanya ${fmtQtyRingkas(_sisaStok!)} $_satuan.'
                     : kurangDariMinimal
@@ -191,7 +200,11 @@ class _LembarUkuranState extends State<LembarUkuran> {
               FilledButton.icon(
                 onPressed: qty > 0 && !lebihStok ? _kirim : null,
                 icon: const Icon(Icons.add_shopping_cart_rounded, size: 19),
-                label: Text(widget.qtyAwal == null ? widget.labelTambah : 'Simpan perubahan'),
+                label: Text(
+                  widget.qtyAwal == null
+                      ? widget.labelTambah
+                      : 'Simpan perubahan',
+                ),
               ),
             ],
           ),
@@ -251,7 +264,11 @@ class _LembarUkuranState extends State<LembarUkuran> {
 
 /// Baris pintasan angka yang sering dipakai.
 class _Pintasan extends StatelessWidget {
-  const _Pintasan({required this.nilai, required this.label, required this.onPilih});
+  const _Pintasan({
+    required this.nilai,
+    required this.label,
+    required this.onPilih,
+  });
 
   final List<double> nilai;
   final String Function(double) label;
@@ -298,34 +315,57 @@ class _Ringkasan extends StatelessWidget {
         ),
         child: Text(
           peringatan!,
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.danger),
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: AppColors.danger,
+          ),
         ),
       );
     }
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
+        color: isDark ? AppColors.surfaceDark2 : AppColors.surfaceLight2,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: cs.outline.withValues(alpha: isDark ? 0.6 : 0.8),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (nominalDiminta != null)
-            Text(
-              'Diminta ${fmtIDR(nominalDiminta!)}',
-              style: TextStyle(fontSize: 12.5, color: cs.onSurface.withValues(alpha: 0.65)),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 2),
+              child: Text(
+                'Diminta ${fmtIDR(nominalDiminta!)}',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  color: cs.onSurface.withValues(alpha: 0.65),
+                ),
+              ),
             ),
           Text(
             qty > 0
                 ? '${fmtQtyRingkas(qty)} $satuan × ${fmtIDR(harga)}'
                 : 'Isi ukurannya lebih dulu',
-            style: const TextStyle(fontSize: 13.5),
+            style: TextStyle(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w600,
+              color: cs.onSurface.withValues(alpha: 0.75),
+            ),
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: 4),
           Text(
             fmtIDR(total),
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.mint600),
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.2,
+              color: isDark ? AppColors.mint400 : AppColors.mint600,
+            ),
           ),
         ],
       ),

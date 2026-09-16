@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../core/utils/satuan_terukur.dart';
 import '../../domain/entities/cart_item.dart';
@@ -32,6 +33,7 @@ class DaftarItemKeranjang extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final items = ref.watch(cartControllerProvider);
     final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
@@ -57,8 +59,17 @@ class DaftarItemKeranjang extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
             decoration: BoxDecoration(
               color: cs.surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: cs.outline),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: cs.outline.withValues(alpha: isDark ? 0.65 : 0.85),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: isDark ? AppColors.shadowDark : AppColors.shadowLight,
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
             child: Row(
               children: [
@@ -103,10 +114,17 @@ class DaftarItemKeranjang extends ConsumerWidget {
                 // Barang terukur: ketuk untuk menimbang ulang, bukan +/− satuan.
                 if (it.terukur)
                   ActionChip(
-                    avatar: Icon(Icons.scale_outlined, size: 16, color: cs.primary),
+                    avatar: Icon(
+                      Icons.scale_outlined,
+                      size: 16,
+                      color: cs.primary,
+                    ),
                     label: Text(
                       it.labelQty,
-                      style: TextStyle(fontWeight: FontWeight.w700, color: cs.primary),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: cs.primary,
+                      ),
                     ),
                     onPressed: () => onUbahUkuran(it),
                   )
@@ -127,7 +145,11 @@ class DaftarItemKeranjang extends ConsumerWidget {
 /// Pelanggan, diskon transaksi, dan catatan — opsional, di bawah daftar item.
 
 class PengaturJumlahKeranjang extends StatelessWidget {
-  const PengaturJumlahKeranjang({super.key, required this.qty, required this.onUbah});
+  const PengaturJumlahKeranjang({
+    super.key,
+    required this.qty,
+    required this.onUbah,
+  });
 
   final double qty;
   final ValueChanged<double> onUbah;
@@ -137,8 +159,9 @@ class PengaturJumlahKeranjang extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return Container(
       decoration: BoxDecoration(
-        color: cs.primary.withValues(alpha: 0.09),
+        color: cs.primary.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: cs.primary.withValues(alpha: 0.25)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

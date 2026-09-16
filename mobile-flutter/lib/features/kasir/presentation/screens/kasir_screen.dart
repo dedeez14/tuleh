@@ -74,13 +74,15 @@ class _KasirScreenState extends ConsumerState<KasirScreen> {
     if (p.perilaku.terukur) {
       final isian = await tanyaUkuran(context, p);
       if (isian == null || !mounted) return;
-      ref.read(cartControllerProvider.notifier).tambahUkuran(
-        p,
-        isian.qty,
-        cara: isian.cara,
-        nominalDiminta: isian.nominalDiminta,
-        ganti: true,
-      );
+      ref
+          .read(cartControllerProvider.notifier)
+          .tambahUkuran(
+            p,
+            isian.qty,
+            cara: isian.cara,
+            nominalDiminta: isian.nominalDiminta,
+            ganti: true,
+          );
       HapticFeedback.selectionClick();
       return;
     }
@@ -92,13 +94,15 @@ class _KasirScreenState extends ConsumerState<KasirScreen> {
   Future<void> _ubahUkuran(Product p, double qtyAwal) async {
     final isian = await tanyaUkuran(context, p, qtyAwal: qtyAwal);
     if (isian == null || !mounted) return;
-    ref.read(cartControllerProvider.notifier).tambahUkuran(
-      p,
-      isian.qty,
-      cara: isian.cara,
-      nominalDiminta: isian.nominalDiminta,
-      ganti: true,
-    );
+    ref
+        .read(cartControllerProvider.notifier)
+        .tambahUkuran(
+          p,
+          isian.qty,
+          cara: isian.cara,
+          nominalDiminta: isian.nominalDiminta,
+          ganti: true,
+        );
   }
 
   /// Pindai beruntun: tiap barcode yang dikenal langsung masuk keranjang.
@@ -109,18 +113,24 @@ class _KasirScreenState extends ConsumerState<KasirScreen> {
     // Barang timbang tidak bisa masuk "×1" begitu saja: pemindaian dihentikan
     // dan ukurannya ditanyakan setelah layar pindai ditutup.
     Product? perluUkuran;
-    await PindaiBarcodeScreen.beruntun(context, onKode: (kode) async {
-      final produk = await _cariBarcode(kode);
-      if (produk == null) return null;
-      if (produk.perilaku.terukur) {
-        perluUkuran = produk;
-        if (mounted) Navigator.of(context, rootNavigator: true).pop();
-        return '${produk.nama} · isi ukurannya';
-      }
-      ref.read(cartControllerProvider.notifier).add(produk);
-      final qty = ref.read(cartControllerProvider).firstWhere((e) => e.product.id == produk.id).qty;
-      return '${produk.nama} · ×${fmtQtyRingkas(qty)}';
-    });
+    await PindaiBarcodeScreen.beruntun(
+      context,
+      onKode: (kode) async {
+        final produk = await _cariBarcode(kode);
+        if (produk == null) return null;
+        if (produk.perilaku.terukur) {
+          perluUkuran = produk;
+          if (mounted) Navigator.of(context, rootNavigator: true).pop();
+          return '${produk.nama} · isi ukurannya';
+        }
+        ref.read(cartControllerProvider.notifier).add(produk);
+        final qty = ref
+            .read(cartControllerProvider)
+            .firstWhere((e) => e.product.id == produk.id)
+            .qty;
+        return '${produk.nama} · ×${fmtQtyRingkas(qty)}';
+      },
+    );
     final p = perluUkuran;
     if (p != null && mounted) await _tambah(p);
   }
@@ -133,7 +143,9 @@ class _KasirScreenState extends ConsumerState<KasirScreen> {
       if (cocok(p)) return p;
     }
     final tipe = ref.read(tipeKatalogKasirProvider).valueOrNull;
-    final r = await ref.read(productRepositoryProvider).list(query: k, tipe: tipe);
+    final r = await ref
+        .read(productRepositoryProvider)
+        .list(query: k, tipe: tipe);
     return r.when(
       ok: (list) {
         for (final p in list) {
@@ -159,7 +171,8 @@ class _KasirScreenState extends ConsumerState<KasirScreen> {
     final semua = products.valueOrNull ?? const <Product>[];
     final kategori = <String>{
       for (final p in semua)
-        if (p.kategori != null && p.kategori!.trim().isNotEmpty) p.kategori!.trim(),
+        if (p.kategori != null && p.kategori!.trim().isNotEmpty)
+          p.kategori!.trim(),
     }.toList()..sort();
     final tampil = _kategori == null
         ? semua
@@ -199,20 +212,25 @@ class _KasirScreenState extends ConsumerState<KasirScreen> {
                               padding: const EdgeInsets.fromLTRB(16, 6, 16, 24),
                               // Kolom mengikuti lebar (sel ≥ 320 dp) agar nama
                               // & harga tidak terhimpit di panel yang sempit.
-                              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: ((c.maxWidth - 32) / 320).floor().clamp(1, 4),
-                                mainAxisExtent: 112,
-                                mainAxisSpacing: 10,
-                                crossAxisSpacing: 10,
-                              ),
+                              gridDelegate:
+                                  SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: ((c.maxWidth - 32) / 320)
+                                        .floor()
+                                        .clamp(1, 4),
+                                    mainAxisExtent: 118,
+                                    mainAxisSpacing: 10,
+                                    crossAxisSpacing: 10,
+                                  ),
                               itemCount: tampil.length,
                               itemBuilder: (_, i) => _KartuProduk(
                                 product: tampil[i],
                                 qty: qty[tampil[i].id] ?? 0,
                                 onTambah: () => _tambah(tampil[i]),
                                 onUbahQty: (n) => cart.setQty(tampil[i].id, n),
-                                onUbahUkuran: () =>
-                                    _ubahUkuran(tampil[i], qty[tampil[i].id] ?? 0),
+                                onUbahUkuran: () => _ubahUkuran(
+                                  tampil[i],
+                                  qty[tampil[i].id] ?? 0,
+                                ),
                               ),
                             ),
                           )
@@ -224,7 +242,8 @@ class _KasirScreenState extends ConsumerState<KasirScreen> {
                               count == 0 ? 24 : 118,
                             ),
                             itemCount: tampil.length,
-                            separatorBuilder: (_, _) => const SizedBox(height: 10),
+                            separatorBuilder: (_, _) =>
+                                const SizedBox(height: 10),
                             itemBuilder: (_, i) => MunculBertahap(
                               urutan: i,
                               child: _KartuProduk(
@@ -232,8 +251,10 @@ class _KasirScreenState extends ConsumerState<KasirScreen> {
                                 qty: qty[tampil[i].id] ?? 0,
                                 onTambah: () => _tambah(tampil[i]),
                                 onUbahQty: (n) => cart.setQty(tampil[i].id, n),
-                                onUbahUkuran: () =>
-                                    _ubahUkuran(tampil[i], qty[tampil[i].id] ?? 0),
+                                onUbahUkuran: () => _ubahUkuran(
+                                  tampil[i],
+                                  qty[tampil[i].id] ?? 0,
+                                ),
                               ),
                             ),
                           ),
@@ -401,15 +422,31 @@ class _Pencarian extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
       child: TextField(
         controller: controller,
         textInputAction: TextInputAction.search,
         onChanged: onChanged,
         decoration: InputDecoration(
           hintText: 'Cari nama, kode, atau barcode…',
-          prefixIcon: const Icon(Icons.search_rounded),
+          prefixIcon: Icon(Icons.search_rounded, color: cs.primary),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 18,
+            vertical: 14,
+          ),
+          filled: true,
+          fillColor: isDark ? AppColors.surfaceDark : Colors.white,
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: cs.outline.withValues(alpha: 0.75)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: cs.primary, width: 1.8),
+          ),
           suffixIcon: controller.text.isEmpty
               ? null
               : IconButton(
@@ -498,20 +535,29 @@ class _KartuProduk extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Material(
-      color: cs.surface,
+      color: _diKeranjang
+          ? (isDark
+                ? AppColors.mint400.withValues(alpha: 0.08)
+                : AppColors.mint50.withValues(alpha: 0.9))
+          : cs.surface,
       borderRadius: BorderRadius.circular(18),
+      elevation: _diKeranjang ? 1 : 0,
+      shadowColor: AppColors.mint900.withValues(alpha: 0.12),
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
         onTap: onTambah,
         child: AnimatedContainer(
           duration: Gerak.cepat,
-          padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+          padding: const EdgeInsets.fromLTRB(12, 8, 10, 8),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
-              color: _diKeranjang ? cs.primary : cs.outline,
+              color: _diKeranjang
+                  ? cs.primary
+                  : cs.outline.withValues(alpha: isDark ? 0.6 : 0.8),
               width: _diKeranjang ? 1.6 : 1,
             ),
           ),
@@ -524,58 +570,59 @@ class _KartuProduk extends StatelessWidget {
                 // panjang dipotong rapi alih-alih meluap.
                 child: ClipRect(
                   child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      product.nama,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14.5,
-                        height: 1.25,
-                      ),
-                    ),
-                    const SizedBox(height: 5),
-                    // Harga · satuan · lencana stok dalam satu baris agar kartu
-                    // ringkas dan lebih banyak produk terlihat sekali pandang.
-                    Wrap(
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      spacing: 6,
-                      runSpacing: 4,
-                      children: [
-                        Text(
-                          fmtIDR(product.harga),
-                          style: TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 15,
-                            color: cs.primary,
-                          ),
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        product.nama,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14.5,
+                          height: 1.25,
                         ),
-                        if (product.promo && product.hargaNormal != null)
+                      ),
+                      const SizedBox(height: 5),
+                      // Harga · satuan · lencana stok dalam satu baris agar kartu
+                      // ringkas dan lebih banyak produk terlihat sekali pandang.
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: [
                           Text(
-                            fmtIDR(product.hargaNormal!),
+                            fmtIDR(product.harga),
                             style: TextStyle(
-                              fontSize: 12,
-                              decoration: TextDecoration.lineThrough,
-                              color: cs.onSurface.withValues(alpha: 0.5),
+                              fontWeight: FontWeight.w800,
+                              fontSize: 15,
+                              color: cs.primary,
                             ),
                           ),
-                        if (product.satuan != null && product.satuan!.isNotEmpty)
-                          Text(
-                            '/ ${product.satuan}',
-                            style: TextStyle(
-                              fontSize: 12.5,
-                              color: cs.onSurface.withValues(alpha: 0.55),
+                          if (product.promo && product.hargaNormal != null)
+                            Text(
+                              fmtIDR(product.hargaNormal!),
+                              style: TextStyle(
+                                fontSize: 12,
+                                decoration: TextDecoration.lineThrough,
+                                color: cs.onSurface.withValues(alpha: 0.5),
+                              ),
                             ),
-                          ),
-                        if (!_jasa && product.stok != null)
-                          _LencanaStok(stok: product.stok!),
-                      ],
-                    ),
-                  ],
-                ),
+                          if (product.satuan != null &&
+                              product.satuan!.isNotEmpty)
+                            Text(
+                              '/ ${product.satuan}',
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                color: cs.onSurface.withValues(alpha: 0.55),
+                              ),
+                            ),
+                          if (!_jasa && product.stok != null)
+                            _LencanaStok(stok: product.stok!),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(width: 10),
@@ -599,6 +646,10 @@ class _KartuProduk extends StatelessWidget {
                         label: 'Tambah ${product.nama}',
                         child: Material(
                           color: AppColors.mint400,
+                          elevation: 1,
+                          shadowColor: AppColors.mint900.withValues(
+                            alpha: 0.25,
+                          ),
                           shape: const CircleBorder(),
                           child: InkWell(
                             customBorder: const CircleBorder(),
@@ -640,12 +691,20 @@ class _Lambang extends StatelessWidget {
       color: cs.primary,
     );
     return Container(
-      height: 46,
-      width: 46,
+      height: 48,
+      width: 48,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: cs.primary.withValues(alpha: 0.12),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            cs.primary.withValues(alpha: 0.18),
+            cs.primary.withValues(alpha: 0.06),
+          ],
+        ),
         borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: cs.primary.withValues(alpha: 0.16), width: 1),
       ),
       child: gambar == null
           ? ikon
@@ -672,21 +731,33 @@ class _LencanaStok extends StatelessWidget {
         ? (cs.error, 'Stok habis')
         : stok <= 5
         ? (AppColors.warn, 'Sisa ${stok.toInt()}')
-        : (cs.onSurface.withValues(alpha: 0.6), 'Stok ${stok.toInt()}');
+        : (cs.onSurface.withValues(alpha: 0.65), 'Stok ${stok.toInt()}');
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
         color: warna.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: warna.withValues(alpha: 0.22)),
       ),
-      child: Text(
-        teks,
-        style: TextStyle(
-          fontSize: 11.5,
-          fontWeight: FontWeight.w700,
-          color: warna,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 5,
+            height: 5,
+            decoration: BoxDecoration(color: warna, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            teks,
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+              color: warna,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -694,7 +765,11 @@ class _LencanaStok extends StatelessWidget {
 
 /// Barang terukur di keranjang: tampilkan ukurannya, ketuk untuk mengubah.
 class _TombolUbahUkuran extends StatelessWidget {
-  const _TombolUbahUkuran({super.key, required this.label, required this.onTekan});
+  const _TombolUbahUkuran({
+    super.key,
+    required this.label,
+    required this.onTekan,
+  });
 
   final String label;
   final VoidCallback onTekan;
@@ -704,7 +779,10 @@ class _TombolUbahUkuran extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return ActionChip(
       avatar: Icon(Icons.scale_outlined, size: 16, color: cs.primary),
-      label: Text(label, style: TextStyle(fontWeight: FontWeight.w700, color: cs.primary)),
+      label: Text(
+        label,
+        style: TextStyle(fontWeight: FontWeight.w700, color: cs.primary),
+      ),
       onPressed: onTekan,
       tooltip: 'Ubah ukuran',
     );
@@ -731,7 +809,9 @@ class _PengaturJumlah extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           _TombolBulat(
-            ikon: qty <= 1 ? Icons.delete_outline_rounded : Icons.remove_rounded,
+            ikon: qty <= 1
+                ? Icons.delete_outline_rounded
+                : Icons.remove_rounded,
             tooltip: qty <= 1 ? 'Hapus dari keranjang' : 'Kurangi',
             onTekan: () {
               onUbah(qty - 1);
@@ -816,89 +896,109 @@ class BilahKeranjang extends StatelessWidget {
       top: false,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-        child: Material(
-          color: AppColors.mint600,
-          borderRadius: BorderRadius.circular(18),
-          elevation: 10,
-          shadowColor: AppColors.mint900.withValues(alpha: 0.45),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(18),
-            onTap: onTap,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-              child: Row(
-                children: [
-                  Container(
-                    height: 34,
-                    width: 34,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(11),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: AppColors.mintGradasiUtama,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.mint900.withValues(alpha: 0.38),
+                blurRadius: 18,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: onTap,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                child: Row(
+                  children: [
+                    Container(
+                      height: 38,
+                      width: 38,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.22),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.shopping_cart_rounded,
+                        size: 20,
+                        color: Colors.white,
+                      ),
                     ),
-                    child: const Icon(
-                      Icons.shopping_cart_rounded,
-                      size: 18,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          '$count item di keranjang',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white.withValues(alpha: 0.85),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '$count item di keranjang',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white.withValues(alpha: 0.85),
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 1),
-                        AngkaBerubah(
-                          nilai: total,
-                          format: fmtIDR,
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
+                          const SizedBox(height: 1),
+                          AngkaBerubah(
+                            nilai: total,
+                            format: fmtIDR,
+                            style: const TextStyle(
+                              fontSize: 17.5,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                              letterSpacing: -0.2,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 9,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Bayar',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w800,
+                    const SizedBox(width: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.08),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Bayar',
+                            style: TextStyle(
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.mint900,
+                            ),
+                          ),
+                          SizedBox(width: 4),
+                          Icon(
+                            Icons.arrow_forward_rounded,
+                            size: 18,
                             color: AppColors.mint900,
                           ),
-                        ),
-                        SizedBox(width: 4),
-                        Icon(
-                          Icons.arrow_forward_rounded,
-                          size: 17,
-                          color: AppColors.mint900,
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -943,7 +1043,11 @@ class _SesiBanner extends ConsumerWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.info_outline_rounded, color: AppColors.warn, size: 20),
+          const Icon(
+            Icons.info_outline_rounded,
+            color: AppColors.warn,
+            size: 20,
+          ),
           const SizedBox(width: 10),
           const Expanded(
             child: Text(
@@ -962,7 +1066,10 @@ class _SesiBanner extends ConsumerWidget {
 }
 
 /// Buka sesi kasir + tampilkan hasilnya. Dipakai layar Kasir dan keranjang.
-Future<void> bukaSesiDenganUmpanBalik(BuildContext context, WidgetRef ref) async {
+Future<void> bukaSesiDenganUmpanBalik(
+  BuildContext context,
+  WidgetRef ref,
+) async {
   final messenger = ScaffoldMessenger.of(context); // sebelum async gap
   final modal = await showBukaSesiDialog(context);
   if (modal == null) return;
@@ -973,9 +1080,11 @@ Future<void> bukaSesiDenganUmpanBalik(BuildContext context, WidgetRef ref) async
       ..showSnackBar(
         SnackBar(
           backgroundColor: tertunda ? AppColors.warn : AppColors.success,
-          content: Text(tertunda
-              ? 'Sesi dibuka offline. Dikirim ke server saat online, sebelum transaksi.'
-              : 'Sesi kasir dibuka.'),
+          content: Text(
+            tertunda
+                ? 'Sesi dibuka offline. Dikirim ke server saat online, sebelum transaksi.'
+                : 'Sesi kasir dibuka.',
+          ),
         ),
       );
   } on ApiException catch (e) {

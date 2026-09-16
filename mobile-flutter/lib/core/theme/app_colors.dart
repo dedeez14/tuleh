@@ -37,4 +37,25 @@ class AppColors {
   static const Color success = Color(0xFF16A34A);
   static const Color danger = Color(0xFFDC3545);
   static const Color warn = Color(0xFFD97706);
+
+  // Elevasi & Bayangan Modern
+  static const Color shadowLight = Color(0x0C08332C);
+  static const Color shadowDark = Color(0x35000000);
+
+  // Gradien Aksen
+  static const LinearGradient mintGradasiUtama = LinearGradient(
+    colors: [Color(0xFF37B8A4), Color(0xFF17695D)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+  static const LinearGradient mintGradasiLembut = LinearGradient(
+    colors: [Color(0xFFEAFBF6), Color(0xFFCFF6EC)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+  static const LinearGradient mintGradasiDark = LinearGradient(
+    colors: [Color(0xFF0F2E28), Color(0xFF071E1A)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
 }

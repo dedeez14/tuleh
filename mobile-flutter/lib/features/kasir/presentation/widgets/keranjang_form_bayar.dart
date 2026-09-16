@@ -13,7 +13,8 @@ import '../../../../core/widgets/states.dart';
 import '../../../pengaturan/domain/entities/pengaturan_pembayaran.dart';
 
 class FormBayar extends StatelessWidget {
-  const FormBayar({super.key, 
+  const FormBayar({
+    super.key,
     required this.total,
     required this.metode,
     required this.terpilih,
@@ -125,7 +126,8 @@ class FormBayar extends StatelessWidget {
 }
 
 class PilihanMetode extends StatelessWidget {
-  const PilihanMetode({super.key, 
+  const PilihanMetode({
+    super.key,
     required this.label,
     required this.ikon,
     required this.aktif,
@@ -140,19 +142,28 @@ class PilihanMetode extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Material(
-      color: aktif ? cs.primary.withValues(alpha: 0.14) : cs.surface,
-      borderRadius: BorderRadius.circular(14),
+      color: aktif
+          ? (isDark
+                ? AppColors.mint400.withValues(alpha: 0.12)
+                : AppColors.mint50.withValues(alpha: 0.9))
+          : cs.surface,
+      borderRadius: BorderRadius.circular(16),
+      elevation: aktif ? 1 : 0,
+      shadowColor: AppColors.mint900.withValues(alpha: 0.12),
       child: InkWell(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         onTap: onTap,
         child: AnimatedContainer(
           duration: Gerak.cepat,
           padding: const EdgeInsets.symmetric(vertical: 14),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: aktif ? cs.primary : cs.outline,
+              color: aktif
+                  ? cs.primary
+                  : cs.outline.withValues(alpha: isDark ? 0.65 : 0.85),
               width: aktif ? 1.6 : 1,
             ),
           ),
@@ -160,7 +171,7 @@ class PilihanMetode extends StatelessWidget {
             children: [
               Icon(
                 ikon,
-                size: 21,
+                size: 22,
                 color: aktif
                     ? cs.primary
                     : cs.onSurface.withValues(alpha: 0.65),
@@ -188,7 +199,8 @@ class PilihanMetode extends StatelessWidget {
 /// Metode TRANSFER: daftar rekening toko dengan tombol salin.
 
 class CatatanKecil extends StatelessWidget {
-  const CatatanKecil({super.key, 
+  const CatatanKecil({
+    super.key,
     required this.ikon,
     required this.teks,
     this.peringatan = false,
@@ -244,7 +256,8 @@ class PanduanQris extends StatelessWidget {
       return const CatatanKecil(
         ikon: Icons.qr_code_2_rounded,
         peringatan: true,
-        teks: 'QRIS statis belum diunggah. Pemilik/Manajer: buka Pengaturan → '
+        teks:
+            'QRIS statis belum diunggah. Pemilik/Manajer: buka Pengaturan → '
             'Pembayaran di aplikasi desktop untuk mengunggah gambar QRIS usaha.',
       );
     }
@@ -281,7 +294,8 @@ class PanduanQris extends StatelessWidget {
         const SizedBox(height: 8),
         const CatatanKecil(
           ikon: Icons.qr_code_scanner_rounded,
-          teks: 'Tunjukkan QR ke pelanggan. Setelah pelanggan membayar dan Anda '
+          teks:
+              'Tunjukkan QR ke pelanggan. Setelah pelanggan membayar dan Anda '
               'cek dananya masuk, tekan Bayar.',
         ),
       ],
@@ -304,7 +318,8 @@ class PanduanTransfer extends StatelessWidget {
       return const CatatanKecil(
         ikon: Icons.account_balance_outlined,
         peringatan: true,
-        teks: 'Belum ada rekening. Pemilik/Manajer: tambahkan di Pengaturan → '
+        teks:
+            'Belum ada rekening. Pemilik/Manajer: tambahkan di Pengaturan → '
             'Pembayaran di aplikasi desktop.',
       );
     }
@@ -350,7 +365,8 @@ class PanduanTransfer extends StatelessWidget {
         ],
         const CatatanKecil(
           ikon: Icons.verified_outlined,
-          teks: 'Pelanggan transfer ke salah satu rekening. Setelah dana masuk, '
+          teks:
+              'Pelanggan transfer ke salah satu rekening. Setelah dana masuk, '
               'tekan Bayar.',
         ),
       ],

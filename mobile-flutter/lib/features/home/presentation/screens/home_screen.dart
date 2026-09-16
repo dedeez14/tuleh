@@ -11,7 +11,8 @@ import '../../../auth/domain/entities/user.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../../../demo/data/masa_coba_service.dart';
 import '../../../demo/demo_session.dart';
-import '../../../pengaturan/presentation/screens/pengaturan_screen.dart' show keluarDenganPenjagaAntrean;
+import '../../../pengaturan/presentation/screens/pengaturan_screen.dart'
+    show keluarDenganPenjagaAntrean;
 import '../../../laporan/presentation/providers/laporan_providers.dart';
 import '../../../riwayat/domain/entities/transaksi.dart';
 import '../../../riwayat/presentation/providers/riwayat_providers.dart';
@@ -77,7 +78,10 @@ class HomeScreen extends ConsumerWidget {
                     bisaGanti: tokos.length > 1,
                     isDemo: ref.read(demoSessionProvider).active,
                     sisaHariDemo: ref.read(demoSessionProvider).active
-                        ? ref.watch(masaCobaStatusProvider).valueOrNull?.sisaHari
+                        ? ref
+                              .watch(masaCobaStatusProvider)
+                              .valueOrNull
+                              ?.sisaHari
                         : null,
                     onGantiToko: tokos.length > 1
                         ? () => _pilihToko(context, ref, tokos, activeId)
@@ -105,15 +109,25 @@ class HomeScreen extends ConsumerWidget {
                                   Expanded(
                                     flex: 5,
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
                                       children: [
-                                        const MunculBertahap(urutan: 1, child: _KartuSesi()),
+                                        const MunculBertahap(
+                                          urutan: 1,
+                                          child: _KartuSesi(),
+                                        ),
                                         const SizedBox(height: 14),
-                                        const MunculBertahap(urutan: 2, child: _RingkasanHariIni()),
+                                        const MunculBertahap(
+                                          urutan: 2,
+                                          child: _RingkasanHariIni(),
+                                        ),
                                         const SizedBox(height: 22),
                                         MunculBertahap(
                                           urutan: 3,
-                                          child: _AksiCepat(bertahap: bertahap, pakaiMeja: pakaiMeja),
+                                          child: _AksiCepat(
+                                            bertahap: bertahap,
+                                            pakaiMeja: pakaiMeja,
+                                          ),
                                         ),
                                       ],
                                     ),
@@ -121,7 +135,10 @@ class HomeScreen extends ConsumerWidget {
                                   const SizedBox(width: 24),
                                   const Expanded(
                                     flex: 4,
-                                    child: MunculBertahap(urutan: 4, child: _TransaksiTerbaru()),
+                                    child: MunculBertahap(
+                                      urutan: 4,
+                                      child: _TransaksiTerbaru(),
+                                    ),
                                   ),
                                 ],
                               ),
@@ -143,7 +160,10 @@ class HomeScreen extends ConsumerWidget {
                     const SizedBox(height: 22),
                     MunculBertahap(
                       urutan: 3,
-                      child: _AksiCepat(bertahap: bertahap, pakaiMeja: pakaiMeja),
+                      child: _AksiCepat(
+                        bertahap: bertahap,
+                        pakaiMeja: pakaiMeja,
+                      ),
                     ),
                     const SizedBox(height: 22),
                     const MunculBertahap(urutan: 4, child: _TransaksiTerbaru()),
@@ -234,6 +254,7 @@ class _Header extends StatelessWidget {
 
   final User? user;
   final Toko? toko;
+
   /// Daftar toko gagal dimuat → tampilkan sebab + tombol ulang, bukan
   /// "Memuat toko…" tanpa akhir.
   final bool tokoGagal;
@@ -257,14 +278,27 @@ class _Header extends StatelessWidget {
 
     return Row(
       children: [
-        CircleAvatar(
-          radius: 23,
-          backgroundColor: cs.primaryContainer,
+        Container(
+          height: 46,
+          width: 46,
+          decoration: BoxDecoration(
+            gradient: AppColors.mintGradasiUtama,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.mint900.withValues(alpha: 0.18),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          alignment: Alignment.center,
           child: Text(
             initials.isEmpty ? 'K' : initials,
-            style: TextStyle(
+            style: const TextStyle(
               fontWeight: FontWeight.w800,
-              color: cs.onPrimaryContainer,
+              fontSize: 16,
+              color: Colors.white,
             ),
           ),
         ),
@@ -281,6 +315,7 @@ class _Header extends StatelessWidget {
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
+                        letterSpacing: -0.2,
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -311,11 +346,11 @@ class _Header extends StatelessWidget {
                   ],
                 ],
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: 3),
               // Nama toko sebagai tombol pilih — bukan kartu terpisah.
               InkWell(
                 onTap: tokoGagal ? onMuatUlangToko : onGantiToko,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(20),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 2),
                   child: Row(
@@ -347,12 +382,14 @@ class _Header extends StatelessWidget {
                           ),
                         ),
                       ),
-                      if (bisaGanti)
+                      if (bisaGanti) ...[
+                        const SizedBox(width: 3),
                         Icon(
                           Icons.expand_more_rounded,
                           size: 18,
                           color: cs.primary,
                         ),
+                      ],
                     ],
                   ),
                 ),
@@ -438,21 +475,41 @@ class _KartuSesi extends ConsumerWidget {
           );
         }
 
+        final isDark = Theme.of(context).brightness == Brightness.dark;
         return Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: cs.surface,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: cs.outline),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: cs.outline.withValues(alpha: isDark ? 0.65 : 0.85),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: isDark ? AppColors.shadowDark : AppColors.shadowLight,
+                blurRadius: 10,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
           child: Row(
             children: [
               Container(
-                height: 44,
-                width: 44,
+                height: 46,
+                width: 46,
                 decoration: BoxDecoration(
-                  color: AppColors.success.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(13),
+                  gradient: LinearGradient(
+                    colors: [
+                      AppColors.success.withValues(alpha: 0.22),
+                      AppColors.success.withValues(alpha: 0.08),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: AppColors.success.withValues(alpha: 0.25),
+                  ),
                 ),
                 child: const Icon(
                   Icons.point_of_sale_rounded,
@@ -472,27 +529,44 @@ class _KartuSesi extends ConsumerWidget {
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               fontWeight: FontWeight.w800,
-                              fontSize: 15,
+                              fontSize: 15.5,
                             ),
                           ),
                         ),
                         const SizedBox(width: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 7,
+                            horizontal: 8,
                             vertical: 2,
                           ),
                           decoration: BoxDecoration(
-                            color: AppColors.success.withValues(alpha: 0.13),
+                            color: AppColors.success.withValues(alpha: 0.14),
                             borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: const Text(
-                            'Buka',
-                            style: TextStyle(
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.success,
+                            border: Border.all(
+                              color: AppColors.success.withValues(alpha: 0.25),
                             ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 5,
+                                height: 5,
+                                decoration: BoxDecoration(
+                                  color: AppColors.success,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              const Text(
+                                'Buka',
+                                style: TextStyle(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.success,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
@@ -584,25 +658,52 @@ class _Angka extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: utama ? cs.primaryContainer : cs.surface,
+        color: utama
+            ? (isDark
+                  ? AppColors.surfaceDark
+                  : AppColors.mint50.withValues(alpha: 0.85))
+            : cs.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: utama ? Colors.transparent : cs.outline),
+        border: Border.all(
+          color: utama
+              ? cs.primary.withValues(alpha: isDark ? 0.45 : 0.65)
+              : cs.outline.withValues(alpha: isDark ? 0.65 : 0.85),
+          width: utama ? 1.4 : 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isDark ? AppColors.shadowDark : AppColors.shadowLight,
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(
-                ikon,
-                size: 16,
-                color: (utama ? cs.onPrimaryContainer : cs.onSurface)
-                    .withValues(alpha: 0.65),
+              Container(
+                padding: const EdgeInsets.all(5),
+                decoration: BoxDecoration(
+                  color: (utama ? cs.primary : cs.onSurface).withValues(
+                    alpha: 0.12,
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  ikon,
+                  size: 16,
+                  color: utama
+                      ? cs.primary
+                      : cs.onSurface.withValues(alpha: 0.7),
+                ),
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   label,
@@ -610,22 +711,22 @@ class _Angka extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: (utama ? cs.onPrimaryContainer : cs.onSurface)
-                        .withValues(alpha: 0.65),
+                    color: cs.onSurface.withValues(alpha: 0.7),
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           Text(
             nilai,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: utama ? 20 : 20,
+              fontSize: 20,
               fontWeight: FontWeight.w800,
-              color: utama ? cs.onPrimaryContainer : cs.onSurface,
+              letterSpacing: -0.2,
+              color: utama ? cs.primary : cs.onSurface,
             ),
           ),
         ],
@@ -695,9 +796,14 @@ class _TombolAksi extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Material(
-      color: utama ? cs.primary : cs.surface,
+      color: utama
+          ? (isDark ? AppColors.mint500 : AppColors.mint400)
+          : cs.surface,
       borderRadius: BorderRadius.circular(16),
+      elevation: utama ? 2 : 0,
+      shadowColor: AppColors.mint900.withValues(alpha: 0.25),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: onTap,
@@ -705,14 +811,18 @@ class _TombolAksi extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 14),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: utama ? Colors.transparent : cs.outline),
+            border: Border.all(
+              color: utama
+                  ? Colors.transparent
+                  : cs.outline.withValues(alpha: isDark ? 0.65 : 0.85),
+            ),
           ),
           child: Column(
             children: [
               Icon(
                 ikon,
                 size: 24,
-                color: utama ? cs.onPrimary : cs.primary,
+                color: utama ? AppColors.mint900 : cs.primary,
               ),
               const SizedBox(height: 7),
               Text(
@@ -720,7 +830,7 @@ class _TombolAksi extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 12.5,
                   fontWeight: FontWeight.w700,
-                  color: utama ? cs.onPrimary : cs.onSurface,
+                  color: utama ? AppColors.mint900 : cs.onSurface,
                 ),
               ),
             ],
@@ -797,13 +907,22 @@ class _BarisTransaksi extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final batal = (t.status ?? '').toUpperCase() == 'DIBATALKAN';
     return ListTile(
       dense: true,
-      leading: Icon(
-        batal ? Icons.cancel_outlined : Icons.receipt_outlined,
-        size: 20,
-        color: batal ? cs.error : cs.primary,
+      leading: Container(
+        height: 38,
+        width: 38,
+        decoration: BoxDecoration(
+          color: (batal ? cs.error : cs.primary).withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Icon(
+          batal ? Icons.cancel_outlined : Icons.receipt_outlined,
+          size: 20,
+          color: batal ? cs.error : cs.primary,
+        ),
       ),
       title: Text(
         t.nomor,
@@ -817,10 +936,20 @@ class _BarisTransaksi extends StatelessWidget {
           if (t.metode != null && t.metode!.isNotEmpty) t.metode!,
           fmtTanggal(t.tanggal),
         ].join(' · '),
+        style: TextStyle(
+          fontSize: 12,
+          color: cs.onSurface.withValues(alpha: 0.6),
+        ),
       ),
       trailing: Text(
         fmtIDR(t.grandTotal),
-        style: const TextStyle(fontWeight: FontWeight.w800),
+        style: TextStyle(
+          fontWeight: FontWeight.w800,
+          fontSize: 14,
+          color: batal
+              ? cs.error
+              : (isDark ? AppColors.mint300 : AppColors.mint700),
+        ),
       ),
       onTap: () => context.push('/riwayat'),
     );

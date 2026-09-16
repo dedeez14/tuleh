@@ -76,7 +76,10 @@ class _CartSheetState extends ConsumerState<CartSheet> {
     final items = ref.read(cartControllerProvider);
     final total = ref.read(cartGrandTotalProvider);
     final meta = ref.read(keranjangMetaProvider);
-    final potongan = hitungPotongan(ref.read(cartTotalProvider), meta.diskonPersen);
+    final potongan = hitungPotongan(
+      ref.read(cartTotalProvider),
+      meta.diskonPersen,
+    );
     if (items.isEmpty) return;
 
     final tunai = _metodeTerpilih == 'TUNAI';
@@ -127,16 +130,18 @@ class _CartSheetState extends ConsumerState<CartSheet> {
         diskon: potongan > 0 ? potongan : null,
       );
 
-      final res = await ref.read(checkoutRepositoryProvider).bayar(
-        items: items,
-        metode: _metodeTerpilih,
-        dibayar: dibayar,
-        total: total,
-        buatStruk: buatStruk,
-        diskonPersen: meta.diskonPersen,
-        idPelanggan: meta.pelanggan?.id,
-        catatan: meta.catatan,
-      );
+      final res = await ref
+          .read(checkoutRepositoryProvider)
+          .bayar(
+            items: items,
+            metode: _metodeTerpilih,
+            dibayar: dibayar,
+            total: total,
+            buatStruk: buatStruk,
+            diskonPersen: meta.diskonPersen,
+            idPelanggan: meta.pelanggan?.id,
+            catatan: meta.catatan,
+          );
       final struk = buatStruk(res.nomor, res.kembalian);
 
       ref.read(cartControllerProvider.notifier).clear();
@@ -155,11 +160,7 @@ class _CartSheetState extends ConsumerState<CartSheet> {
         Navigator.of(context).pop();
       }
       HapticFeedback.mediumImpact();
-      await _tampilkanHasil(
-        struk,
-        res.kembalian,
-        tertunda: res.tertunda,
-      );
+      await _tampilkanHasil(struk, res.kembalian, tertunda: res.tertunda);
     } on ApiException catch (e) {
       if (!mounted) return;
       // 409 = sesi kasir belum dibuka; tawarkan jalan keluarnya langsung.
@@ -194,11 +195,7 @@ class _CartSheetState extends ConsumerState<CartSheet> {
     );
   }
 
-  void _pesan(
-    String teks, {
-    bool gagal = false,
-    (String, VoidCallback)? aksi,
-  }) {
+  void _pesan(String teks, {bool gagal = false, (String, VoidCallback)? aksi}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -223,13 +220,15 @@ class _CartSheetState extends ConsumerState<CartSheet> {
   Future<void> _ubahUkuran(CartItem it) async {
     final isian = await tanyaUkuran(context, it.product, qtyAwal: it.qty);
     if (isian == null || !mounted) return;
-    ref.read(cartControllerProvider.notifier).tambahUkuran(
-      it.product,
-      isian.qty,
-      cara: isian.cara,
-      nominalDiminta: isian.nominalDiminta,
-      ganti: true,
-    );
+    ref
+        .read(cartControllerProvider.notifier)
+        .tambahUkuran(
+          it.product,
+          isian.qty,
+          cara: isian.cara,
+          nominalDiminta: isian.nominalDiminta,
+          ganti: true,
+        );
   }
 
   @override
@@ -247,61 +246,62 @@ class _CartSheetState extends ConsumerState<CartSheet> {
     }
 
     final isi = Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _Judul(
-                langkah: _langkah,
-                count: count,
-                onKembali: () => setState(() => _langkah = _Langkah.keranjang),
-                onKosongkan: items.isEmpty || _loading ? null : cart.clear,
-                onParkir: items.isEmpty || _loading
-                    ? null
-                    : () async {
-                        final ok = await parkirKeranjang(context, ref);
-                        // Lembar ponsel ditutup setelah parkir; panel tablet tetap.
-                        if (ok && !widget.tertanam && context.mounted) Navigator.of(context).pop();
-                      },
-              ),
-              const Divider(height: 1),
-              Expanded(
-                child: items.isEmpty
-                    ? const KeadaanKosong(
-                        ikon: Icons.shopping_cart_outlined,
-                        judul: 'Keranjang masih kosong',
-                        detail: 'Ketuk item di katalog untuk menambahkannya.',
-                      )
-                    : _langkah == _Langkah.keranjang
-                    ? DaftarItemKeranjang(
-                        onUbah: cart.setQty,
-                        onUbahUkuran: (it) => _ubahUkuran(it),
-                        onHapus: cart.remove,
-                        tambahan: const KartuTambahanKeranjang(),
-                      )
-                    : FormBayar(
-                        total: total,
-                        metode: _metode,
-                        terpilih: _metodeTerpilih,
-                        uangCtrl: _uangCtrl,
-                        saran: _saranUang(total),
-                        pembayaran: pembayaran,
-                        onPilihMetode: (m) =>
-                            setState(() => _metodeTerpilih = m),
-                        onUbahUang: () => setState(() {}),
-                      ),
-              ),
-              if (items.isNotEmpty)
-                _Kaki(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _Judul(
+          langkah: _langkah,
+          count: count,
+          onKembali: () => setState(() => _langkah = _Langkah.keranjang),
+          onKosongkan: items.isEmpty || _loading ? null : cart.clear,
+          onParkir: items.isEmpty || _loading
+              ? null
+              : () async {
+                  final ok = await parkirKeranjang(context, ref);
+                  // Lembar ponsel ditutup setelah parkir; panel tablet tetap.
+                  if (ok && !widget.tertanam && context.mounted) {
+                    Navigator.of(context).pop();
+                  }
+                },
+        ),
+        const Divider(height: 1),
+        Expanded(
+          child: items.isEmpty
+              ? const KeadaanKosong(
+                  ikon: Icons.shopping_cart_outlined,
+                  judul: 'Keranjang masih kosong',
+                  detail: 'Ketuk item di katalog untuk menambahkannya.',
+                )
+              : _langkah == _Langkah.keranjang
+              ? DaftarItemKeranjang(
+                  onUbah: cart.setQty,
+                  onUbahUkuran: (it) => _ubahUkuran(it),
+                  onHapus: cart.remove,
+                  tambahan: const KartuTambahanKeranjang(),
+                )
+              : FormBayar(
                   total: total,
-                  langkah: _langkah,
-                  metode: _metodeTerpilih,
-                  uangDiterima: _uangDiterima,
-                  loading: _loading,
-                  onLanjut: () => setState(() => _langkah = _Langkah.bayar),
-                  onBayar: _bayar,
-                  cs: cs,
+                  metode: _metode,
+                  terpilih: _metodeTerpilih,
+                  uangCtrl: _uangCtrl,
+                  saran: _saranUang(total),
+                  pembayaran: pembayaran,
+                  onPilihMetode: (m) => setState(() => _metodeTerpilih = m),
+                  onUbahUang: () => setState(() {}),
                 ),
-            ],
-          );
+        ),
+        if (items.isNotEmpty)
+          _Kaki(
+            total: total,
+            langkah: _langkah,
+            metode: _metodeTerpilih,
+            uangDiterima: _uangDiterima,
+            loading: _loading,
+            onLanjut: () => setState(() => _langkah = _Langkah.bayar),
+            onBayar: _bayar,
+            cs: cs,
+          ),
+      ],
+    );
 
     if (widget.tertanam) {
       return Padding(padding: const EdgeInsets.only(top: 10), child: isi);
@@ -451,9 +451,11 @@ class _Kaki extends StatelessWidget {
               AngkaBerubah(
                 nilai: total,
                 format: fmtIDR,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w800,
+                  letterSpacing: -0.3,
+                  color: cs.primary,
                 ),
               ),
             ],
@@ -466,7 +468,9 @@ class _Kaki extends StatelessWidget {
                   kurang ? 'Kurang' : 'Kembalian',
                   style: TextStyle(
                     fontWeight: FontWeight.w700,
-                    color: kurang ? cs.error : cs.onSurface.withValues(alpha: 0.7),
+                    color: kurang
+                        ? cs.error
+                        : cs.onSurface.withValues(alpha: 0.7),
                   ),
                 ),
                 const Spacer(),
@@ -512,7 +516,9 @@ class _Kaki extends StatelessWidget {
                       color: AppColors.mint900,
                     ),
                   )
-                : Text(bayar ? 'Bayar ${fmtIDR(total)}' : 'Lanjut ke pembayaran'),
+                : Text(
+                    bayar ? 'Bayar ${fmtIDR(total)}' : 'Lanjut ke pembayaran',
+                  ),
           ),
         ],
       ),
