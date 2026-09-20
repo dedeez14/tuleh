@@ -19,6 +19,19 @@ export function buildReceiptHTML(struk) {
   const isVoid = struk.status === 'DIBATALKAN'
   // Pra-bon (bill hitungan bon meja) — belum dibayar; sembunyikan baris bayar/kembalian
   const isPrabon = struk.status === 'BELUM DIBAYAR'
+  const row = (label, value, cls = '') => `
+    <div class="receipt__row ${cls}">
+      <span>${label}</span>
+      <span class="num">${value}</span>
+    </div>`
+
+  // Nota refund (objek dari strukRefund): kepala NOTA REFUND, tanpa baris bayar/kembalian.
+  const isRefund = struk.status === 'REFUND'
+  const blokRefund = !isRefund && Number(struk.total_refund) > 0
+    ? `<div class="receipt__sep"></div>
+      ${(struk.refunds || []).map((r) => row(`Refund ${esc(r.nomor || '')}`, `−${fmtIDR(r.total)}`)).join('')}
+      ${row('NILAI BERSIH', fmtIDR(struk.nilai_bersih), 'receipt__row--total')}`
+    : ''
   // Mode Demo: struk bertanda agar tidak dipakai sebagai bukti pembayaran sungguhan.
   const tandaDemo = getState().demo ? `<div class="receipt__demo">${TANDA_DEMO}</div>` : ''
   // Transaksi offline: nomor lokal, nomor resmi menyusul setelah tersinkron.
@@ -39,12 +52,6 @@ export function buildReceiptHTML(struk) {
     })
     .join('')
 
-  const row = (label, value, cls = '') => `
-    <div class="receipt__row ${cls}">
-      <span>${label}</span>
-      <span class="num">${value}</span>
-    </div>`
-
   return `
     <div class="receipt${isVoid ? ' receipt--void' : ''}">
       ${isVoid ? '<div class="receipt__void-stamp">DIBATALKAN</div>' : ''}
@@ -59,16 +66,22 @@ export function buildReceiptHTML(struk) {
       <div class="receipt__sep"></div>
       ${isPrabon ? `<div class="receipt__antrian" style="background:#fdf1df;color:#b45309">BILL — BELUM DIBAYAR</div>` : ''}
       ${tandaOffline}
+      ${isRefund ? '<div class="receipt__antrian">NOTA REFUND</div>' : ''}
       ${struk.meja ? `<div class="receipt__antrian">${esc(struk.meja)}${struk.pax ? ` · ${esc(struk.pax)} org` : ''}</div>` : ''}
       <div class="receipt__row"><span>No.</span><span class="mono">${esc(struk.nomor)}</span></div>
+      ${isRefund ? `<div class="receipt__row"><span>Transaksi</span><span class="mono">${esc(struk.transaksi_nomor || '—')}</span></div>` : ''}
       ${struk.no_antrian ? `<div class="receipt__antrian">ANTRIAN: ${esc(struk.no_antrian)}</div>` : ''}
       <div class="receipt__row"><span>Tanggal</span><span>${fmtDateTime(struk.tanggal)}</span></div>
-      ${struk.kasir ? `<div class="receipt__row"><span>Kasir</span><span>${esc(struk.kasir)}</span></div>` : ''}
+      ${struk.kasir ? `<div class="receipt__row"><span>${isRefund ? 'Oleh' : 'Kasir'}</span><span>${esc(struk.kasir)}</span></div>` : ''}
       ${struk.pelanggan ? `<div class="receipt__row"><span>Pelanggan</span><span>${esc(struk.pelanggan)}</span></div>` : ''}
       <div class="receipt__sep"></div>
       ${itemRows}
       <div class="receipt__sep"></div>
-      ${row('Subtotal', fmtIDR(struk.subtotal))}
+      ${isRefund
+        ? `${row('TOTAL REFUND', fmtIDR(struk.grand_total), 'receipt__row--total')}
+      ${row('Dikembalikan via', esc(struk.metode_nama || struk.metode || '—'))}
+      <div class="receipt__meta">Alasan: ${esc(struk.alasan || '—')}</div>`
+        : `${row('Subtotal', fmtIDR(struk.subtotal))}
       ${Number(struk.total_diskon) > 0 ? row('Diskon', `−${fmtIDR(struk.total_diskon)}`) : ''}
       ${Number(struk.total_pajak) > 0 ? row('Pajak', fmtIDR(struk.total_pajak)) : ''}
       ${row('TOTAL', fmtIDR(struk.grand_total), 'receipt__row--total')}
@@ -76,15 +89,18 @@ export function buildReceiptHTML(struk) {
         ? ''
         : `${row(esc(labelPembayaranStruk(struk)), fmtIDR(struk.dibayar))}
       ${row('Kembalian', fmtIDR(struk.kembalian))}`}
+      ${blokRefund}`}
       <div class="receipt__sep"></div>
       ${struk.lacak_qr ? `
         <div class="receipt__track">
           <img class="receipt__track-qr" src="${esc(struk.lacak_qr)}" alt="QR lacak pesanan" />
           <div class="receipt__track-label">Scan untuk lacak status pesanan</div>
         </div>` : ''}
-      <div class="receipt__foot">${isPrabon
-        ? 'Ini bukan bukti bayar — silakan bayar di kasir'
-        : esc(footerCfg || 'Terima kasih atas kunjungan Anda')}</div>
+      <div class="receipt__foot">${isRefund
+        ? 'Dana telah dikembalikan'
+        : isPrabon
+          ? 'Ini bukan bukti bayar — silakan bayar di kasir'
+          : esc(footerCfg || 'Terima kasih atas kunjungan Anda')}</div>
       ${tandaDemo}
     </div>`
 }
