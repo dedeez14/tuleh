@@ -22,6 +22,20 @@ const demoUser = {
   'is_admin': true,
 };
 
+/// Hak akses akun demo (pemilik usaha). Di server sungguhan daftar ini datang dari
+/// master data `pos_hak_akses`; Mode Demo tidak punya server, jadi disediakan di
+/// sini. Tambahkan kunci baru bila layar demo mulai memakai gerbang lain.
+const demoAkses = [
+  'kasir.transaksi',
+  'transaksi.riwayat_semua',
+  'transaksi.batal',
+  'transaksi.refund',
+  'sesi.lihat_semua',
+  'sesi.tutup_lain',
+  'produk.lihat',
+  'laporan.lihat',
+];
+
 const demoGudang = [
   {'id': 'GDG-1', 'kode': 'GU', 'nama': 'Gudang Utama'},
   {'id': 'GDG-2', 'kode': 'GC', 'nama': 'Gudang Cabang'},

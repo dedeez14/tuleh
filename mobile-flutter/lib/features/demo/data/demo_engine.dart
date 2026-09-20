@@ -744,6 +744,8 @@ class DemoEngine {
   Map<String, dynamic> _sesiUser({bool token = false}) => {
     if (token) 'token': 'demo-token',
     'pos_role': demoUser['pos_role'],
+    'akses': demoAkses,
+    'peran': {'nama': 'Pemilik (demo)'},
     'user': {
       'id': demoUser['id'],
       'name': demoUser['name'],

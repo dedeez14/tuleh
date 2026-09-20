@@ -64,12 +64,19 @@ class AuthRemoteDataSource {
   User _userFrom(Map<String, dynamic> data) {
     final userMap = _map(data['user']);
     final companyMap = _map(data['company']);
+    final akses = data['akses'];
+    final peran = _map(data['peran']);
     return User(
       id: (userMap['id'] ?? '').toString(),
       name: (userMap['name'] ?? userMap['nama'] ?? 'Pengguna').toString(),
       email: userMap['email']?.toString(),
       role: (data['pos_role'] ?? userMap['role'])?.toString(),
       companyName: (companyMap['nama'] ?? companyMap['name'])?.toString(),
+      // Hanya kunci string tak kosong; bentuk lain (server lama/rusak) = tanpa hak.
+      akses: akses is List
+          ? [for (final k in akses) if (k is String && k.isNotEmpty) k]
+          : const <String>[],
+      peran: peran['nama']?.toString(),
     );
   }
 }
