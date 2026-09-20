@@ -9,6 +9,10 @@ import { esc, fmtIDR, fmtNumber, fmtDateTime, toISODate, daysAgo } from '../util
 import { toast, showModal, confirmDialog, emptyStateHTML, loadingHTML, icons } from '../components/ui.js'
 import { buildReceiptHTML, printReceipt, tombolBagikanStruk } from '../components/receipt.js'
 import { cariRiwayat, daftarKasir, saringKasir } from '../lib/cari-riwayat.js'
+import { strukRefund } from '../lib/struk-teks.js'
+import { barisRefund, bisaDirefund, perkiraanRefund, susunPermintaanRefund } from '../lib/refund-form.js'
+import { labelKuantitas } from '../lib/satuan-terukur.js'
+import { getState } from '../state.js'
 import { bisa } from '../akses.js'
 
 const DEFAULT_RANGE_DAYS = 6
@@ -135,7 +139,7 @@ export const HistoryScreen = {
           ${pantauSemua ? `<td class="hst-col-kasir">${esc(trx.kasir?.nama || '—')}</td>` : ''}
           <td class="hst-col-no"><span class="mono">${esc(trx.sesi?.nomor || '—')}</span></td>
           <td><span class="badge ${METHOD_BADGE[method] || 'badge--neutral'}">${esc(method || '—')}</span></td>
-          <td><span class="badge ${STATUS_BADGE[status] || 'badge--neutral'}">${esc(status || '—')}</span></td>
+          <td><span class="badge ${STATUS_BADGE[status] || 'badge--neutral'}">${esc(status || '—')}</span>${Number(trx.total_refund) > 0 ? ` <span class="badge badge--warn" title="Sebagian/seluruh dana sudah dikembalikan">Refund ${fmtIDR(trx.total_refund)}</span>` : ''}</td>
           <td class="u-right"><span class="num hst-total">${fmtIDR(trx.grand_total)}</span></td>
         </tr>`
     }
@@ -259,6 +263,18 @@ export const HistoryScreen = {
 
       function renderStruk(struk) {
         body.innerHTML = `<div class="hst-detail__receipt">${buildReceiptHTML(struk)}</div>`
+        for (const r of struk.refunds || []) {
+          const baris = document.createElement('div')
+          baris.className = 'hst-refund'
+          baris.innerHTML = `<span class="mono">${esc(r.nomor || '')}</span><span>${fmtDateTime(r.tanggal)}</span><span class="num">−${fmtIDR(r.total)}</span>`
+          const btn = document.createElement('button')
+          btn.type = 'button'
+          btn.className = 'btn btn--ghost'
+          btn.textContent = 'Cetak nota'
+          btn.addEventListener('click', () => printReceipt(strukRefund(struk, r)))
+          baris.appendChild(btn)
+          body.appendChild(baris)
+        }
         footer.innerHTML = ''
 
         const btnPrint = document.createElement('button')
@@ -269,7 +285,19 @@ export const HistoryScreen = {
 
         if (isVoided(struk.status)) return
         footer.appendChild(tombolBagikanStruk(struk))
-        if (struk.belum_sinkron || String(struk.id || '').startsWith('lokal:')) return // batalkan lewat Pengaturan → Sinkronisasi
+        if (struk.belum_sinkron || String(struk.id || '').startsWith('lokal:')) return // batalkan/refund lewat Pengaturan → Sinkronisasi
+        if (bisa('transaksi.refund') && bisaDirefund(struk)) {
+          const btnRefund = document.createElement('button')
+          btnRefund.className = 'btn btn--outline'
+          btnRefund.textContent = 'Refund'
+          btnRefund.title = 'Kembalikan dana sebagian/penuh — dicatat sebagai dokumen refund bernomor'
+          if (getState().online === false) {
+            btnRefund.disabled = true
+            btnRefund.title = 'Refund hanya bisa dilakukan saat terhubung ke server.'
+          }
+          btnRefund.addEventListener('click', () => bukaLembarRefund(struk))
+          footer.appendChild(btnRefund)
+        }
         if (!bisa('transaksi.batal')) return // kasir meminta Owner/Manager membatalkan
 
         const btnCancel = document.createElement('button')
@@ -306,7 +334,91 @@ export const HistoryScreen = {
         footer.appendChild(btnCancel)
       }
 
-      const result = await api.trx.detail({ id })
+      function bukaLembarRefund(struk) {
+        const baris = barisRefund(struk)
+        const aktif = Array.isArray(getState().paymentMethods) && getState().paymentMethods.length ? getState().paymentMethods : ['TUNAI']
+        const asal = String(struk.tipe_pembayaran || '').toUpperCase()
+        const bawaan = aktif.includes(asal) ? asal : aktif[0]
+        const body = document.createElement('div')
+        body.className = 'refund-form'
+        body.innerHTML = `
+          <p class="refund-form__intro">Transaksi <span class="mono">${esc(struk.nomor)}</span>. Isi jumlah yang dikembalikan per item (kosong = tidak direfund).</p>
+          <table class="table refund-form__tabel">
+            <thead><tr><th>Item</th><th class="u-right">Sisa</th><th class="u-right">Refund</th></tr></thead>
+            <tbody>${baris.map((b) => `
+              <tr>
+                <td>${esc(b.nama)}<div class="refund-form__sub">${fmtIDR(b.nilaiPerUnit)} / ${esc(b.satuan || 'item')}</div></td>
+                <td class="u-right">${esc(labelKuantitas(b.sisa, b.satuan))}</td>
+                <td class="u-right"><input class="input refund-form__qty" type="number" inputmode="decimal" min="0" max="${b.sisa}" step="${b.langkah}" data-refund-id="${esc(b.id)}" placeholder="0" /></td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+          <div class="field">
+            <label for="rf-metode">Metode pengembalian dana</label>
+            <select class="select" id="rf-metode">${aktif.map((m) => `<option value="${esc(m)}"${m === bawaan ? ' selected' : ''}>${esc(m)}</option>`).join('')}</select>
+          </div>
+          <div class="field">
+            <label for="rf-alasan">Alasan (wajib)</label>
+            <textarea class="textarea" id="rf-alasan" rows="2" maxlength="255" placeholder="Contoh: rasa tidak sesuai, barang rusak"></textarea>
+          </div>
+          <label class="field refund-form__cek"><input type="checkbox" id="rf-stok" checked /> Barang kembali ke stok</label>
+          <div class="refund-form__ringkas">Perkiraan dana kembali <strong class="num" id="rf-perkiraan">${fmtIDR(0)}</strong><span class="refund-form__sub">nilai pasti dihitung server (diskon &amp; pajak ikut dihitung)</span></div>`
+        const footer = document.createElement('div')
+        footer.className = 'hst-detail__foot'
+        const btnKembali = document.createElement('button')
+        btnKembali.className = 'btn btn--ghost'
+        btnKembali.textContent = 'Kembali'
+        const btnKirim = document.createElement('button')
+        btnKirim.className = 'btn btn--primary'
+        btnKirim.textContent = 'Catat refund'
+        footer.append(btnKembali, btnKirim)
+        const { close } = showModal({ title: 'Refund transaksi', body, footer, size: 'md' })
+        btnKembali.addEventListener('click', () => close())
+
+        const qty = () => Object.fromEntries([...body.querySelectorAll('[data-refund-id]')].map((el) => [el.dataset.refundId, Number(el.value) || 0]))
+        body.addEventListener('input', () => { body.querySelector('#rf-perkiraan').textContent = fmtIDR(perkiraanRefund(struk, qty())) })
+        // Satu client_ref per lembar: pengulangan tombol setelah timeout mengembalikan refund yang sama (pos.idempoten).
+        const clientRef = globalThis.crypto?.randomUUID ? crypto.randomUUID() : `rf-${Date.now()}-${Math.random().toString(16).slice(2)}`
+
+        btnKirim.addEventListener('click', async () => {
+          let payload
+          try {
+            payload = susunPermintaanRefund(struk, {
+              qty: qty(),
+              metode: body.querySelector('#rf-metode').value,
+              alasan: body.querySelector('#rf-alasan').value,
+              kembaliStok: body.querySelector('#rf-stok').checked
+            })
+          } catch (e) {
+            toast(e.message, 'error')
+            return
+          }
+          const yes = await confirmDialog({
+            title: 'Catat refund?',
+            message: `Sekitar ${fmtIDR(perkiraanRefund(struk, qty()))} dikembalikan ke pelanggan via ${payload.metode}. Dokumen refund bernomor akan dibuat dan tidak dapat diurungkan.`,
+            confirmText: 'Ya, catat',
+            cancelText: 'Kembali'
+          })
+          if (!yes) return
+          btnKirim.disabled = true
+          btnKirim.textContent = 'Mencatat…'
+          const result = await api.trx.refund({ ...payload, clientRef, waktuKlien: new Date().toISOString() })
+          if (!result.ok) {
+            btnKirim.disabled = false
+            btnKirim.textContent = 'Catat refund'
+            toast(firstError(result), 'error')
+            return
+          }
+          const refund = result.data || {}
+          toast(`Refund ${refund.nomor || ''} tercatat — ${fmtIDR(refund.total)} dikembalikan.`, 'success')
+          close()
+          const segar = await api.trx.struk({ id: struk.id })
+          renderStruk(segar.ok && segar.data ? segar.data : struk)
+          if (alive) loadData()
+        })
+      }
+
+      const result = await api.trx.struk({ id })
       if (!result.ok || !result.data) {
         // firstError() mengembalikan '' saat result.ok — beri pesan fallback
         // supaya toast tidak pernah kosong.

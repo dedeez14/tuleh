@@ -104,3 +104,23 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* Daftar nota refund di bawah struk (modal detail) */
+.hst-refund {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border-top: 1px solid var(--line);
+  font-size: 0.9rem;
+}
+.hst-refund .num { margin-left: auto; }
+
+/* Lembar refund */
+.refund-form__intro { margin: 0 0 var(--sp-3); color: var(--text-2); }
+.refund-form__tabel { width: 100%; margin-bottom: var(--sp-4); }
+.refund-form__qty { width: 6.5rem; text-align: right; }
+.refund-form__sub { display: block; font-size: 0.8rem; color: var(--text-2); }
+.refund-form__cek { display: flex; align-items: center; gap: var(--sp-2); }
+.refund-form__ringkas { margin-top: var(--sp-3); padding-top: var(--sp-3); border-top: 1px solid var(--line); }
+.refund-form__ringkas strong { margin: 0 var(--sp-2); }
