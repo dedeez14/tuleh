@@ -217,7 +217,9 @@ contextBridge.exposeInMainWorld('iposAPI', {
     checkout: invoke('trx:checkout'),
     list: invoke('trx:list'),
     detail: invoke('trx:detail'),
-    batal: invoke('trx:batal')
+    struk: invoke('trx:struk'),
+    batal: invoke('trx:batal'),
+    refund: invoke('trx:refund')
   },
   laporan: {
     penjualanHarian: invoke('laporan:penjualanHarian'),

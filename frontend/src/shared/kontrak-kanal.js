@@ -134,6 +134,16 @@
     })
   }
 
+  /** Baris refund: id baris struk + kuantitas > 0; minimal satu baris. */
+  function barisRefund (baris) {
+    if (!Array.isArray(baris) || baris.length === 0) throw new Error('Pilih minimal satu item yang direfund.')
+    return baris.map(function (b) {
+      const kuantitas = num(b && b.kuantitas, { required: true })
+      if (kuantitas <= 0) throw new Error('Jumlah refund harus lebih dari nol.')
+      return { id: str(b && b.id, { required: true }), kuantitas: kuantitas }
+    })
+  }
+
   const GET = function (jalur, query) { return { metode: 'GET', jalur: jalur, query: query } }
   const POST = function (jalur, body, query) { return { metode: 'POST', jalur: jalur, body: body, query: query } }
 
@@ -360,6 +370,24 @@
     },
     'trx:detail': { permukaan: 'trx.detail', buat: function (p) { return GET('/transaksi/' + id(p.id)) } },
     'trx:batal': { permukaan: 'trx.batal', buat: function (p) { return POST('/transaksi/' + id(p.id) + '/batal') } },
+    // Struk lengkap (qty_bisa_refund per baris, refunds[], total_refund, nilai_bersih) — sama dengan trx:detail di server kini,
+    // dipisah agar layar Riwayat jelas memakai bentuk struk.
+    'trx:struk': { permukaan: 'trx.struk', buat: function (p) { return GET('/transaksi/' + id(p.id) + '/struk') } },
+    // Refund penuh/sebagian per baris (hak transaksi.refund). baris = [{id: id baris dari struk, kuantitas}].
+    // client_ref idempoten (pos.idempoten): pengulangan setelah timeout mengembalikan refund yang sama, bukan mencatat ganda.
+    'trx:refund': {
+      permukaan: 'trx.refund',
+      buat: function (p) {
+        return POST('/transaksi/' + id(p.id) + '/refund', {
+          items: barisRefund(p.baris),
+          metode: str(p.metode, { required: true, max: 20 }),
+          alasan: str(p.alasan, { required: true, max: 255 }),
+          kembali_stok: p.kembaliStok === undefined ? true : !!p.kembaliStok,
+          client_ref: str(p.clientRef, { max: 64 }) || undefined,
+          waktu_klien: str(p.waktuKlien, { max: 40 }) || undefined
+        })
+      }
+    },
 
     // Laporan
     'laporan:penjualanHarian': { permukaan: 'laporan.penjualanHarian', buat: function (p) { return GET('/laporan/penjualan-harian', tanggalRentang(p)) } },

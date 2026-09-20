@@ -128,6 +128,7 @@ var routeTable = []route{
 	{method: "GET", pattern: "/transaksi/{id}"},
 	{method: "GET", pattern: "/transaksi/{id}/struk"},
 	{method: "POST", pattern: "/transaksi/{id}/batal", purge: []string{apiPrefix + "/produk", apiPrefix + "/laporan"}},
+	{method: "POST", pattern: "/transaksi/{id}/refund", purge: []string{apiPrefix + "/produk", apiPrefix + "/laporan", apiPrefix + "/transaksi"}},
 
 	// Pengaturan Usaha & Struk (profil perusahaan). Mutasi menyegarkan /config
 	// (blok company+struk) & /pengaturan. Upload logo = multipart (O/M).

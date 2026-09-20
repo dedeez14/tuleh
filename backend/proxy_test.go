@@ -147,6 +147,33 @@ func TestProxyCheckoutMembersihkanCacheProduk(t *testing.T) {
 	}
 }
 
+// Refund mengubah stok & laporan: cache /produk wajib dibersihkan seperti checkout.
+func TestProxyRefundMembersihkanCacheProduk(t *testing.T) {
+	gw, hits := newTestGateway(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"success":true,"data":[]}`))
+	}))
+
+	do := func(method, path string) {
+		req, _ := http.NewRequest(method, gw.URL+path, strings.NewReader("{}"))
+		req.Header.Set("Authorization", "Bearer manajer")
+		req.Header.Set("Content-Type", "application/json")
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+	}
+
+	do("GET", "/api/pos/v1/produk")               // isi cache (1)
+	do("GET", "/api/pos/v1/produk")               // HIT (masih 1)
+	do("POST", "/api/pos/v1/transaksi/T1/refund") // mutasi (2) → purge produk
+	do("GET", "/api/pos/v1/produk")               // MISS lagi (3)
+
+	if hits.Load() != 3 {
+		t.Fatalf("upstream terpukul %d kali, ingin 3 (cache di-purge setelah refund)", hits.Load())
+	}
+}
+
 // Setiap entri tabel rute harus terdaftar tanpa panik (ServeMux Go 1.22 panik saat pola
 // bentrok, mis. /produk/{id}/toko vs /produk/barcode/{barcode}) DAN benar-benar diteruskan.
 func TestSemuaRuteTerdaftarDanDiteruskan(t *testing.T) {

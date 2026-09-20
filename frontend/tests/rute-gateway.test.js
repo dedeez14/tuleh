@@ -50,6 +50,7 @@ const CONTOH = {
   tipePembayaran: 'TUNAI', dibayar: 1000, nama: 'Contoh', nomor: '1', type: 'MEJA', pax: 2,
   barcode: '899', hargaJual: 1000, tokoIds: ['T1'], jumlah: 1, keterangan: 'k', nominal: 1000,
   gudangId: 'G1', kasAwal: 0, kasAkhirFisik: 0, to: 'SELESAI', bulan: '2026-09',
+  baris: [{ id: 'I1', kuantitas: 1 }], metode: 'TUNAI', alasan: 'Contoh alasan refund',
   bytes: new Uint8Array([1]), filename: 'a.png', mime: 'image/png'
 }
 
