@@ -349,7 +349,7 @@ export const HistoryScreen = {
               <tr>
                 <td>${esc(b.nama)}<div class="refund-form__sub">${fmtIDR(b.nilaiPerUnit)} / ${esc(b.satuan || 'item')}</div></td>
                 <td class="u-right">${esc(labelKuantitas(b.sisa, b.satuan))}</td>
-                <td class="u-right"><input class="input refund-form__qty" type="number" inputmode="decimal" min="0" max="${b.sisa}" step="${b.langkah}" data-refund-id="${esc(b.id)}" placeholder="0" /></td>
+                <td class="u-right"><input class="input refund-form__qty" type="text" inputmode="decimal" data-refund-id="${esc(b.id)}" placeholder="0" /></td>
               </tr>`).join('')}
             </tbody>
           </table>
@@ -375,7 +375,8 @@ export const HistoryScreen = {
         const { close } = showModal({ title: 'Refund transaksi', body, footer, size: 'md' })
         btnKembali.addEventListener('click', () => close())
 
-        const qty = () => Object.fromEntries([...body.querySelectorAll('[data-refund-id]')].map((el) => [el.dataset.refundId, Number(el.value) || 0]))
+        // Terima desimal gaya Indonesia (koma) maupun titik: "0,5" → 0.5 (pola sama dengan inventory.js/dialog-ukuran.js).
+        const qty = () => Object.fromEntries([...body.querySelectorAll('[data-refund-id]')].map((el) => [el.dataset.refundId, Number(String(el.value).trim().replace(',', '.')) || 0]))
         body.addEventListener('input', () => { body.querySelector('#rf-perkiraan').textContent = fmtIDR(perkiraanRefund(struk, qty())) })
         // Satu client_ref per lembar: pengulangan tombol setelah timeout mengembalikan refund yang sama (pos.idempoten).
         const clientRef = globalThis.crypto?.randomUUID ? crypto.randomUUID() : `rf-${Date.now()}-${Math.random().toString(16).slice(2)}`
@@ -418,7 +419,9 @@ export const HistoryScreen = {
         })
       }
 
-      const result = await api.trx.struk({ id })
+      // Struk lokal (belum tersinkron, id "lokal:<ref>") masih dilayani lewat antrean offline via trx:detail;
+      // trx:struk hanya mengenal transaksi yang sudah tersinkron ke server.
+      const result = await (String(id).startsWith('lokal:') ? api.trx.detail({ id }) : api.trx.struk({ id }))
       if (!result.ok || !result.data) {
         // firstError() mengembalikan '' saat result.ok — beri pesan fallback
         // supaya toast tidak pernah kosong.
