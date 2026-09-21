@@ -59,6 +59,16 @@ var routeTable = []route{
 	{method: "PUT", pattern: "/tables/{id}", purge: []string{apiPrefix + "/tables"}},
 	{method: "DELETE", pattern: "/tables/{id}", purge: []string{apiPrefix + "/tables"}}, // nonaktifkan meja
 
+	// Modul Jadwal (gym/klinik) — daftar per hari & pesertanya; mutasi apa pun menyegarkan daftar.
+	{method: "GET", pattern: "/jadwal", cache: 15 * time.Second},
+	{method: "POST", pattern: "/jadwal", purge: []string{apiPrefix + "/jadwal"}},
+	{method: "GET", pattern: "/jadwal/{id}"},
+	{method: "PUT", pattern: "/jadwal/{id}", purge: []string{apiPrefix + "/jadwal"}},
+	{method: "DELETE", pattern: "/jadwal/{id}", purge: []string{apiPrefix + "/jadwal"}},
+	{method: "POST", pattern: "/jadwal/{id}/peserta", purge: []string{apiPrefix + "/jadwal"}},
+	{method: "PATCH", pattern: "/jadwal/{id}/peserta/{pid}", purge: []string{apiPrefix + "/jadwal"}},
+	{method: "DELETE", pattern: "/jadwal/{id}/peserta/{pid}", purge: []string{apiPrefix + "/jadwal"}},
+
 	// Order (F&B/jasa) & sinkronisasi offline — selalu segar
 	{method: "GET", pattern: "/orders"},
 	{method: "POST", pattern: "/orders"},

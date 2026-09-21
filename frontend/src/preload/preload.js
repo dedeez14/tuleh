@@ -138,6 +138,16 @@ contextBridge.exposeInMainWorld('iposAPI', {
     ubah: invoke('table:ubah'),
     nonaktifkan: invoke('table:nonaktifkan')
   },
+  jadwal: {
+    list: invoke('jadwal:list'),
+    detail: invoke('jadwal:detail'),
+    simpan: invoke('jadwal:simpan'),
+    ubah: invoke('jadwal:ubah'),
+    batal: invoke('jadwal:batal'),
+    pesertaTambah: invoke('jadwal:pesertaTambah'),
+    pesertaStatus: invoke('jadwal:pesertaStatus'),
+    pesertaHapus: invoke('jadwal:pesertaHapus')
+  },
   bill: {
     peta: invoke('bill:peta'),
     buka: invoke('bill:buka'),

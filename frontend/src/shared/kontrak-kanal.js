@@ -144,6 +144,19 @@
     })
   }
 
+  /** Badan slot jadwal (POST & PUT sama): wajib nama+tanggal+jam mulai; sisanya null bila kosong. */
+  function slotJadwal (p) {
+    return {
+      nama: str(p.nama, { required: true, max: 150 }),
+      tanggal: str(p.tanggal, { required: true, max: 10 }),
+      jam_mulai: str(p.jamMulai, { required: true, max: 5 }),
+      jam_selesai: str(p.jamSelesai, { max: 5 }) || null,
+      kuota: num(p.kuota) === undefined ? null : num(p.kuota),
+      pengajar: str(p.pengajar, { max: 100 }) || null,
+      catatan: str(p.catatan, { max: 255 }) || null
+    }
+  }
+
   const GET = function (jalur, query) { return { metode: 'GET', jalur: jalur, query: query } }
   const POST = function (jalur, body, query) { return { metode: 'POST', jalur: jalur, body: body, query: query } }
 
@@ -219,6 +232,18 @@
       }
     },
     'table:nonaktifkan': { permukaan: 'table.nonaktifkan', buat: function (p) { return { metode: 'DELETE', jalur: '/tables/' + id(p.id) } } },
+
+    // Modul Jadwal (gym/klinik) — slot kelas/janji temu per hari + pesertanya.
+    // Slot dikirim UTUH pada PUT (ganti penuh): jam selesai/kuota yang dikosongkan
+    // menjadi null supaya "hapus kuota" benar-benar tersimpan, bukan dibiarkan lama.
+    'jadwal:list': { permukaan: 'jadwal.list', buat: function (p) { return GET('/jadwal', { tanggal: str(p.tanggal, { max: 10 }), semua: p.semua ? 1 : undefined }) } },
+    'jadwal:detail': { permukaan: 'jadwal.detail', buat: function (p) { return GET('/jadwal/' + id(p.id)) } },
+    'jadwal:simpan': { permukaan: 'jadwal.simpan', buat: function (p) { return POST('/jadwal', slotJadwal(p)) } },
+    'jadwal:ubah': { permukaan: 'jadwal.ubah', buat: function (p) { return { metode: 'PUT', jalur: '/jadwal/' + id(p.id), body: slotJadwal(p) } } },
+    'jadwal:batal': { permukaan: 'jadwal.batal', buat: function (p) { return { metode: 'DELETE', jalur: '/jadwal/' + id(p.id) } } },
+    'jadwal:pesertaTambah': { permukaan: 'jadwal.pesertaTambah', buat: function (p) { return POST('/jadwal/' + id(p.id) + '/peserta', { pelanggan_id: str(p.idPelanggan, { required: true }) }) } },
+    'jadwal:pesertaStatus': { permukaan: 'jadwal.pesertaStatus', buat: function (p) { return { metode: 'PATCH', jalur: '/jadwal/' + id(p.id) + '/peserta/' + id(p.pesertaId), body: { status: str(p.status, { required: true, max: 20 }) } } } },
+    'jadwal:pesertaHapus': { permukaan: 'jadwal.pesertaHapus', buat: function (p) { return { metode: 'DELETE', jalur: '/jadwal/' + id(p.id) + '/peserta/' + id(p.pesertaId) } } },
 
     // Bon meja (open bill dine-in)
     'bill:peta': { permukaan: 'bill.peta', buat: function () { return GET('/bills', { status: 'BUKA' }) } },
