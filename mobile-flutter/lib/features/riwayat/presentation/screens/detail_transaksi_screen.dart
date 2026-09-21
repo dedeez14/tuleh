@@ -401,15 +401,20 @@ class _Receipt extends StatelessWidget {
     );
   }
 
+  /// Baris label–nilai; label boleh membungkus agar nomor refund panjang tidak
+  /// meluap di layar sempit (RenderFlex overflow = tes widget gagal).
   Widget _row(String label, String value, {bool bold = false}) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 3),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label,
-                style: TextStyle(
-                    fontWeight: bold ? FontWeight.w800 : FontWeight.w400,
-                    fontSize: bold ? 16 : 14)),
+            Expanded(
+              child: Text(label,
+                  style: TextStyle(
+                      fontWeight: bold ? FontWeight.w800 : FontWeight.w400,
+                      fontSize: bold ? 16 : 14)),
+            ),
+            const SizedBox(width: 12),
             Text(value,
                 style: TextStyle(
                     fontWeight: bold ? FontWeight.w800 : FontWeight.w600,
