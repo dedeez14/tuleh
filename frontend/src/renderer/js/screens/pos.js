@@ -16,6 +16,7 @@ import { customerViewHTML } from '../components/customer-view.js'
 import { bacaParkir, simpanParkir, tambahParkir, hapusParkir, pulihkanBaris, ringkasParkir } from '../lib/parkir.js'
 import { tanyaUkuran } from '../components/dialog-ukuran.js'
 import { apakahTerukur, labelKuantitas } from '../lib/satuan-terukur.js'
+import { catatKeranjang, kodeGalat, tokoSesi } from '../lib/keranjang-toko.js'
 
 const QRIS_POLL_MS = 4000 // interval cek status tagihan QRIS (kontrak: 3–5s)
 
@@ -642,6 +643,12 @@ function renderPos(container) {
     parkBtn.disabled = cart.length === 0
     renderParkirBadge()
     pushCustomerDisplay() // cerminkan keranjang live ke Display Pelanggan (bila aktif)
+    // Ikatan toko dibaca pemilih toko di top bar (app.js) sebelum berpindah.
+    catatKeranjang({
+      jumlah: cart.length,
+      tokoId: cart.length ? (getState().toko?.id || null) : null,
+      kosongkan: () => { cart = []; diskonTransaksi = 0; pelanggan = null; renderCart() }
+    })
   }
 
   // ---------- Parkir keranjang (simpan & lanjutkan nanti) ----------
@@ -1350,15 +1357,18 @@ function renderPos(container) {
         errorEl.textContent = firstError(result)
         errorEl.classList.remove('u-hidden')
         if (result.status === 409 && !footer.querySelector('#pay-goto-session')) {
+          // Dua bentuk 409: belum ada sesi (buka sesi) dan sesi di toko lain (pindah toko).
+          const sesiToko = kodeGalat(result) === 'SESI_BEDA_TOKO' ? tokoSesi(result) : null
           const gotoBtn = document.createElement('button')
           gotoBtn.type = 'button'
           gotoBtn.id = 'pay-goto-session'
           gotoBtn.className = 'btn btn--outline btn--block'
-          gotoBtn.textContent = 'Buka Sesi Kasir'
+          gotoBtn.textContent = sesiToko ? `Pindah ke ${sesiToko.nama}` : 'Buka Sesi Kasir'
           gotoBtn.addEventListener('click', async () => {
             modal.close()
-            const { showScreen } = await import('../app.js')
-            showScreen('sessions')
+            const { showScreen, pindahToko } = await import('../app.js')
+            if (sesiToko) await pindahToko(sesiToko.id)
+            else showScreen('sessions')
           })
           footer.prepend(gotoBtn)
         }

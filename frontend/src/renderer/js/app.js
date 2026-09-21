@@ -37,6 +37,7 @@ import { mulaiPemantau, hentikanPemantau } from './pemantau-pesanan.js'
 import { bukaBantuanPintasan } from './components/pintasan.js'
 import { bisa, isManajemen } from './akses.js'
 import { MODULES, MODULE_ACCENT, susunModul, kartuUtama } from './lib/registri-modul.js'
+import { keranjangLain, kosongkanKeranjang, ringkasKeranjang } from './lib/keranjang-toko.js'
 
 const SCREENS = [
   PosScreen, HistoryScreen, SessionsScreen, ReportsScreen, SettingsScreen,
@@ -226,9 +227,40 @@ async function switchToko() {
     await showScreen(screen || 'home')
     return
   }
+  // Keranjang hanya sah untuk tokonya sendiri: server menolak checkout lintas toko (409).
+  if (keranjangLain(chosen.id)) {
+    const { jumlah } = ringkasKeranjang()
+    const lanjut = await confirmDialog({
+      title: 'Kosongkan keranjang?',
+      message: `Keranjang berisi ${jumlah} item dari toko sebelumnya. Berpindah ke ${chosen.nama} akan mengosongkannya — parkir dulu bila ingin melanjutkannya nanti.`,
+      confirmText: 'Ya, ganti toko',
+      cancelText: 'Batal',
+      danger: true
+    })
+    if (!lanjut) {
+      renderShell()
+      await showScreen(screen || 'home')
+      return
+    }
+    kosongkanKeranjang()
+  }
   await applyToko(chosen)
   renderShell()
   await showScreen('home')
+}
+
+/** Pindah ke toko lain dari layar mana pun (tombol "Pindah ke …" pada 409 SESI_BEDA_TOKO). */
+export async function pindahToko(idToko) {
+  const toko = getState().tokoList.find((t) => String(t.id) === String(idToko))
+  if (!toko) {
+    toast('Toko sesi tidak ada dalam daftar toko Anda. Tutup sesi itu lebih dulu.', 'error')
+    return false
+  }
+  kosongkanKeranjang()
+  await applyToko(toko)
+  renderShell()
+  await showScreen('pos')
+  return true
 }
 
 // ---------- Muat data kerja setelah autentikasi ----------
