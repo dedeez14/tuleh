@@ -200,4 +200,57 @@ void main() {
       }
     });
   });
+
+  group('nota refund', () {
+    final nota = Struk(
+      namaToko: 'Warung Demo',
+      nomor: 'RF-000003',
+      waktu: DateTime(2026, 9, 20, 10, 15),
+      kasir: 'Manager Toko',
+      baris: const [StrukBaris(nama: 'Kopi Susu', kuantitas: 1, harga: 18000)],
+      total: 18000,
+      metode: 'TUNAI',
+      judul: 'NOTA REFUND',
+      rujukan: 'TRX/0001',
+      alasan: 'Rasa tidak sesuai pesanan pelanggan',
+      labelTotal: 'TOTAL REFUND',
+      catatanKaki: 'Dana telah dikembalikan',
+      barcode: 'RF-000003',
+    );
+
+    test('teks & pratinjau ESC/POS: judul, transaksi asal, Oleh, TOTAL REFUND, alasan; ≤32 kolom; tanpa Tunai/Kembali', () {
+      for (final teks in [const StrukTeks().bangun(nota), const StrukEscPos().pratinjau(nota)]) {
+        for (final b in teks.split('\n')) {
+          expect(b.length, lessThanOrEqualTo(32), reason: 'baris: "$b"');
+        }
+        expect(teks, contains('NOTA REFUND'));
+        expect(teks, contains('RF-000003'));
+        expect(teks, contains('TRX/0001'));
+        expect(teks, contains('Oleh'));
+        expect(teks, contains('TOTAL REFUND'));
+        expect(teks, contains('Dikembalikan via'));
+        expect(teks, contains('Alasan: Rasa tidak sesuai'));
+        expect(teks, contains('Dana telah dikembalikan'));
+        expect(teks, isNot(contains('Tunai ')));
+        expect(teks, isNot(contains('Kembali ')));
+      }
+    });
+
+    test('struk biasa tidak berubah: label TOTAL, Kasir, tanpa Alasan', () {
+      final teks = const StrukTeks().bangun(_struk(dibayar: 50000, kembalian: 14000));
+      expect(teks, contains('TOTAL'));
+      expect(teks, isNot(contains('TOTAL REFUND')));
+      expect(teks, contains('Kasir'));
+      expect(teks, isNot(contains('Alasan')));
+    });
+
+    test('toJson/fromJson mempertahankan judul, rujukan, alasan, labelTotal', () {
+      final ulang = Struk.fromJson(nota.toJson());
+      expect(ulang.judul, 'NOTA REFUND');
+      expect(ulang.rujukan, 'TRX/0001');
+      expect(ulang.alasan, nota.alasan);
+      expect(ulang.labelTotal, 'TOTAL REFUND');
+      expect(Struk.fromJson(_struk().toJson()).labelTotal, 'TOTAL');
+    });
+  });
 }

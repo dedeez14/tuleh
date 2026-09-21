@@ -62,6 +62,10 @@ class Struk {
     this.demo = false,
     this.pelanggan,
     this.diskon,
+    this.judul,
+    this.rujukan,
+    this.alasan,
+    this.labelTotal = 'TOTAL',
   });
 
   final String namaToko;
@@ -91,6 +95,18 @@ class Struk {
 
   /// Potongan diskon transaksi (rupiah); [total] sudah setelah potongan.
   final double? diskon;
+
+  /// Judul di bawah kepala toko (mis. "NOTA REFUND"); null = struk transaksi biasa.
+  final String? judul;
+
+  /// Nomor dokumen yang dirujuk (nota refund → nomor transaksi asal).
+  final String? rujukan;
+
+  /// Alasan (refund) — dicetak di bawah total, dibungkus per kata.
+  final String? alasan;
+
+  /// Label baris total: "TOTAL" untuk transaksi, "TOTAL REFUND" untuk nota refund.
+  final String labelTotal;
 
   /// Baris terukur dihitung satu item: "0,74 kg" bukan nol item (0,4 kg
   /// membulat ke nol) dan bukan pula 0,74 item.
@@ -126,6 +142,10 @@ class Struk {
     'demo': demo,
     'pelanggan': pelanggan,
     'diskon': diskon,
+    'judul': judul,
+    'rujukan': rujukan,
+    'alasan': alasan,
+    'label_total': labelTotal,
   };
 
   factory Struk.fromJson(Map<String, dynamic> j) {
@@ -160,6 +180,10 @@ class Struk {
       demo: j['demo'] == true,
       pelanggan: j['pelanggan']?.toString(),
       diskon: d(j['diskon']),
+      judul: j['judul']?.toString(),
+      rujukan: j['rujukan']?.toString(),
+      alasan: j['alasan']?.toString(),
+      labelTotal: (j['label_total'] ?? 'TOTAL').toString(),
     );
   }
 
@@ -181,5 +205,9 @@ class Struk {
     demo: demo,
     pelanggan: pelanggan,
     diskon: diskon,
+    judul: judul,
+    rujukan: rujukan,
+    alasan: alasan,
+    labelTotal: labelTotal,
   );
 }

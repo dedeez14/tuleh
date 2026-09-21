@@ -61,11 +61,19 @@ class StrukEscPos {
     }
     b.addAll(g.hr());
 
+    if (s.judul != null) {
+      b.addAll(g.text(s.judul!, styles: const PosStyles(align: PosAlign.center, bold: true)));
+      b.addAll(g.hr());
+    }
+
     // --- info transaksi ---
     b.addAll(_duaKolom(g, 'No', s.nomor));
+    if (s.rujukan?.isNotEmpty ?? false) {
+      b.addAll(_duaKolom(g, 'Transaksi', s.rujukan!));
+    }
     b.addAll(_duaKolom(g, 'Waktu', _waktu(s.waktu)));
     if (s.kasir != null && s.kasir!.isNotEmpty) {
-      b.addAll(_duaKolom(g, 'Kasir', s.kasir!));
+      b.addAll(_duaKolom(g, s.judul == null ? 'Kasir' : 'Oleh', s.kasir!));
     }
     if (s.pelanggan != null && s.pelanggan!.isNotEmpty) {
       b.addAll(_duaKolom(g, 'Pelanggan', s.pelanggan!));
@@ -98,16 +106,21 @@ class StrukEscPos {
       b.addAll(_duaKolom(g, 'Diskon', '-${fmtIDR(s.diskon!)}'));
     }
     b.addAll(
-      _duaKolom(g, 'TOTAL', fmtIDR(s.total), tebal: true, besar: true),
+      _duaKolom(g, s.labelTotal, fmtIDR(s.total), tebal: true, besar: true),
     );
     if (s.metode != null && s.metode!.isNotEmpty) {
-      b.addAll(_duaKolom(g, 'Bayar', s.metode!));
+      b.addAll(_duaKolom(g, s.judul == null ? 'Bayar' : 'Dikembalikan via', s.metode!));
     }
     if (s.dibayar != null) {
       b.addAll(_duaKolom(g, 'Tunai', fmtIDR(s.dibayar!)));
     }
     if (s.kembalian != null && s.kembalian! > 0) {
       b.addAll(_duaKolom(g, 'Kembali', fmtIDR(s.kembalian!), tebal: true));
+    }
+    if (s.alasan?.trim().isNotEmpty ?? false) {
+      for (final potong in bungkus('Alasan: ${s.alasan!.trim()}', _kolom)) {
+        b.addAll(g.text(potong));
+      }
     }
 
     // --- kaki ---
@@ -210,9 +223,12 @@ class StrukEscPos {
       if (s.telepon != null && s.telepon!.trim().isNotEmpty)
         _tengah('Telp ${s.telepon!.trim()}'),
       '-' * _kolom,
+      if (s.judul != null) ...[_tengah(s.judul!), '-' * _kolom],
       _pasangan('No', s.nomor),
+      if (s.rujukan?.isNotEmpty ?? false) _pasangan('Transaksi', s.rujukan!),
       _pasangan('Waktu', _waktu(s.waktu)),
-      if (s.kasir != null && s.kasir!.isNotEmpty) _pasangan('Kasir', s.kasir!),
+      if (s.kasir != null && s.kasir!.isNotEmpty)
+        _pasangan(s.judul == null ? 'Kasir' : 'Oleh', s.kasir!),
       '-' * _kolom,
       for (final b in s.baris) ...[
         ...bungkus(b.nama, _kolom),
@@ -223,11 +239,14 @@ class StrukEscPos {
         if ((b.nominalDiminta ?? 0) > 0) '  (diminta ${fmtIDR(b.nominalDiminta!)})',
       ],
       '-' * _kolom,
-      _pasangan('TOTAL', fmtIDR(s.total)),
-      if (s.metode != null && s.metode!.isNotEmpty) _pasangan('Bayar', s.metode!),
+      _pasangan(s.labelTotal, fmtIDR(s.total)),
+      if (s.metode != null && s.metode!.isNotEmpty)
+        _pasangan(s.judul == null ? 'Bayar' : 'Dikembalikan via', s.metode!),
       if (s.dibayar != null) _pasangan('Tunai', fmtIDR(s.dibayar!)),
       if (s.kembalian != null && s.kembalian! > 0)
         _pasangan('Kembali', fmtIDR(s.kembalian!)),
+      if (s.alasan?.trim().isNotEmpty ?? false)
+        ...bungkus('Alasan: ${s.alasan!.trim()}', _kolom),
       '',
       _tengah(
         (s.catatanKaki?.trim().isNotEmpty ?? false)

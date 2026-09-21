@@ -29,9 +29,16 @@ class StrukTeks {
     }
     if (s.telepon?.trim().isNotEmpty ?? false) tengah('Telp ${s.telepon!.trim()}');
     garis();
+    if (s.judul != null) {
+      tengah(s.judul!);
+      garis();
+    }
     b.add(_duaKolom('No', s.nomor));
+    if (s.rujukan?.isNotEmpty ?? false) b.add(_duaKolom('Transaksi', s.rujukan!));
     b.add(_duaKolom('Waktu', _waktu(s.waktu)));
-    if (s.kasir?.isNotEmpty ?? false) b.add(_duaKolom('Kasir', s.kasir!));
+    if (s.kasir?.isNotEmpty ?? false) {
+      b.add(_duaKolom(s.judul == null ? 'Kasir' : 'Oleh', s.kasir!));
+    }
     if (s.pelanggan?.isNotEmpty ?? false) b.add(_duaKolom('Pelanggan', s.pelanggan!));
     garis();
     for (final r in s.baris) {
@@ -44,10 +51,15 @@ class StrukTeks {
       b.add(_duaKolom('Subtotal', fmtIDR(s.total + s.diskon!)));
       b.add(_duaKolom('Diskon', '-${fmtIDR(s.diskon!)}'));
     }
-    b.add(_duaKolom('TOTAL', fmtIDR(s.total)));
-    if (s.metode?.isNotEmpty ?? false) b.add(_duaKolom('Bayar', s.metode!));
+    b.add(_duaKolom(s.labelTotal, fmtIDR(s.total)));
+    if (s.metode?.isNotEmpty ?? false) {
+      b.add(_duaKolom(s.judul == null ? 'Bayar' : 'Dikembalikan via', s.metode!));
+    }
     if (s.dibayar != null) b.add(_duaKolom('Tunai', fmtIDR(s.dibayar!)));
     if ((s.kembalian ?? 0) > 0) b.add(_duaKolom('Kembali', fmtIDR(s.kembalian!)));
+    if (s.alasan?.trim().isNotEmpty ?? false) {
+      b.addAll(StrukEscPos.bungkus('Alasan: ${s.alasan!.trim()}', kolom));
+    }
     garis();
     tengah(
       (s.catatanKaki?.trim().isNotEmpty ?? false)
