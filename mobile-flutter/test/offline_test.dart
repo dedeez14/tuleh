@@ -10,6 +10,7 @@ import 'package:tuleh_pos/core/offline/pita_koneksi.dart';
 import 'package:tuleh_pos/core/offline/salinan_interceptor.dart';
 import 'package:tuleh_pos/core/offline/salinan_store.dart';
 import 'package:tuleh_pos/core/theme/app_theme.dart';
+import 'package:tuleh_pos/features/pengaturan/presentation/providers/pengaturan_providers.dart';
 
 /// Mode offline fase 1 (salinan baca) — sesuai "Tuléh Offline-First":
 /// jawaban GET disalin; saat jaringan putus, salinan disajikan dan pita
@@ -217,6 +218,43 @@ void main() {
       await t.pumpAndSettle();
       expect(find.textContaining('Offline'), findsNothing);
       expect(find.text('isi'), findsOneWidget);
+    });
+
+    testWidgets('kembali online: daftar metode pembayaran ikut dimuat ulang', (t) async {
+      // metodePembayaranProvider bukan autoDispose: app yang MULAI offline
+      // memakai daftar cadangan sepanjang sesi bila tidak ikut disegarkan,
+      // sehingga metode yang dimatikan/ditambah pemilik tak pernah sampai.
+      var muat = 0;
+      final c = ProviderContainer(
+        overrides: [
+          koneksiProvider.overrideWith(
+            () => KoneksiNotifier(jaringan: const Stream.empty()),
+          ),
+          metodePembayaranProvider.overrideWith((_) async {
+            muat++;
+            return const ['QRIS'];
+          }),
+        ],
+      );
+      addTearDown(c.dispose);
+      addTearDown(c.listen(metodePembayaranProvider, (_, _) {}).close);
+      await t.pumpWidget(
+        UncontrolledProviderScope(
+          container: c,
+          child: MaterialApp(
+            theme: AppTheme.light(),
+            home: const Scaffold(body: PitaKoneksi(child: Text('isi'))),
+          ),
+        ),
+      );
+      await t.pumpAndSettle();
+      expect(muat, 1);
+
+      c.read(koneksiProvider.notifier).tandaiOffline();
+      await t.pumpAndSettle();
+      c.read(koneksiProvider.notifier).tandaiOnline();
+      await t.pumpAndSettle();
+      expect(muat, 2, reason: 'daftar metode diambil ulang saat server kembali');
     });
   });
 }

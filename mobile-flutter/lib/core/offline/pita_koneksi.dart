@@ -85,6 +85,9 @@ class _PitaKoneksiState extends ConsumerState<PitaKoneksi>
     ref.invalidate(mejaPetaProvider);
     ref.invalidate(profilUsahaProvider);
     ref.invalidate(pengaturanPembayaranProvider);
+    // Provider ini tidak autoDispose: app yang MULAI offline memegang daftar
+    // metode cadangan sepanjang sesi walau server sudah kembali terjangkau.
+    ref.invalidate(metodePembayaranProvider);
   }
 
   @override

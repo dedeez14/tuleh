@@ -16,6 +16,7 @@ import 'package:tuleh_pos/features/cetak/data/struk_esc_pos.dart';
 import 'package:tuleh_pos/features/cetak/domain/entities/struk.dart';
 import 'package:tuleh_pos/features/kasir/presentation/controllers/cart_controller.dart';
 import 'package:tuleh_pos/features/kasir/presentation/widgets/cart_sheet.dart';
+import 'package:tuleh_pos/features/kasir/presentation/widgets/keranjang_form_bayar.dart';
 import 'package:tuleh_pos/features/pengaturan/data/datasources/pengaturan_remote_datasource.dart';
 import 'package:tuleh_pos/features/pengaturan/domain/entities/pengaturan_pembayaran.dart';
 import 'package:tuleh_pos/features/pengaturan/presentation/providers/pengaturan_providers.dart';
@@ -148,6 +149,7 @@ void main() {
     Future<ProviderContainer> pumpBayar(
       WidgetTester t, {
       PengaturanPembayaran pembayaran = const PengaturanPembayaran(),
+      List<String>? metode,
     }) async {
       final c = ProviderContainer(
         overrides: [
@@ -155,6 +157,7 @@ void main() {
           masaCobaServiceProvider.overrideWithValue(MasaCobaPalsu()),
         ...overrideOffline(),
           pengaturanPembayaranProvider.overrideWith((_) async => pembayaran),
+          if (metode != null) metodePembayaranProvider.overrideWith((_) async => metode),
         ],
       );
       addTearDown(c.dispose);
@@ -203,6 +206,21 @@ void main() {
       await t.pumpAndSettle();
       expect(t.widget<TextField>(find.byType(TextField)).controller!.text, '4.000');
       expect(tombolBayar(t).onPressed, isNotNull);
+    });
+
+    testWidgets('toko tanpa TUNAI: metode pertama server yang terpilih, tanpa UI kembalian', (t) async {
+      // `pos_metode_pembayaran` adalah master data server: toko boleh
+      // mematikan TUNAI. Tanpa normalisasi, tak ada chip yang terpilih, kolom
+      // uang diterima tetap tampil, dan checkout mengirim TUNAI → 422.
+      await pumpBayar(t, metode: const ['QRIS', 'TRANSFER']);
+      expect(find.text('TUNAI'), findsNothing);
+      final chip = t.widget<PilihanMetode>(
+        find.widgetWithText(PilihanMetode, 'QRIS'),
+      );
+      expect(chip.aktif, isTrue, reason: 'metode pertama server yang dipakai');
+      expect(find.text('Uang diterima'), findsNothing);
+      expect(find.byType(TextField), findsNothing);
+      expect(tombolBayar(t).onPressed, isNotNull, reason: 'non-tunai tak butuh nominal');
     });
 
     testWidgets('QRIS & TRANSFER menampilkan pengaturan pembayaran toko', (

@@ -50,6 +50,9 @@ enum _Langkah { keranjang, bayar }
 
 class _CartSheetState extends ConsumerState<CartSheet> {
   _Langkah _langkah = _Langkah.keranjang;
+
+  /// Dinormalkan terhadap daftar metode dari server di [build] — toko boleh
+  /// menonaktifkan TUNAI, dan mengirimkannya tetap akan ditolak server (422).
   String _metodeTerpilih = 'TUNAI';
   final _uangCtrl = TextEditingController();
   bool _loading = false;
@@ -270,6 +273,10 @@ class _CartSheetState extends ConsumerState<CartSheet> {
     final cart = ref.read(cartControllerProvider.notifier);
     final pembayaran = ref.watch(pengaturanPembayaranProvider);
     final metode = ref.watch(metodePembayaranProvider).valueOrNull ?? metodePembayaranBawaan;
+    // Toko yang mematikan TUNAI: tanpa normalisasi tak ada chip terpilih, UI
+    // kembalian tetap tampil, dan checkout mengirim metode yang ditolak server
+    // (422, Rule::in kode aktif). Daftar provider dijamin tidak kosong.
+    if (!metode.contains(_metodeTerpilih)) _metodeTerpilih = metode.first;
     final cs = Theme.of(context).colorScheme;
 
     // Keranjang dikosongkan dari layar lain → tutup lembar ini.
