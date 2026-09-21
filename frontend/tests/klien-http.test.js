@@ -47,6 +47,55 @@ test('klasifikasi: tabel keputusan', () => {
   assert.equal(klasifikasi(200, null, { success: true }), JENIS.SUKSES)
   assert.equal(adalahGangguan({ ok: false, status: -1 }), true)
   assert.equal(adalahGangguan({ ok: false, status: 402 }), false)
+
+  // 429 BERPAYLOAD `errors` = penolakan domain (kunci PIN persetujuan, tugas 9), bukan rem lalu
+  // lintas: server menjawab dengan sadar untuk permintaan INI. Kalau ikut GANGGUAN, satu PIN salah
+  // menyalakan banner offline seluruh app dan `data.terkunci_detik` hilang dari amplopnya.
+  assert.equal(klasifikasi(429, null, { success: false, errors: { kode: ['PIN_TERKUNCI'] } }), JENIS.TOLAK)
+  assert.equal(klasifikasi(429, null, { success: false, message: 'Terlalu banyak permintaan.' }), JENIS.GANGGUAN, '429 polos tetap rem lalu lintas')
+  assert.equal(klasifikasi(429, null, { success: false, errors: {} }), JENIS.GANGGUAN, 'errors kosong bukan penolakan domain')
+  // Penanda gateway menang: 429 buatan gateway lokal berarti server tak terjangkau, apa pun isinya.
+  assert.equal(klasifikasi(429, { 'X-Tuleh-Gateway': 'rate-limited' }, { errors: { kode: ['PIN_TERKUNCI'] } }), JENIS.GANGGUAN)
+})
+
+// GET /keamanan/* memotret rahasia yang berubah (PIN saya terpasang?, siapa yang bisa menyetujui):
+// salinan lama menyesatkan — kartu menawarkan "Ganti PIN" untuk PIN yang sudah dicabut, atau memajang
+// pemberi yang sudah tak berhak. App-Lock di /pengaturan/keamanan tak terpengaruh (awalan berbeda).
+test('jawaban /keamanan tidak pernah disalin untuk offline', () => {
+  const { bolehDisalin } = require('../src/main/lib/klien-http')
+  assert.equal(bolehDisalin('/keamanan/pin-saya'), false)
+  assert.equal(bolehDisalin('/keamanan/pemberi-otorisasi'), false)
+  assert.equal(bolehDisalin('/pengaturan/keamanan'), true)
+  assert.equal(bolehDisalin('/produk'), true)
+})
+
+// Hitung mundur kunci PIN ada di `data.terkunci_detik` — amplop gagal yang membuang `data` membuat
+// dialog cuma bisa bilang "coba lagi nanti".
+test('429 kunci PIN: penolakan biasa (bukan gangguan), data/errors/message utuh, tetap online', async () => {
+  const { klien, offline } = rakit(jawaban(429, {
+    success: false,
+    data: { terkunci_detik: 47 },
+    meta: null,
+    message: 'Terlalu banyak PIN salah. Coba lagi dalam 47 detik.',
+    errors: { kode: ['PIN_TERKUNCI'] }
+  }))
+  const r = await klien.post('/keamanan/otorisasi', { body: { pin: '0000' } })
+  assert.equal(r.ok, false)
+  assert.equal(r.status, 429)
+  assert.equal(r.gangguan, undefined, 'penolakan domain tak boleh diantrekan/dicoba ulang')
+  assert.deepEqual(r.data, { terkunci_detik: 47 })
+  assert.deepEqual(r.errors, { kode: ['PIN_TERKUNCI'] })
+  assert.match(r.message, /47 detik/)
+  assert.equal(offline.koneksi.online, true, 'satu PIN salah tidak boleh menyalakan banner offline')
+})
+
+test('amplop gagal biasa (422) juga membawa data dari server', async () => {
+  const { klien } = rakit(jawaban(422, { success: false, data: { sisa_percobaan: 3 }, message: 'PIN salah.', errors: { pin: ['PIN salah.'] } }))
+  const r = await klien.put('/keamanan/pin-saya', { body: { pin: '1111' } })
+  assert.equal(r.ok, false)
+  assert.deepEqual(r.data, { sisa_percobaan: 3 })
+  const kosong = await rakit(jawaban(404, { success: false, message: 'Tidak ditemukan.' })).klien.get('/produk/X')
+  assert.equal(kosong.data, null, 'tanpa data dari server → null, bukan undefined')
 })
 
 test('sukses GET: header versi+platform, toko aktif, salinan disimpan, tandai online', async () => {

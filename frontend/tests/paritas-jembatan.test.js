@@ -25,14 +25,14 @@ function permukaanDesktop () {
   return terekspos
 }
 
-function jembatanAndroid ({ tokoAktif = null, respons = { success: true, data: [] } } = {}) {
+function jembatanAndroid ({ tokoAktif = null, respons = { success: true, data: [] }, status = 200 } = {}) {
   const panggilan = []
   const prefs = { token: 'tkn', activeTokoId: tokoAktif }
   const ctx = {
     console, URL, AbortController, setTimeout, clearTimeout, Promise, Blob, FormData, encodeURIComponent,
     fetch: (url, opsi) => {
       panggilan.push({ url: new URL(url), metode: opsi.method, body: opsi.body })
-      return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve(JSON.stringify(respons)) })
+      return Promise.resolve({ ok: status >= 200 && status < 300, status, text: () => Promise.resolve(JSON.stringify(respons)) })
     }
   }
   ctx.window = ctx
@@ -116,6 +116,25 @@ test('Android: preferensi cetak tersimpan di Preferences; tanpa printer sistem &
   const st = (await api.offline.status()).data
   assert.equal(st.menunggu, 0)
   assert.equal(typeof api.offline.onStatus(() => {}), 'function')
+})
+
+// Layar yang sama berjalan di Android: dialog persetujuan membaca `data.terkunci_detik` dari amplop
+// 429 untuk hitung mundur. Amplop gagal yang membuang `data` membuatnya diam-diam cuma bisa bilang
+// "coba lagi nanti" di Android sementara di desktop hitung mundurnya jalan (paritas dengan klien-http).
+test('Android: amplop gagal membawa data dari server (hitung mundur kunci PIN)', async () => {
+  const { api } = jembatanAndroid({
+    status: 429,
+    respons: { success: false, data: { terkunci_detik: 47 }, meta: null, message: 'Terlalu banyak PIN salah. Coba lagi dalam 47 detik.', errors: { kode: ['PIN_TERKUNCI'] } }
+  })
+  const r = await api.keamanan.otorisasi({ pemberiId: 'U1', pin: '0000', aksi: 'transaksi.batal', transaksiId: 'T1' })
+  assert.equal(r.ok, false)
+  assert.equal(r.status, 429)
+  assert.deepEqual(polos(r.data), { terkunci_detik: 47 })
+  assert.deepEqual(polos(r.errors), { kode: ['PIN_TERKUNCI'] })
+  assert.match(r.message, /47 detik/)
+
+  const kosong = jembatanAndroid({ status: 404, respons: { success: false, message: 'Tidak ditemukan.' } })
+  assert.equal((await kosong.api.trx.struk({ id: 'X' })).data, null, 'tanpa data dari server → null')
 })
 
 test('build Android memuat kontrak bersama sebelum jembatan (CI & skrip lokal)', () => {

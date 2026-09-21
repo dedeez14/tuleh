@@ -9,6 +9,7 @@
 //               (502/503/504 ber-header X-Tuleh-Gateway) → perlakukan seperti
 //               jaringan putus: tandai offline, GET dari salinan, tulis diantrekan,
 //               antrean dicoba ulang dengan mundur (bukan "perlu ditinjau").
+//               KECUALI 429 yang membawa `errors` — lihat penolakanDomain() di bawah.
 //   LANGGANAN : 402 → layar "Langganan berakhir"; TIDAK diantrekan.
 //   SESI      : 401 → alur sesi berakhir (kembali ke login).
 //   UPDATE    : 426 → layar update wajib.
@@ -42,6 +43,20 @@ function penandaGateway(headers) {
 }
 
 /**
+ * 429 yang dijawab server dengan `errors` terisi adalah penolakan DOMAIN, bukan rem lalu lintas:
+ * kunci PIN persetujuan (`errors.kode = ['PIN_TERKUNCI']`, `data.terkunci_detik` untuk hitung
+ * mundur) memakai 429 karena itu memang "terlalu banyak percobaan". Diperlakukan sebagai
+ * gangguan, satu PIN salah akan menandai SELURUH aplikasi offline, mengantrekan ulang permintaan
+ * yang server sudah tolak dengan sadar, dan membuang `data` dari amplopnya. 429 polos (rem gateway
+ * atau throttle Laravel tanpa badan) tetap gangguan.
+ */
+function penolakanDomain(status, payload) {
+  if (status !== 429) return false
+  const e = payload && payload.errors
+  return !!e && typeof e === 'object' && Object.keys(e).length > 0
+}
+
+/**
  * @param {number} status  kode HTTP (0 = tidak ada jawaban sama sekali)
  * @param {object} [headers]  Headers fetch atau objek biasa
  * @param {object|null} [payload]  badan JSON ter-parse (amplop {success,...})
@@ -51,6 +66,7 @@ function klasifikasi(status, headers = null, payload = null) {
   if (s === 0) return JENIS.GANGGUAN
   const gw = penandaGateway(headers)
   if (gw && PENANDA_GATEWAY_GANGGUAN.has(gw)) return JENIS.GANGGUAN
+  if (penolakanDomain(s, payload)) return JENIS.TOLAK
   if (s >= 500 || s === 408 || s === 429) return JENIS.GANGGUAN
   if (s === 402) return JENIS.LANGGANAN
   if (s === 401) return JENIS.SESI
@@ -94,4 +110,4 @@ function infoLangganan(payload) {
   }
 }
 
-module.exports = { JENIS, klasifikasi, adalahGangguan, jenisGangguan, penandaGateway, infoLangganan, HEADER_GATEWAY }
+module.exports = { JENIS, klasifikasi, adalahGangguan, jenisGangguan, penandaGateway, penolakanDomain, infoLangganan, HEADER_GATEWAY }

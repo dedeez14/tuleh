@@ -17,8 +17,10 @@ const WAKTU_SERVER_TIMEOUT_MS = 6000
 const MAX_BODY_BYTES = 5 * 1024 * 1024
 
 // Jalur GET yang TIDAK disalin untuk offline (status pembayaran, masa coba, versi,
-// langganan): jawaban lama justru menyesatkan.
-const TANPA_SALINAN = ['/qris', '/demo', '/ping', '/app/versi', '/langganan', '/diagnostik']
+// langganan, PIN persetujuan): jawaban lama justru menyesatkan — kartu PIN akan menawarkan
+// "Ganti PIN" untuk PIN yang sudah dicabut, dan daftar pemberi persetujuan memajang orang yang
+// haknya sudah ditarik. (App-Lock ada di /pengaturan/keamanan, awalan berbeda.)
+const TANPA_SALINAN = ['/qris', '/demo', '/ping', '/app/versi', '/langganan', '/diagnostik', '/keamanan']
 function bolehDisalin(endpoint) {
   return !TANPA_SALINAN.some((p) => endpoint.startsWith(p))
 }
@@ -188,7 +190,9 @@ function buatKlienHttp({ fetch, versiApp, platform, offline, pura2Offline = () =
         const info = infoLangganan(payload)
         panggil(langgananHandler, { ...info, pesan: info.pesan || message })
       }
-      const r = { ok: false, status: response.status, message, errors, meta }
+      // `data` ikut pada amplop GAGAL: sebagian penolakan membawa angka yang dibutuhkan layar
+      // (mis. data.terkunci_detik pada 429 kunci PIN → hitung mundur di dialog persetujuan).
+      const r = { ok: false, status: response.status, data: payload && payload.data !== undefined ? payload.data : null, message, errors, meta }
       if (gw) r.gateway = gw
       return r
     }

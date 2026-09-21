@@ -113,7 +113,10 @@
           var ml = (payload && payload.meta && payload.meta.langganan) || {}
           try { langgananCb({ pesan: (payload && payload.message) || statusMessage(402), status: ml.status || null, perpanjang_url: /^https:\/\//i.test(ml.perpanjang_url || '') ? ml.perpanjang_url : null }) } catch (e) {}
         }
-        return { ok: false, status: res.status, message: (payload && payload.message) || statusMessage(res.status), errors: (payload && payload.errors) || null, meta: (payload && payload.meta) || null }
+        // `data` ikut pada amplop GAGAL (paritas klien-http.js desktop): sebagian penolakan
+        // membawa angka yang dibutuhkan layar — mis. data.terkunci_detik pada 429 kunci PIN,
+        // dipakai dialog persetujuan untuk hitung mundur.
+        return { ok: false, status: res.status, data: (payload && payload.data !== undefined) ? payload.data : null, message: (payload && payload.message) || statusMessage(res.status), errors: (payload && payload.errors) || null, meta: (payload && payload.meta) || null }
       }
       return { ok: true, status: res.status, data: payload.data !== undefined ? payload.data : null, meta: payload.meta !== undefined ? payload.meta : null, message: payload.message || '' }
     })

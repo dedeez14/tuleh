@@ -10,6 +10,7 @@ import { mountProfilUsaha } from './profil-usaha.js'
 import { mountPembayaran } from './pembayaran-setelan.js'
 import { renderPanelSinkronisasi } from '../components/sinkronisasi.js'
 import { mountPrinterSetelan } from './printer-setelan.js'
+import { mountPinPersetujuan } from './pin-persetujuan.js'
 import { kemampuanPlatform } from '../lib/kemampuan.js'
 
 const DASH = '<span class="u-faint">—</span>'
@@ -191,6 +192,8 @@ export const SettingsScreen = {
 
           ${hakAksesCardHTML()}
 
+          <div id="set-pin-persetujuan"></div>
+
           ${langgananCardHTML()}
 
           ${premiumCardHTML()}
@@ -253,6 +256,7 @@ export const SettingsScreen = {
       }
     })
     mountPrinterSetelan(container.querySelector('#set-printer'))
+    mountPinPersetujuan(container.querySelector('#set-pin-persetujuan'))
 
     // Perpanjang langganan (alur pembayaran Midtrans)
     const perpanjangBtn = container.querySelector('#set-perpanjang')

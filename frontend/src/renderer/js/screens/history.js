@@ -14,6 +14,8 @@ import { barisRefund, bisaDirefund, perkiraanRefund, susunPermintaanRefund } fro
 import { labelKuantitas } from '../lib/satuan-terukur.js'
 import { getState } from '../state.js'
 import { bisa } from '../akses.js'
+import { mintaOtorisasi } from '../components/dialog-otorisasi.js'
+import { labelAksi, perluPersetujuan } from '../lib/otorisasi.js'
 
 const DEFAULT_RANGE_DAYS = 6
 
@@ -263,6 +265,14 @@ export const HistoryScreen = {
 
       function renderStruk(struk) {
         body.innerHTML = `<div class="hst-detail__receipt">${buildReceiptHTML(struk)}</div>`
+        // Pembatalan lewat PIN atasan: server mengirim nama penyetujunya — tampilkan supaya
+        // struk yang dicetak ulang & layar bercerita sama dengan catatan di server.
+        if (struk.disetujui_oleh) {
+          const ket = document.createElement('div')
+          ket.className = 'hst-refund__judul'
+          ket.textContent = `Disetujui: ${struk.disetujui_oleh}`
+          body.appendChild(ket)
+        }
         if ((struk.refunds || []).length) {
           const judul = document.createElement('div')
           judul.className = 'hst-refund__judul'
@@ -272,7 +282,7 @@ export const HistoryScreen = {
         for (const r of struk.refunds || []) {
           const baris = document.createElement('div')
           baris.className = 'hst-refund'
-          baris.innerHTML = `<span class="mono">${esc(r.nomor || '')}</span><span>${fmtDateTime(r.tanggal)}</span><span class="num">−${fmtIDR(r.total)}</span>`
+          baris.innerHTML = `<span class="mono">${esc(r.nomor || '')}</span><span>${fmtDateTime(r.tanggal)}</span>${r.disetujui_oleh ? `<span>Disetujui: ${esc(r.disetujui_oleh)}</span>` : ''}<span class="num">−${fmtIDR(r.total)}</span>`
           const btn = document.createElement('button')
           btn.type = 'button'
           btn.className = 'btn btn--ghost'
@@ -292,10 +302,12 @@ export const HistoryScreen = {
         if (isVoided(struk.status)) return
         footer.appendChild(tombolBagikanStruk(struk))
         if (struk.belum_sinkron || String(struk.id || '').startsWith('lokal:')) return // batalkan/refund lewat Pengaturan → Sinkronisasi
-        if (bisa('transaksi.refund') && bisaDirefund(struk)) {
+        // Tanpa hak sendiri, tombol TETAP tampil: kasir meminta PIN atasannya di dialog
+        // (labelnya mengatakan itu sebelum ditekan). Server tetap yang memutuskan.
+        if (bisaDirefund(struk)) {
           const btnRefund = document.createElement('button')
           btnRefund.className = 'btn btn--outline'
-          btnRefund.textContent = 'Refund'
+          btnRefund.textContent = labelAksi('transaksi.refund', bisa('transaksi.refund'))
           btnRefund.title = 'Kembalikan dana sebagian/penuh — dicatat sebagai dokumen refund bernomor'
           btnRefund.addEventListener('click', () => {
             // Diperiksa DI SINI, bukan saat modal dibuat: kasir bisa kehilangan
@@ -308,11 +320,10 @@ export const HistoryScreen = {
           })
           footer.appendChild(btnRefund)
         }
-        if (!bisa('transaksi.batal')) return // kasir meminta Owner/Manager membatalkan
-
+        const labelBatal = labelAksi('transaksi.batal', bisa('transaksi.batal'))
         const btnCancel = document.createElement('button')
         btnCancel.className = 'btn btn--danger-outline'
-        btnCancel.textContent = 'Batalkan Transaksi'
+        btnCancel.textContent = labelBatal
         btnCancel.addEventListener('click', async () => {
           const yes = await confirmDialog({
             title: 'Batalkan transaksi ini?',
@@ -323,9 +334,18 @@ export const HistoryScreen = {
           })
           if (!yes) return
 
+          // Token persetujuan sekali pakai (5 menit, satu aksi & satu transaksi). Server
+          // membakarnya walau layanan lalu menolak — pesannya tampil apa adanya dan kasir
+          // meminta persetujuan lagi.
+          let token
+          if (perluPersetujuan('transaksi.batal', { punyaHak: bisa('transaksi.batal') })) {
+            token = await mintaOtorisasi({ aksi: 'transaksi.batal', transaksiId: struk.id })
+            if (!token) return // dibatalkan / PIN salah — pesannya sudah tampil di dialog
+          }
+
           btnCancel.disabled = true
           btnCancel.textContent = 'Membatalkan…'
-          const result = await api.trx.batal({ id: struk.id })
+          const result = await api.trx.batal({ id: struk.id, otorisasiToken: token })
 
           if (result.ok) {
             // Server bisa saja sukses tanpa mengembalikan struk — jangan anggap
@@ -338,7 +358,7 @@ export const HistoryScreen = {
             return
           }
           btnCancel.disabled = false
-          btnCancel.textContent = 'Batalkan Transaksi'
+          btnCancel.textContent = labelBatal
           toast(firstError(result), 'error')
         })
         footer.appendChild(btnCancel)
@@ -411,9 +431,16 @@ export const HistoryScreen = {
             cancelText: 'Kembali'
           })
           if (!yes) return
+
+          let token
+          if (perluPersetujuan('transaksi.refund', { punyaHak: bisa('transaksi.refund') })) {
+            token = await mintaOtorisasi({ aksi: 'transaksi.refund', transaksiId: struk.id })
+            if (!token) return
+          }
+
           btnKirim.disabled = true
           btnKirim.textContent = 'Mencatat…'
-          const result = await api.trx.refund({ ...payload, clientRef, waktuKlien: new Date().toISOString() })
+          const result = await api.trx.refund({ ...payload, clientRef, waktuKlien: new Date().toISOString(), otorisasiToken: token })
           if (!result.ok) {
             btnKirim.disabled = false
             btnKirim.textContent = 'Catat refund'
