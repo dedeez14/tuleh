@@ -76,5 +76,7 @@ class TransaksiDetail {
   final double? nilaiBersih;
   final List<Refund> refunds;
 
-  bool get adaSisaRefund => items.any((i) => i.qtyBisaRefund > 0);
+  /// Ada baris yang masih bisa direfund DAN punya id baris (server 2026-09-13+);
+  /// dipakai tombol Refund maupun filter baris lembar refund.
+  bool get adaSisaRefund => items.any((i) => i.qtyBisaRefund > 0 && i.id != null);
 }
