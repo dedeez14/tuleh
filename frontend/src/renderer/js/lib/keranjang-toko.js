@@ -45,29 +45,9 @@ export function tokoSesi(hasil) {
   return keluar
 }
 
-/** Nama/kode toko yang bisa dibandingkan: rapi, tak peduli huruf besar-kecil. */
-function rapi(nilai) {
-  return typeof nilai === 'string' ? nilai.trim().toLowerCase() : ''
-}
-
-/**
- * Cocokkan toko sesi dari meta 409 dengan daftar toko pengguna.
- *
- * `id` toko adalah ciphertext non-deterministik (encrypt_id): id yang sama dienkripsi berbeda di
- * `/tokos` dan di meta 409, jadi id TIDAK bisa dipakai membandingkan. Urutan pencocokan: `kode`
- * (TK-xxx, stabil) lalu `nama`. Yang ketemu dipakai untuk melengkapi (bidang usaha dll.), tapi
- * `id`-nya tetap id dari 409 — itu yang sah di server saat ini.
- * Tak ketemu → kembalikan toko sesi apa adanya; server yang berhak menolak, bukan app.
- */
-export function pilihTokoSesi(tokoList, sesiToko) {
-  if (!sesiToko || !sesiToko.id) return null
-  const daftar = Array.isArray(tokoList) ? tokoList : []
-  const kode = rapi(sesiToko.kode)
-  const nama = rapi(sesiToko.nama)
-  const cocok = (kode && daftar.find((t) => rapi(t.kode) === kode))
-    || (nama && daftar.find((t) => rapi(t.nama) === nama))
-  return cocok ? { ...cocok, id: sesiToko.id } : sesiToko
-}
+// Pencocokan toko dipindahkan ke lib/toko-cocok.js (dipakai juga oleh muat ulang identitas);
+// di-ekspor ulang dari sini supaya layar kasir tetap mengimpor dari satu tempat.
+export { pilihTokoSesi } from './toko-cocok.js'
 
 /**
  * Tombol apa yang pantas di bawah galat checkout 409.

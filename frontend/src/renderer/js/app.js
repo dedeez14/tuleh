@@ -38,7 +38,8 @@ import { bukaBantuanPintasan } from './components/pintasan.js'
 import { bisa, isManajemen } from './akses.js'
 import { MODULES, MODULE_ACCENT, susunModul, kartuUtama } from './lib/registri-modul.js'
 import { keranjangLain, kosongkanKeranjang, pilihTokoSesi, ringkasKeranjang } from './lib/keranjang-toko.js'
-import { perluMuatUlang, patchIdentitas, manifestBerubah } from './lib/identitas.js'
+import { perluMuatUlang, putusanIdentitas, layarTujuan } from './lib/identitas.js'
+import { cocokkanToko } from './lib/toko-cocok.js'
 
 const SCREENS = [
   PosScreen, HistoryScreen, SessionsScreen, ReportsScreen, SettingsScreen,
@@ -122,7 +123,36 @@ function moduleList() {
   })
 }
 
+// Layar yang tak pernah punya kartu Beranda (dibuka dari dalam layar lain, mis. Kelola Meja):
+// manifest tak pernah menyebutnya, jadi penggunanya tak boleh ikut terusir saat hak berubah.
+const LAYAR_TANPA_KARTU = SCREENS
+  .map((l) => l.id)
+  .filter((id) => !Object.values(MODULES).some((m) => m.screen === id))
+
+/** Layar yang punya pintu di Beranda saat ini (kartu manifest + Beranda itu sendiri).
+ *  Dipakai muat ulang identitas untuk memulangkan pengguna dari layar yang haknya dicabut. */
+function layarTersedia() {
+  return ['home', ...LAYAR_TANPA_KARTU, ...moduleList().map((m) => m.screen)]
+}
+
 // ---------- Pemilihan toko ----------
+
+/** Ingat toko terakhir dengan penanda yang STABIL: id toko = ciphertext non-deterministik,
+ *  jadi id saja tak bisa dicocokkan lagi di sesi berikutnya (lihat lib/toko-cocok.js). */
+function ingatToko(toko) {
+  try {
+    localStorage.setItem(LAST_TOKO_KEY, JSON.stringify({ id: toko.id, kode: toko.kode || '', nama: toko.nama || '' }))
+  } catch (e) { /* penyimpanan penuh/diblokir bukan alasan menggagalkan pindah toko */ }
+}
+
+/** Penanda toko terakhir; format lama (id telanjang) tetap dibaca. */
+function tokoTerakhir() {
+  let mentah = null
+  try { mentah = localStorage.getItem(LAST_TOKO_KEY) } catch (e) { return null }
+  if (!mentah) return null
+  if (mentah[0] !== '{') return { id: mentah }
+  try { return JSON.parse(mentah) } catch (e) { return null }
+}
 
 async function loadTokoAndManifest({ forcePicker = false } = {}) {
   const result = await api.toko.list()
@@ -145,8 +175,7 @@ async function loadTokoAndManifest({ forcePicker = false } = {}) {
     if (smokeIdx !== null && list[smokeIdx]) {
       chosen = list[smokeIdx]
     } else if (!forcePicker) {
-      const lastId = localStorage.getItem(LAST_TOKO_KEY)
-      chosen = list.find((t) => t.id === lastId) || null
+      chosen = cocokkanToko(list, tokoTerakhir())
     }
     if (!chosen) chosen = await pickToko(list)
   }
@@ -157,7 +186,7 @@ async function loadTokoAndManifest({ forcePicker = false } = {}) {
 /** Terapkan toko terpilih: ingat, beri tahu main process, muat manifest,
  *  lalu segarkan data yang berbeda per toko (kategori & sesi kasir). */
 async function applyToko(chosen) {
-  localStorage.setItem(LAST_TOKO_KEY, chosen.id)
+  ingatToko(chosen)
   await api.toko.select({ id: chosen.id })
   const [manifestResult, kategori, sesi] = await Promise.all([
     api.toko.manifest({ id: chosen.id }),
@@ -861,6 +890,7 @@ api.auth.onExpired(() => {
 // ---------- Identitas (Tahap B §2b) ----------
 
 let identitasTerakhir = 0
+let identitasPaksaTerakhir = 0
 let identitasBerjalan = false
 
 /** Tandai identitas baru saja dimuat (login / boot) agar throttle tak memanggil ulang. */
@@ -875,23 +905,42 @@ function tandaiIdentitasSegar(now = Date.now()) {
 export async function muatIdentitas({ paksa = false, now = Date.now() } = {}) {
   const st = getState()
   if (!st.user || st.demo || identitasBerjalan) return false
-  if (!perluMuatUlang(identitasTerakhir, now, { paksa })) return false
+  if (!perluMuatUlang(identitasTerakhir, now, { paksa, terakhirPaksaMs: identitasPaksaTerakhir })) return false
   identitasBerjalan = true
+  if (paksa) identitasPaksaTerakhir = now
+  // Potret SEBELUM menunggu jawaban: getState() mengembalikan objek state yang hidup, bukan
+  // salinan — membacanya sesudah await berarti membandingkan keadaan dengan dirinya sendiri.
+  const sebelum = { user: st.user, akses: st.akses, toko: st.toko, screen: st.screen, layarTersedia: layarTersedia() }
   try {
     const me = await api.auth.me()
-    if (!me.ok || !me.data || !me.data.user) return false
+    const putusan = putusanIdentitas(me, sebelum)
+    // Distempel juga saat gagal: perangkat offline tak perlu mencoba lagi tiap kembali ke depan.
     tandaiIdentitasSegar(now)
-    const aksesLama = JSON.stringify(st.akses)
-    setState(patchIdentitas(me.data))
-    const tokoAktif = getState().toko
-    if (manifestBerubah(tokoAktif, me.data.tokos)) {
-      const baru = me.data.tokos.find((t) => String(t.id) === String(tokoAktif.id))
-      await applyToko({ ...tokoAktif, ...baru })
+    if (!putusan.patch) return false
+    // Pengguna keluar akun / sesi kedaluwarsa selagi jawaban ditunggu → jangan hidupkan lagi.
+    if (getState().user !== sebelum.user) return false
+    setState(putusan.patch)
+    let keLayar = putusan.keLayar
+    if (putusan.perluManifest) {
+      // Menu manifest disaring server per hak akses, jadi hak berubah = menu berubah walau
+      // manifest_version tidak bergerak. Muat ulang manifest+kategori+sesi SEBELUM menggambar.
+      const tokoAktif = getState().toko
+      let siap = true
+      if (tokoAktif) {
+        const segar = cocokkanToko(me.data.tokos, tokoAktif)
+        // id dari state yang dipakai: keduanya ciphertext toko yang sama, tapi yang di state
+        // sudah terbukti diterima server.
+        siap = await applyToko(segar ? { ...tokoAktif, ...segar, id: tokoAktif.id } : tokoAktif)
+      }
+      // Manifest gagal dimuat (mis. jaringan putus) → daftar kartu tak bisa dipercaya, jangan
+      // mengusir siapa pun berdasarkan itu.
+      if (siap) keLayar = layarTujuan(getState().screen, layarTersedia(), sebelum.layarTersedia)
     }
-    // Hak berubah → tombol & kartu Beranda digambar ulang tanpa menunggu login ulang.
-    if (aksesLama !== JSON.stringify(getState().akses)) {
+    // Hak berubah → tombol & kartu Beranda digambar ulang tanpa menunggu login ulang; layar yang
+    // haknya baru saja dicabut ditinggalkan (kalau tidak, layarnya terus menabrak 403).
+    if (putusan.perluRender || keLayar) {
       renderShell()
-      await showScreen(getState().screen || 'home')
+      await showScreen(keLayar || getState().screen || 'home')
     }
     return true
   } finally {

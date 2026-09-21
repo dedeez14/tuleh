@@ -17,6 +17,18 @@ export function pasangTolakHak(fn) {
   onTolakHak = typeof fn === 'function' ? fn : null
 }
 
+// Gerbang dijalankan TERPISAH dari permintaan yang memicunya. Muat ulang identitas bisa
+// menggambar ulang kerangka & layar, dan itu tak boleh terjadi di tengah `await` pemanggil: elemen
+// DOM yang ia pegang sebelum await akan basi, dan modalnya bisa tertinggal di atas layar baru.
+// Hasilnya tak dipakai siapa pun, jadi sengaja tidak di-await.
+function picuTolakHak() {
+  const fn = onTolakHak
+  if (!fn) return
+  setTimeout(() => {
+    try { Promise.resolve(fn()).catch(() => { /* gagal-terbuka */ }) } catch { /* gagal-terbuka */ }
+  }, 0)
+}
+
 function bungkusGerbang(permukaan) {
   const keluar = {}
   for (const grup of Object.keys(permukaan)) {
@@ -32,9 +44,8 @@ function bungkusGerbang(permukaan) {
       keluar[grup][nama] = typeof fn === 'function' && !nama.startsWith('on')
         ? async (...args) => {
             const hasil = await fn(...args)
-            if (hasil && hasil.ok === false && hasil.status === 403 && onTolakHak) {
-              try { await onTolakHak() } catch { /* gagal-terbuka: jangan menutupi galat aslinya */ }
-            }
+            // Permintaannya sendiri tetap gagal - server yang berwenang; app hanya menyegarkan hak.
+            if (hasil && hasil.ok === false && hasil.status === 403) picuTolakHak()
             return hasil
           }
         : fn
