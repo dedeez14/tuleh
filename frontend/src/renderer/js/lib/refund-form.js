@@ -16,6 +16,7 @@ export function barisRefund(struk) {
         satuan: it.satuan || '',
         sisa: Number(it.qty_bisa_refund),
         terjual,
+        terukur: apakahTerukur(it.satuan),
         langkah: apakahTerukur(it.satuan) ? langkahSatuan(it.satuan) : 1,
         // Nilai yang dibayar per unit (subtotal baris / qty) — untuk perkiraan di layar.
         nilaiPerUnit: terjual > 0 ? (Number(it.subtotal) || 0) / terjual : 0
@@ -40,20 +41,21 @@ export function perkiraanRefund(struk, qty) {
  * (ditampilkan apa adanya di toast) bila isian tidak lengkap.
  *
  * Kuantitas ikut langkah satuannya (paritas dengan app Android): barang
- * hitungan (langkah 1) wajib bilangan bulat, barang terukur (langkah < 1,
- * mis. kg) dibulatkan ke kelipatan langkah satuannya sebelum diperiksa
- * terhadap sisa dan dikirim ke server.
+ * hitungan (tidak terukur, mis. cup) wajib bilangan bulat; barang terukur
+ * (mis. kg, gram, ml — lihat `apakahTerukur`) dibulatkan ke kelipatan
+ * langkah satuannya (bisa < 1 seperti kg, atau > 1 seperti gram/ml) sebelum
+ * diperiksa terhadap sisa dan dikirim ke server.
  */
 export function susunPermintaanRefund(struk, { qty = {}, metode, alasan, kembaliStok = true } = {}) {
   const baris = []
   for (const b of barisRefund(struk)) {
     let n = Number(qty[b.id]) || 0
     if (n <= 0) continue
-    if (b.langkah >= 1) {
-      if (!Number.isInteger(n)) throw new Error(`Jumlah refund ${b.nama} harus bilangan bulat.`)
-    } else {
+    if (b.terukur) {
       n = bulatkanKuantitas(n, b.satuan)
       if (n <= 0) continue
+    } else {
+      if (!Number.isInteger(n)) throw new Error(`Jumlah refund ${b.nama} harus bilangan bulat.`)
     }
     if (n > b.sisa + 1e-9) throw new Error(`Jumlah refund ${b.nama} melebihi sisa (${b.sisa}).`)
     baris.push({ id: b.id, kuantitas: n })

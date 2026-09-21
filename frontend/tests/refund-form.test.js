@@ -11,7 +11,8 @@ const struk = {
   items: [
     { id: 'I1', nama: 'Kopi Susu', satuan: 'cup', kuantitas: 2, subtotal: 36000, qty_refund: 0, qty_bisa_refund: 2 },
     { id: 'I2', nama: 'Cuci Kiloan', satuan: 'kg', kuantitas: 2.5, subtotal: 17500, qty_refund: 2.5, qty_bisa_refund: 0 },
-    { id: 'I3', nama: 'Beras', satuan: 'kg', kuantitas: 3, subtotal: 45000, qty_refund: 1, qty_bisa_refund: 2 }
+    { id: 'I3', nama: 'Beras', satuan: 'kg', kuantitas: 3, subtotal: 45000, qty_refund: 1, qty_bisa_refund: 2 },
+    { id: 'I4', nama: 'Kopi Bubuk', satuan: 'gram', kuantitas: 100, subtotal: 50000, qty_refund: 0, qty_bisa_refund: 100 }
   ]
 }
 
@@ -19,12 +20,15 @@ test.before(async () => { F = await import('../src/renderer/js/lib/refund-form.j
 
 test('barisRefund: hanya baris bersisa; langkah 1 untuk hitungan, desimal untuk terukur; nilai per unit dari subtotal', () => {
   const b = F.barisRefund(struk)
-  assert.deepEqual(b.map((x) => x.id), ['I1', 'I3'])
+  assert.deepEqual(b.map((x) => x.id), ['I1', 'I3', 'I4'])
   assert.equal(b[0].langkah, 1)
+  assert.equal(b[0].terukur, false)
   assert.equal(b[1].langkah, 0.01, 'kg = terukur, langkah 0,01')
   assert.equal(b[0].nilaiPerUnit, 18000)
   assert.equal(b[1].nilaiPerUnit, 15000)
   assert.equal(b[1].sisa, 2)
+  assert.equal(b[2].terukur, true)
+  assert.equal(b[2].langkah, 10, 'gram = terukur, langkah 10')
 })
 
 test('bisaDirefund: dibatalkan / belum sinkron / lokal / tanpa sisa = tidak', () => {
@@ -59,4 +63,8 @@ test('susunPermintaanRefund: barang hitungan wajib bulat; barang terukur dibulat
   // dirinya sendiri (2,01), lalu melebihi sisa 2 — memastikan pemeriksaan sisa jalan setelah
   // pembulatan (2,004 dipakai spec awal ternyata dibulatkan turun jadi 2, jadi tak berguna di sini).
   assert.throws(() => F.susunPermintaanRefund(struk, { qty: { I3: 2.01 }, metode: 'TUNAI', alasan: 'Tumpah' }), /melebihi sisa/)
+  // I4 (Kopi Bubuk, gram, langkah 10): terukur meski langkah > 1 — cabang harus ikut
+  // apakahTerukur(), bukan nilai langkah, agar tidak ikut jalur "wajib bulat".
+  assert.deepEqual(F.susunPermintaanRefund(struk, { qty: { I4: 25 }, metode: 'TUNAI', alasan: 'Tumpah' }).baris, [{ id: 'I4', kuantitas: 30 }])
+  assert.deepEqual(F.susunPermintaanRefund(struk, { qty: { I4: 12.5 }, metode: 'TUNAI', alasan: 'Tumpah' }).baris, [{ id: 'I4', kuantitas: 10 }])
 })
