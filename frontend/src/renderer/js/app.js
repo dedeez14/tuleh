@@ -5,7 +5,7 @@
 
 // Penangkap galat renderer dipasang PALING AWAL (laporan dukungan, kontrak #1).
 import './diagnostik.js'
-import { api, firstError } from './api.js'
+import { api, firstError, pasangTolakHak } from './api.js'
 import { getState, setState, subscribe, resetAuthState } from './state.js'
 import { toast, icons, confirmDialog } from './components/ui.js'
 import { applyTheme, getEffectiveTheme, cycleTheme } from './theme.js'
@@ -38,6 +38,7 @@ import { bukaBantuanPintasan } from './components/pintasan.js'
 import { bisa, isManajemen } from './akses.js'
 import { MODULES, MODULE_ACCENT, susunModul, kartuUtama } from './lib/registri-modul.js'
 import { keranjangLain, kosongkanKeranjang, ringkasKeranjang } from './lib/keranjang-toko.js'
+import { perluMuatUlang, patchIdentitas, manifestBerubah } from './lib/identitas.js'
 
 const SCREENS = [
   PosScreen, HistoryScreen, SessionsScreen, ReportsScreen, SettingsScreen,
@@ -763,6 +764,7 @@ async function enterApp(identity) {
     demo: !!identity.demo,
     demoSisaHari: identity.demo && identity.masaCoba ? identity.masaCoba.sisaHari : null
   })
+  tandaiIdentitasSegar()
   // Toko dulu (menetapkan toko aktif) baru workspace, agar /gudang, /kategori,
   // /langganan otomatis membawa ?toko_id (MOVERA §1.3).
   await loadTokoAndManifest()
@@ -846,6 +848,47 @@ api.auth.onExpired(() => {
   toast('Sesi berakhir — silakan masuk kembali.', 'error')
   enterLogin()
 })
+
+// ---------- Identitas (Tahap B §2b) ----------
+
+let identitasTerakhir = 0
+let identitasBerjalan = false
+
+/** Tandai identitas baru saja dimuat (login / boot) agar throttle tak memanggil ulang. */
+function tandaiIdentitasSegar(now = Date.now()) {
+  identitasTerakhir = now
+}
+
+/**
+ * Muat ulang identitas dari server: hak akses, peran, perusahaan, sesi kasir, dan versi manifest
+ * toko aktif. Dipanggil saat app kembali ke depan (throttle 60 detik) dan dengan `paksa` setelah 403.
+ */
+export async function muatIdentitas({ paksa = false, now = Date.now() } = {}) {
+  const st = getState()
+  if (!st.user || st.demo || identitasBerjalan) return false
+  if (!perluMuatUlang(identitasTerakhir, now, { paksa })) return false
+  identitasBerjalan = true
+  try {
+    const me = await api.auth.me()
+    if (!me.ok || !me.data || !me.data.user) return false
+    tandaiIdentitasSegar(now)
+    const aksesLama = JSON.stringify(st.akses)
+    setState(patchIdentitas(me.data))
+    const tokoAktif = getState().toko
+    if (manifestBerubah(tokoAktif, me.data.tokos)) {
+      const baru = me.data.tokos.find((t) => String(t.id) === String(tokoAktif.id))
+      await applyToko({ ...tokoAktif, ...baru })
+    }
+    // Hak berubah → tombol & kartu Beranda digambar ulang tanpa menunggu login ulang.
+    if (aksesLama !== JSON.stringify(getState().akses)) {
+      renderShell()
+      await showScreen(getState().screen || 'home')
+    }
+    return true
+  } finally {
+    identitasBerjalan = false
+  }
+}
 
 // ---------- Boot ----------
 
@@ -945,6 +988,7 @@ async function boot() {
         session: me.data.sesi_aktif || null,
         sessionId: me.data.sesi_aktif && me.data.sesi_aktif.id ? me.data.sesi_aktif.id : null
       })
+      tandaiIdentitasSegar()
       await loadTokoAndManifest()
       await loadWorkspace()
       renderShell()
@@ -980,6 +1024,13 @@ if (new URLSearchParams(location.search).get('display') === 'customer') {
     bisaBayar: !!getState().user && !getState().demo && bisa('langganan.kelola'),
     onBayar: () => mulaiPembayaran()
   }))
+  // 403 dari endpoint mana pun → muat ulang identitas SEKALI (melewati throttle), lalu gerbang
+  // dievaluasi ulang. Bila server tetap menolak, pesan hak akses dari server yang tampil.
+  pasangTolakHak(() => muatIdentitas({ paksa: true }))
+  // Kembali ke depan (jendela difokuskan / tab terlihat lagi): identitas & sesi disegarkan.
+  const onKembaliDepan = () => { if (!document.hidden) muatIdentitas().catch(() => { /* fail-open */ }) }
+  document.addEventListener('visibilitychange', onKembaliDepan)
+  window.addEventListener('focus', onKembaliDepan)
   // Auto-Update: langganan sinyal 426 (update wajib) + cek versi saat start &
   // kembali-ke-foreground. FAIL-OPEN: kegagalan cek tak boleh memblokir aplikasi.
   import('./update.js').then((u) => {
