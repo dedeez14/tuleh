@@ -41,7 +41,7 @@ class DetailTransaksiScreen extends ConsumerWidget {
     final bolehBatal = ref.watch(bisaProvider('transaksi.batal'));
     final bolehRefund = ref.watch(bisaProvider('transaksi.refund'));
     final bisaBatal = bisaAksi && !lokal && bolehBatal;
-    final bisaRefund = bisaAksi && !lokal && bolehRefund && d != null && d.adaSisaRefund;
+    final bisaRefund = bisaAksi && !lokal && bolehRefund && d.adaSisaRefund;
 
     final isi = detail.when(
         loading: () => const Center(child: CircularProgressIndicator()),
