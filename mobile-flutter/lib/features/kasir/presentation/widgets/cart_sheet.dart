@@ -14,7 +14,9 @@ import '../../../demo/demo_session.dart';
 import 'hasil_transaksi_sheet.dart';
 import '../../../pengaturan/presentation/providers/pengaturan_providers.dart';
 import '../../../sesi/presentation/providers/sesi_providers.dart';
+import '../../../toko/presentation/providers/toko_providers.dart';
 import '../../domain/entities/cart_item.dart';
+import '../../domain/galat_kasir.dart';
 import '../../domain/metode_pembayaran.dart';
 import '../controllers/cart_controller.dart';
 import '../controllers/keranjang_meta.dart';
@@ -162,9 +164,25 @@ class _CartSheetState extends ConsumerState<CartSheet> {
       await _tampilkanHasil(struk, res.kembalian, tertunda: res.tertunda);
     } on ApiException catch (e) {
       if (!mounted) return;
-      // 409 = sesi kasir belum dibuka; tawarkan jalan keluarnya langsung.
+      // Dua bentuk 409: sesi kasir belum dibuka, atau sesi terbuka DI TOKO
+      // LAIN (§2a). Keduanya menampilkan KALIMAT server apa adanya — kode
+      // mesinnya (errors.kode) hanya dibaca program untuk memilih tombol.
       if (e.statusCode == 409) {
-        _pesan(e.message, gagal: true, aksi: ('Buka sesi', _bukaSesi));
+        final sesi = kodeGalat(e) == 'SESI_BEDA_TOKO' ? tokoSesi(e) : null;
+        if (sesi != null) {
+          final cocok = pilihTokoSesi(
+            ref.read(tokoListProvider).valueOrNull ?? const [],
+            sesi,
+          );
+          final nama = cocok?.nama ?? sesi.nama;
+          _pesan(
+            e.message,
+            gagal: true,
+            aksi: ('Pindah ke $nama', () => _pindahToko(cocok?.id ?? sesi.id, nama)),
+          );
+        } else {
+          _pesan(e.message, gagal: true, aksi: ('Buka sesi', _bukaSesi));
+        }
       } else {
         _pesan(e.firstError() ?? e.message, gagal: true);
       }
@@ -174,6 +192,20 @@ class _CartSheetState extends ConsumerState<CartSheet> {
   }
 
   void _bukaSesi() => bukaSesiDenganUmpanBalik(context, ref);
+
+  /// Pindah ke toko tempat sesi kasir terbuka. Keranjang ikut dikosongkan oleh
+  /// CartController (yang mendengarkan toko aktif) — item toko lain memang tak
+  /// sah di sini.
+  ///
+  /// [id] diutamakan dari daftar `/tokos` bila tokonya ketemu, supaya layar
+  /// lain yang membandingkan id (beranda, katalog) mengenalinya; bila tidak,
+  /// id dari amplop 409 dipakai — ciphertext-nya berbeda tetapi tetap sah di
+  /// server.
+  Future<void> _pindahToko(String id, String nama) async {
+    await ref.read(activeTokoIdProvider.notifier).select(id);
+    if (!mounted) return;
+    _pesan('Toko aktif dipindah ke $nama. Masukkan ulang pesanan pelanggan.');
+  }
 
   /// Lembar hasil transaksi: kembalian besar (yang paling dicari kasir) plus
   /// tombol cetak struk. Dipisah dari snackbar agar tidak hilang sendiri saat

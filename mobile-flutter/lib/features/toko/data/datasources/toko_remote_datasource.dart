@@ -42,9 +42,12 @@ class TokoRemoteDataSource {
 
   Toko _toko(Map<String, dynamic> m) {
     final bu = m['bidang_usaha'] is Map ? Map<String, dynamic>.from(m['bidang_usaha'] as Map) : const <String, dynamic>{};
+    final kode = (m['kode'] ?? m['code'])?.toString();
     return Toko(
       id: (m['id'] ?? '').toString(),
       nama: (m['nama'] ?? m['name'] ?? 'Toko').toString(),
+      // Kode toko stabil (TK-xxx); server lama belum mengirimnya → null.
+      kode: kode != null && kode.isNotEmpty ? kode : null,
       bidangUsaha: (bu['nama'] ?? bu['name'])?.toString(),
       kategori: (bu['kategori'] ?? bu['archetype'])?.toString(),
     );
