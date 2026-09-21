@@ -391,3 +391,90 @@ func TestHealthzMelaporkanVersiBuild(t *testing.T) {
 		t.Fatalf("healthz tidak melaporkan versi build: %s", body)
 	}
 }
+
+// DELETE /keamanan/pin-saya membawa {"pin_lama"} (server menolak 422 tanpa itu). Badan pada
+// DELETE mudah hilang diam-diam di jalur proksi — dijaga di sini agar hapus PIN tak berubah
+// jadi "PIN lama salah atau tidak disertakan" tanpa sebab yang terlihat.
+func TestProxyDeleteMembawaBadanJson(t *testing.T) {
+	var terima, tipe string
+	gw, _ := newTestGateway(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		terima = string(b)
+		tipe = r.Header.Get("Content-Type")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"success":true,"data":{"ada":false}}`))
+	}))
+
+	req, _ := http.NewRequest("DELETE", gw.URL+"/api/pos/v1/keamanan/pin-saya", strings.NewReader(`{"pin_lama":"1234"}`))
+	req.Header.Set("Authorization", "Bearer kasir")
+	req.Header.Set("Content-Type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != 200 {
+		t.Fatalf("status = %d (rute DELETE /keamanan/pin-saya wajib ada di allowlist)", res.StatusCode)
+	}
+	if terima != `{"pin_lama":"1234"}` {
+		t.Fatalf("badan DELETE yang sampai upstream = %q", terima)
+	}
+	if tipe != "application/json" {
+		t.Fatalf("Content-Type tidak diteruskan: %q", tipe)
+	}
+}
+
+// Rute PIN persetujuan tidak boleh di-cache: status PIN & daftar pemberi berubah kapan saja,
+// dan jawaban basi di sini berarti manajer yang baru memasang PIN tak muncul di perangkat kasir.
+func TestProxyPinPersetujuanTanpaCache(t *testing.T) {
+	gw, hits := newTestGateway(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"success":true,"data":[]}`))
+	}))
+
+	for _, jalur := range []string{"/api/pos/v1/keamanan/pin-saya", "/api/pos/v1/keamanan/pemberi-otorisasi"} {
+		for i := 0; i < 2; i++ {
+			req, _ := http.NewRequest("GET", gw.URL+jalur, nil)
+			req.Header.Set("Authorization", "Bearer kasir")
+			res, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if res.StatusCode != 200 {
+				t.Fatalf("%s status = %d (rute wajib ada di allowlist)", jalur, res.StatusCode)
+			}
+			res.Body.Close()
+		}
+	}
+
+	if hits.Load() != 4 {
+		t.Fatalf("upstream terpukul %d kali, ingin 4 (tanpa cache)", hits.Load())
+	}
+}
+
+// Penukaran PIN jadi token adalah POST yang tak boleh di-cache maupun dianggap idempoten.
+func TestProxyOtorisasiDiteruskan(t *testing.T) {
+	var jalur string
+	gw, _ := newTestGateway(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		jalur = r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"success":true,"data":{"token":"t"}}`))
+	}))
+
+	req, _ := http.NewRequest("POST", gw.URL+"/api/pos/v1/keamanan/otorisasi", strings.NewReader(`{"pemberi_id":"U1","pin":"2468","aksi":"transaksi.batal","transaksi_id":"T1"}`))
+	req.Header.Set("Authorization", "Bearer kasir")
+	req.Header.Set("Content-Type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != 200 {
+		t.Fatalf("status = %d (rute POST /keamanan/otorisasi wajib ada di allowlist)", res.StatusCode)
+	}
+	if jalur != "/api/pos/v1/keamanan/otorisasi" {
+		t.Fatalf("jalur upstream = %q", jalur)
+	}
+}

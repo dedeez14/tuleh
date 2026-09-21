@@ -152,6 +152,13 @@ var routeTable = []route{
 	{method: "PUT", pattern: "/pengaturan/keamanan", purge: []string{apiPrefix + "/pengaturan", apiPrefix + "/config"}},
 	{method: "POST", pattern: "/keamanan/verifikasi"}, // verifikasi PIN — tanpa cache (rate-limit di server)
 
+	// PIN persetujuan per pengguna (§2c) — selalu segar: daftar pemberi & status PIN berubah kapan saja.
+	{method: "GET", pattern: "/keamanan/pin-saya"},
+	{method: "PUT", pattern: "/keamanan/pin-saya"},
+	{method: "DELETE", pattern: "/keamanan/pin-saya"},
+	{method: "GET", pattern: "/keamanan/pemberi-otorisasi"},
+	{method: "POST", pattern: "/keamanan/otorisasi"},
+
 	// Pembayaran dua lapis (QR statis + bank; Midtrans merchant). Mutasi purge
 	// /config (blok pembayaran) + /pengaturan. Upload QR statis = multipart (O/M).
 	{method: "GET", pattern: "/pengaturan/pembayaran", cache: 30 * time.Second},

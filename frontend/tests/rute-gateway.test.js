@@ -51,6 +51,7 @@ const CONTOH = {
   barcode: '899', hargaJual: 1000, tokoIds: ['T1'], jumlah: 1, keterangan: 'k', nominal: 1000,
   gudangId: 'G1', kasAwal: 0, kasAkhirFisik: 0, to: 'SELESAI', bulan: '2026-09',
   baris: [{ id: 'I1', kuantitas: 1 }], metode: 'TUNAI', alasan: 'Contoh alasan refund',
+  pin: '2468', pinLama: '1234', pemberiId: 'U1', aksi: 'transaksi.batal', transaksiId: 'T1',
   tanggal: '2026-09-21', jamMulai: '07:00', jamSelesai: '08:00', pesertaId: 'PS1', idPelanggan: 'C1', status: 'HADIR',
   bytes: new Uint8Array([1]), filename: 'a.png', mime: 'image/png'
 }

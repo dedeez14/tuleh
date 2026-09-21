@@ -144,6 +144,22 @@
     })
   }
 
+  /** PIN persetujuan: 4–8 digit angka, divalidasi sebelum meninggalkan perangkat. */
+  function pinPersetujuan (nilai) {
+    const pin = str(nilai, { required: true, max: 10 })
+    if (!/^\d{4,8}$/.test(pin)) throw new Error('PIN harus 4–8 digit angka.')
+    return pin
+  }
+
+  /** Aksi yang boleh didelegasikan lewat PIN (sama dengan PosOtorisasi::AKSI di server). */
+  const AKSI_OTORISASI = ['transaksi.batal', 'transaksi.refund']
+
+  function aksiOtorisasi (nilai) {
+    const aksi = str(nilai, { required: true, max: 40 })
+    if (AKSI_OTORISASI.indexOf(aksi) === -1) throw new Error('Aksi persetujuan tidak dikenal.')
+    return aksi
+  }
+
   /** Badan slot jadwal (POST & PUT sama): wajib nama+tanggal+jam mulai; sisanya null bila kosong. */
   function slotJadwal (p) {
     return {
@@ -189,6 +205,39 @@
     'langganan:status': { permukaan: 'langganan.status', buat: function () { return GET('/langganan/status') } },
     'langganan:bayar': { permukaan: 'langganan.bayar', buat: function () { return POST('/langganan/bayar', {}) } },
     'cs:kontak': { permukaan: 'cs.kontak', buat: function () { return GET('/kontak-cs') } },
+
+    // PIN persetujuan per pengguna (Tahap B §2c) — beda dari PIN App Lock milik perusahaan.
+    'keamanan:pinSaya': { permukaan: 'keamanan.pinSaya', buat: function () { return GET('/keamanan/pin-saya') } },
+    'keamanan:pinSimpan': {
+      permukaan: 'keamanan.pinSimpan',
+      buat: function (p) {
+        const body = { pin: pinPersetujuan(p.pin) }
+        if (p.pinLama) body.pin_lama = str(p.pinLama, { max: 10 })
+        return { metode: 'PUT', jalur: '/keamanan/pin-saya', body: body }
+      }
+    },
+    // pin_lama WAJIB (server 1f627b45): tanpa gerbang ini, hapus lalu pasang baru adalah jalan
+    // pintas mengganti PIN orang lain dari sesi yang ditinggal terbuka.
+    'keamanan:pinHapus': {
+      permukaan: 'keamanan.pinHapus',
+      buat: function (p) {
+        if (!p.pinLama) throw new Error('Isi PIN lama untuk menghapus PIN.')
+        return { metode: 'DELETE', jalur: '/keamanan/pin-saya', body: { pin_lama: str(p.pinLama, { max: 10 }) } }
+      }
+    },
+    'keamanan:pemberi': { permukaan: 'keamanan.pemberi', buat: function () { return GET('/keamanan/pemberi-otorisasi') } },
+    // PIN TIDAK pernah disimpan di perangkat: dikirim sekali, ditukar token sekali pakai 5 menit.
+    'keamanan:otorisasi': {
+      permukaan: 'keamanan.otorisasi',
+      buat: function (p) {
+        return POST('/keamanan/otorisasi', {
+          pemberi_id: str(p.pemberiId, { required: true }),
+          pin: str(p.pin, { required: true, max: 10 }),
+          aksi: aksiOtorisasi(p.aksi),
+          transaksi_id: str(p.transaksiId, { required: true })
+        })
+      }
+    },
 
     // Toko & manifest
     'toko:list': { permukaan: 'toko.list', buat: function () { return GET('/tokos') } },
@@ -394,7 +443,16 @@
       }
     },
     'trx:detail': { permukaan: 'trx.detail', buat: function (p) { return GET('/transaksi/' + id(p.id)) } },
-    'trx:batal': { permukaan: 'trx.batal', buat: function (p) { return POST('/transaksi/' + id(p.id) + '/batal') } },
+    'trx:batal': {
+      permukaan: 'trx.batal',
+      buat: function (p) {
+        return POST('/transaksi/' + id(p.id) + '/batal', {
+          alasan: str(p.alasan, { max: 255 }) || undefined,
+          // Token persetujuan atasan bila pemanggil tak punya hak batal sendiri (§2c).
+          otorisasi_token: str(p.otorisasiToken, { max: 2048 }) || undefined
+        })
+      }
+    },
     // Struk lengkap (qty_bisa_refund per baris, refunds[], total_refund, nilai_bersih) — sama dengan trx:detail di server kini,
     // dipisah agar layar Riwayat jelas memakai bentuk struk.
     'trx:struk': { permukaan: 'trx.struk', buat: function (p) { return GET('/transaksi/' + id(p.id) + '/struk') } },
@@ -409,7 +467,9 @@
           alasan: str(p.alasan, { required: true, max: 255 }),
           kembali_stok: p.kembaliStok === undefined ? true : !!p.kembaliStok,
           client_ref: str(p.clientRef, { max: 64 }) || undefined,
-          waktu_klien: str(p.waktuKlien, { max: 40 }) || undefined
+          waktu_klien: str(p.waktuKlien, { max: 40 }) || undefined,
+          // Token persetujuan atasan bila pemanggil tak punya hak refund sendiri (§2c).
+          otorisasi_token: str(p.otorisasiToken, { max: 2048 }) || undefined
         })
       }
     },

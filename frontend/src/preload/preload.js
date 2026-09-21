@@ -120,6 +120,14 @@ contextBridge.exposeInMainWorld('iposAPI', {
   cs: {
     kontak: invoke('cs:kontak')
   },
+  // PIN persetujuan per pengguna (§2c) — berbeda dari PIN App Lock perusahaan (settings.*).
+  keamanan: {
+    pinSaya: invoke('keamanan:pinSaya'),
+    pinSimpan: invoke('keamanan:pinSimpan'),
+    pinHapus: invoke('keamanan:pinHapus'),
+    pemberi: invoke('keamanan:pemberi'),
+    otorisasi: invoke('keamanan:otorisasi')
+  },
   toko: {
     list: invoke('toko:list'),
     manifest: invoke('toko:manifest'),
