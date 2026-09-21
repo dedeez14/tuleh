@@ -24,6 +24,7 @@ export const JadwalScreen = {
     let tanggal = hariIni()
     let rows = []
     const kelola = bisa('jadwal.kelola')
+    const openModalCloses = new Set()
 
     container.innerHTML = `
       <div class="screen-page">
@@ -89,6 +90,22 @@ export const JadwalScreen = {
       renderList()
     }
 
+    // Modal menempel ke document.body — tanpa mencatat & menutupnya di cleanup,
+    // modal tetap terbuka menutupi layar berikutnya saat pindah layar (Ctrl+N dst.).
+    function bukaModal(opsi) {
+      let ref
+      const hasil = showModal({
+        ...opsi,
+        onClose: () => {
+          openModalCloses.delete(ref)
+          if (typeof opsi.onClose === 'function') opsi.onClose()
+        }
+      })
+      ref = hasil.close
+      openModalCloses.add(ref)
+      return hasil
+    }
+
     function bukaForm(slot) {
       const el = document.createElement('div')
       el.innerHTML = `
@@ -113,7 +130,7 @@ export const JadwalScreen = {
         <div class="field__error u-hidden" id="jf-err"></div>`
       const footer = document.createElement('div')
       footer.innerHTML = `<button type="button" class="btn btn--primary" id="jf-save">Simpan</button>`
-      const { close } = showModal({ title: slot ? 'Ubah jadwal' : 'Tambah jadwal', body: el, footer, size: 'md' })
+      const { close } = bukaModal({ title: slot ? 'Ubah jadwal' : 'Tambah jadwal', body: el, footer, size: 'md' })
 
       footer.querySelector('#jf-save').addEventListener('click', async (e) => {
         const btn = e.currentTarget
@@ -162,7 +179,7 @@ export const JadwalScreen = {
       const footer = document.createElement('div')
       footer.className = 'u-flex'
       footer.style.gap = 'var(--sp-3)'
-      const { close } = showModal({ title: slot.nama, body: el, footer, size: 'md' })
+      const { close } = bukaModal({ title: slot.nama, body: el, footer, size: 'md' })
 
       function gambar(s) {
         el.innerHTML = `
@@ -259,7 +276,7 @@ export const JadwalScreen = {
         <div class="search-box"><span class="search-box__icon">${icons.search}</span>
           <input class="input" id="jp-q" type="text" placeholder="Cari nama atau telepon…" autocomplete="off" /></div>
         <div id="jp-hasil" class="jdw-cari">${loadingHTML('Memuat pelanggan…')}</div>`
-      const { close } = showModal({ title: 'Daftarkan peserta', body: el, size: 'md' })
+      const { close } = bukaModal({ title: 'Daftarkan peserta', body: el, size: 'md' })
       const hasil = el.querySelector('#jp-hasil')
 
       async function cari(q) {
@@ -303,6 +320,12 @@ export const JadwalScreen = {
 
     await muat()
 
-    return () => { alive = false }
+    return () => {
+      // Tutup modal yang masih terbuka (form/detail/cari peserta bersarang) —
+      // ia menempel di document.body, bukan di `container`, jadi tak ikut hilang
+      // saat showScreen() mengganti isi #screen-root.
+      for (const tutup of [...openModalCloses]) tutup()
+      alive = false
+    }
   }
 }
