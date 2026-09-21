@@ -517,6 +517,7 @@ class _BarisTrx extends StatelessWidget {
         [
           if (jam.isNotEmpty) jam,
           if (trx.metode != null && trx.metode!.isNotEmpty) trx.metode!,
+          if (trx.totalRefund > 0) 'Refund ${fmtIDR(trx.totalRefund)}',
           if (batal) 'Dibatalkan',
           if (tertunda) 'Belum tersinkron',
         ].join(' · '),

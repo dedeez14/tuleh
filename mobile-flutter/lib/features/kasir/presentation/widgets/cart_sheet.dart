@@ -15,6 +15,7 @@ import 'hasil_transaksi_sheet.dart';
 import '../../../pengaturan/presentation/providers/pengaturan_providers.dart';
 import '../../../sesi/presentation/providers/sesi_providers.dart';
 import '../../domain/entities/cart_item.dart';
+import '../../domain/metode_pembayaran.dart';
 import '../controllers/cart_controller.dart';
 import '../controllers/keranjang_meta.dart';
 import 'keranjang_daftar_item.dart';
@@ -46,7 +47,7 @@ class CartSheet extends ConsumerStatefulWidget {
 enum _Langkah { keranjang, bayar }
 
 class _CartSheetState extends ConsumerState<CartSheet> {
-  static const _metode = ['TUNAI', 'QRIS', 'TRANSFER'];
+  static const _metode = metodePembayaranBawaan;
 
   _Langkah _langkah = _Langkah.keranjang;
   String _metodeTerpilih = 'TUNAI';

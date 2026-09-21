@@ -2,6 +2,7 @@ import '../../../../core/utils/satuan_terukur.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/akses/akses.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../../../core/offline/koneksi.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -13,8 +14,10 @@ import '../../../laporan/presentation/providers/laporan_providers.dart';
 import '../../../pengaturan/presentation/providers/pengaturan_providers.dart';
 import '../../../products/presentation/providers/products_provider.dart';
 import '../../../sesi/presentation/providers/sesi_providers.dart';
+import '../../domain/entities/refund.dart';
 import '../../domain/entities/transaksi_detail.dart';
 import '../providers/riwayat_providers.dart';
+import '../widgets/lembar_refund.dart';
 
 /// Layar Detail Transaksi — tampilan struk dari `/transaksi/{id}`.
 class DetailTransaksiScreen extends ConsumerWidget {
@@ -34,7 +37,11 @@ class DetailTransaksiScreen extends ConsumerWidget {
     // online — struk lokal (belum sinkron) dibatalkan lewat layar Sinkronisasi.
     final lokal = id.startsWith(awalanIdLokal);
     final online = ref.watch(koneksiProvider.select((s) => s.online));
-    final bisaBatal = bisaAksi && !lokal;
+    // Gerbang hak dari server (gagal-tertutup); server tetap memeriksa ulang (403).
+    final bolehBatal = ref.watch(bisaProvider('transaksi.batal'));
+    final bolehRefund = ref.watch(bisaProvider('transaksi.refund'));
+    final bisaBatal = bisaAksi && !lokal && bolehBatal;
+    final bisaRefund = bisaAksi && !lokal && bolehRefund && (d?.adaSisaRefund ?? false);
 
     final isi = detail.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -51,6 +58,18 @@ class DetailTransaksiScreen extends ConsumerWidget {
           padding: const EdgeInsets.all(16),
           children: [
             _Receipt(d: d),
+            for (final r in d.refunds)
+              ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.currency_exchange_rounded, color: AppColors.warn),
+                title: Text('Refund ${r.nomor} · −${fmtIDR(r.total)}', style: const TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: Text([fmtTanggal(r.tanggal), r.metodeNama ?? r.metode ?? '', r.alasan ?? ''].where((s) => s.isNotEmpty).join(' · ')),
+                trailing: TextButton(
+                  onPressed: () => cetakStrukDenganUmpanBalik(context, ref, _strukRefund(ref, d, r)),
+                  child: const Text('Cetak nota'),
+                ),
+              ),
             if (bisaAksi) ...[
               const SizedBox(height: 14),
               Row(
@@ -72,6 +91,10 @@ class DetailTransaksiScreen extends ConsumerWidget {
                   ),
                 ],
               ),
+            ],
+            if (bisaRefund) ...[
+              const SizedBox(height: 10),
+              _TombolRefund(aktif: online, onTekan: () => _mulaiRefund(context, ref, d)),
             ],
             if (bisaBatal) ...[
               const SizedBox(height: 10),
@@ -134,6 +157,100 @@ class _TombolBatal extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Tombol "Refund" — garis tepi warna peringatan, nonaktif saat offline
+/// (refund online-saja; antrean offline menyusul di fase 4).
+class _TombolRefund extends StatelessWidget {
+  const _TombolRefund({required this.aktif, required this.onTekan});
+
+  final bool aktif;
+  final VoidCallback onTekan;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        OutlinedButton.icon(
+          onPressed: aktif ? onTekan : null,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.warn,
+            side: BorderSide(color: AppColors.warn.withValues(alpha: aktif ? 0.6 : 0.25)),
+          ),
+          icon: const Icon(Icons.currency_exchange_rounded, size: 19),
+          label: const Text('Refund'),
+        ),
+        if (!aktif)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              'Refund hanya bisa dilakukan saat terhubung ke internet.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+Future<void> _mulaiRefund(BuildContext context, WidgetRef ref, TransaksiDetail d) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final refund = await tampilkanLembarRefund(context, d);
+  if (refund == null || !context.mounted) return;
+  ref.invalidate(transaksiDetailProvider(d.id));
+  ref.invalidate(riwayatListProvider);
+  // Stok kembali & penjualan bersih berubah: layar lain ikut menyegarkan.
+  ref.invalidate(activeSesiProvider);
+  ref.invalidate(productsProvider);
+  ref.invalidate(produkKelolaProvider);
+  ref.invalidate(laporanKeuanganProvider);
+  ref.invalidate(penjualanProdukProvider);
+  messenger
+    ..hideCurrentSnackBar()
+    ..showSnackBar(SnackBar(
+      backgroundColor: AppColors.success,
+      content: Text('Refund ${refund.nomor} tercatat — ${fmtIDR(refund.total)} dikembalikan.'),
+      action: SnackBarAction(
+        label: 'Cetak nota',
+        textColor: Colors.white,
+        onPressed: () => cetakStrukDenganUmpanBalik(context, ref, _strukRefund(ref, d, refund)),
+      ),
+    ));
+}
+
+/// Nota refund untuk dicetak: kepala usaha saat ini + isi dokumen refund.
+Struk _strukRefund(WidgetRef ref, TransaksiDetail d, Refund r) {
+  final usaha = ref.read(profilUsahaProvider).valueOrNull;
+  return Struk(
+    namaToko: usaha?.nama ?? 'Tuléh POS',
+    alamat: usaha?.alamat,
+    telepon: usaha?.telepon,
+    nomor: r.nomor,
+    waktu: DateTime.tryParse(r.tanggal ?? '') ?? DateTime.now(),
+    kasir: r.oleh,
+    baris: [
+      for (final it in r.items)
+        StrukBaris(
+          nama: it.nama,
+          kuantitas: it.kuantitas,
+          harga: it.kuantitas > 0 ? it.total / it.kuantitas : it.total,
+          satuan: apakahTerukur(it.satuan) ? it.satuan : null,
+        ),
+    ],
+    total: r.total,
+    metode: r.metodeNama ?? r.metode,
+    judul: 'NOTA REFUND',
+    rujukan: d.nomor,
+    alasan: r.alasan,
+    labelTotal: 'TOTAL REFUND',
+    catatanKaki: 'Dana telah dikembalikan',
+    barcode: r.nomor,
+    logoUrl: (usaha?.strukTampilLogo ?? false) ? usaha?.logo : null,
+    demo: ref.read(demoSessionProvider).active,
+    pelanggan: d.pelanggan,
+  );
 }
 
 Future<void> _konfirmasiBatal(BuildContext context, WidgetRef ref, TransaksiDetail d) async {
@@ -259,6 +376,11 @@ class _Receipt extends StatelessWidget {
             _row('TOTAL', fmtIDR(d.grandTotal), bold: true),
             _row('Dibayar', fmtIDR(d.dibayar)),
             _row('Kembalian', fmtIDR(d.kembalian)),
+            if (d.totalRefund > 0) ...[
+              const _Dashed(),
+              for (final r in d.refunds) _row('Refund ${r.nomor}', '−${fmtIDR(r.total)}'),
+              _row('NILAI BERSIH', fmtIDR(d.nilaiBersih ?? (d.grandTotal - d.totalRefund)), bold: true),
+            ],
           ],
         ),
       ),
