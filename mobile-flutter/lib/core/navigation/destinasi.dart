@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../features/toko/domain/entities/toko_manifest.dart';
+import 'registri_modul.dart';
+
+// MenuLain kini tinggal di registri_modul.dart bersama peta route_key → rute;
+// diekspor ulang agar pemanggil lama (main_shell.dart) tidak perlu berubah.
+export 'registri_modul.dart' show MenuLain, ModulApp, registriModul;
 
 /// Tujuan utama aplikasi — yang tampil di bilah navigasi bawah.
 ///
@@ -16,21 +21,6 @@ class Destinasi {
   final String label;
   final IconData ikon;
   final IconData ikonAktif;
-}
-
-/// Menu sekunder di lembar "Lainnya".
-class MenuLain {
-  const MenuLain({
-    required this.label,
-    required this.deskripsi,
-    required this.ikon,
-    required this.rute,
-  });
-
-  final String label;
-  final String deskripsi;
-  final IconData ikon;
-  final String rute;
 }
 
 /// Cabang ketiga menyesuaikan bidang usaha: toko bertahap memakai papan
@@ -96,62 +86,8 @@ class TujuanUtama {
     );
   }
 
-  /// Menu sekunder. Meja hanya untuk toko yang memakai bon meja; riwayat
-  /// disembunyikan bila sudah jadi tujuan utama.
-  static List<MenuLain> menuLain(TokoManifest? manifest) {
-    final bertahap = manifest?.punyaPapanPesanan ?? false;
-    final pakaiMeja = manifest?.capabilities.contains('tables_qr') ?? false;
-    return [
-      if (bertahap)
-        const MenuLain(
-          label: 'Riwayat',
-          deskripsi: 'Transaksi selesai & cetak ulang struk',
-          ikon: Icons.receipt_long_outlined,
-          rute: '/riwayat',
-        ),
-      if (pakaiMeja)
-        const MenuLain(
-          label: 'Meja',
-          deskripsi: 'Bon meja, ronde pesanan, bayar di akhir',
-          ikon: Icons.table_restaurant_outlined,
-          rute: '/meja',
-        ),
-      const MenuLain(
-        label: 'Produk',
-        deskripsi: 'Katalog barang & layanan',
-        ikon: Icons.inventory_2_outlined,
-        rute: '/produk',
-      ),
-      const MenuLain(
-        label: 'Stok',
-        deskripsi: 'Stok menipis & saran restok',
-        ikon: Icons.warehouse_outlined,
-        rute: '/stok',
-      ),
-      const MenuLain(
-        label: 'Pelanggan',
-        deskripsi: 'Daftar pelanggan toko',
-        ikon: Icons.people_alt_outlined,
-        rute: '/pelanggan',
-      ),
-      const MenuLain(
-        label: 'Pengeluaran',
-        deskripsi: 'Biaya operasional bulan ini',
-        ikon: Icons.account_balance_wallet_outlined,
-        rute: '/pengeluaran',
-      ),
-      const MenuLain(
-        label: 'Sesi Kasir',
-        deskripsi: 'Buka & tutup shift, rekap kas',
-        ikon: Icons.savings_outlined,
-        rute: '/sesi',
-      ),
-      const MenuLain(
-        label: 'Pengaturan',
-        deskripsi: 'Profil usaha, printer, akun',
-        ikon: Icons.settings_outlined,
-        rute: '/pengaturan',
-      ),
-    ];
-  }
+  /// Menu sekunder — disusun dari manifest toko aktif lewat registri route_key
+  /// (dulu daftar tetap di berkas ini; bidang usaha baru dari server tidak pernah
+  /// muncul sampai ada rilis).
+  static List<MenuLain> menuLain(TokoManifest? manifest) => menuLainDariManifest(manifest);
 }
