@@ -68,3 +68,22 @@ test('susunPermintaanRefund: barang hitungan wajib bulat; barang terukur dibulat
   assert.deepEqual(F.susunPermintaanRefund(struk, { qty: { I4: 25 }, metode: 'TUNAI', alasan: 'Tumpah' }).baris, [{ id: 'I4', kuantitas: 30 }])
   assert.deepEqual(F.susunPermintaanRefund(struk, { qty: { I4: 12.5 }, metode: 'TUNAI', alasan: 'Tumpah' }).baris, [{ id: 'I4', kuantitas: 10 }])
 })
+
+test('bisaDirefund: hanya transaksi SELESAI/LUNAS (nota belum dibayar & status asing = tidak)', () => {
+  assert.equal(F.bisaDirefund({ ...struk, status: 'LUNAS' }), true)
+  assert.equal(F.bisaDirefund({ ...struk, status: 'selesai' }), true, 'huruf kecil dari server lama tetap diterima')
+  assert.equal(F.bisaDirefund({ ...struk, status: 'BELUM DIBAYAR' }), false)
+  assert.equal(F.bisaDirefund({ ...struk, status: 'BELUM_SINKRON' }), false)
+  assert.equal(F.bisaDirefund({ ...struk, status: '' }), false, 'tanpa status = jangan tawarkan refund')
+})
+
+test('pesan melebihi sisa memakai label satuan (0,5 kg), bukan angka telanjang', () => {
+  assert.throws(
+    () => F.susunPermintaanRefund(struk, { qty: { I3: 2.5 }, metode: 'TUNAI', alasan: 'Tumpah' }),
+    /melebihi sisa \(2 kg\)/
+  )
+  assert.throws(
+    () => F.susunPermintaanRefund(struk, { qty: { I1: 3 }, metode: 'TUNAI', alasan: 'Tumpah' }),
+    /melebihi sisa \(2\)/
+  )
+})

@@ -2,7 +2,7 @@
 // baris yang masih bisa direfund, validasi sebelum ke server, dan perkiraan dana kembali.
 // Murni (tanpa DOM/state) agar bisa diuji; nilai PASTI (diskon transaksi & pajak) dihitung server.
 
-import { apakahTerukur, langkahSatuan, bulatkanKuantitas } from './satuan-terukur.js'
+import { apakahTerukur, langkahSatuan, bulatkanKuantitas, labelKuantitas } from './satuan-terukur.js'
 
 /** Baris struk yang masih punya sisa refund, dengan langkah input sesuai satuannya. */
 export function barisRefund(struk) {
@@ -24,9 +24,12 @@ export function barisRefund(struk) {
     })
 }
 
-/** Transaksi masih bisa direfund: tidak dibatalkan, sudah tersinkron, dan ada sisa baris. */
+/** Status transaksi yang uangnya sudah diterima — hanya ini yang bisa dikembalikan. */
+const STATUS_BISA_REFUND = ['SELESAI', 'LUNAS']
+
+/** Transaksi masih bisa direfund: sudah dibayar & tersinkron, dan ada sisa baris. */
 export function bisaDirefund(struk) {
-  if (!struk || String(struk.status || '').toUpperCase() === 'DIBATALKAN') return false
+  if (!struk || !STATUS_BISA_REFUND.includes(String(struk.status || '').toUpperCase())) return false
   if (struk.belum_sinkron || String(struk.id || '').startsWith('lokal:')) return false
   return barisRefund(struk).length > 0
 }
@@ -57,7 +60,7 @@ export function susunPermintaanRefund(struk, { qty = {}, metode, alasan, kembali
     } else {
       if (!Number.isInteger(n)) throw new Error(`Jumlah refund ${b.nama} harus bilangan bulat.`)
     }
-    if (n > b.sisa + 1e-9) throw new Error(`Jumlah refund ${b.nama} melebihi sisa (${b.sisa}).`)
+    if (n > b.sisa + 1e-9) throw new Error(`Jumlah refund ${b.nama} melebihi sisa (${labelKuantitas(b.sisa, b.satuan)}).`)
     baris.push({ id: b.id, kuantitas: n })
   }
   if (baris.length === 0) throw new Error('Pilih minimal satu item yang direfund.')

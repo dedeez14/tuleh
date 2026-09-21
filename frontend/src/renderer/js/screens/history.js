@@ -263,6 +263,12 @@ export const HistoryScreen = {
 
       function renderStruk(struk) {
         body.innerHTML = `<div class="hst-detail__receipt">${buildReceiptHTML(struk)}</div>`
+        if ((struk.refunds || []).length) {
+          const judul = document.createElement('div')
+          judul.className = 'hst-refund__judul'
+          judul.textContent = `Refund tercatat (${struk.refunds.length})`
+          body.appendChild(judul)
+        }
         for (const r of struk.refunds || []) {
           const baris = document.createElement('div')
           baris.className = 'hst-refund'
@@ -291,11 +297,15 @@ export const HistoryScreen = {
           btnRefund.className = 'btn btn--outline'
           btnRefund.textContent = 'Refund'
           btnRefund.title = 'Kembalikan dana sebagian/penuh — dicatat sebagai dokumen refund bernomor'
-          if (getState().online === false) {
-            btnRefund.disabled = true
-            btnRefund.title = 'Refund hanya bisa dilakukan saat terhubung ke server.'
-          }
-          btnRefund.addEventListener('click', () => bukaLembarRefund(struk))
+          btnRefund.addEventListener('click', () => {
+            // Diperiksa DI SINI, bukan saat modal dibuat: kasir bisa kehilangan
+            // koneksi setelah detail terbuka, dan refund tidak diantrekan.
+            if (getState().online === false) {
+              toast('Refund hanya bisa dilakukan saat terhubung ke server.', 'error')
+              return
+            }
+            bukaLembarRefund(struk)
+          })
           footer.appendChild(btnRefund)
         }
         if (!bisa('transaksi.batal')) return // kasir meminta Owner/Manager membatalkan

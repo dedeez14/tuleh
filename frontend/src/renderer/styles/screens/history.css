@@ -124,3 +124,12 @@
 .refund-form__cek { display: flex; align-items: center; gap: var(--sp-2); }
 .refund-form__ringkas { margin-top: var(--sp-3); padding-top: var(--sp-3); border-top: 1px solid var(--line); }
 .refund-form__ringkas strong { margin: 0 var(--sp-2); }
+
+.hst-refund__judul {
+  margin-top: var(--sp-3);
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-3);
+}
