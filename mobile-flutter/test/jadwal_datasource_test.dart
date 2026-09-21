@@ -1,4 +1,4 @@
-// Modul Jadwal di Android (2.32.0): slot per hari + peserta. Penolakan 409
+// Modul Jadwal di Android (2.31.0): slot per hari + peserta. Penolakan 409
 // (KUOTA_PENUH dsb.) sampai ke layar sebagai ApiException berstatus 409 dengan
 // kalimat server apa adanya; kode mesinnya sendiri tidak diteruskan.
 

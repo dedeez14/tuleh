@@ -142,13 +142,39 @@ class _KartuSlot extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      slot.nama,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        decoration: slot.aktif ? null : TextDecoration.lineThrough,
-                      ),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            slot.nama,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              decoration: slot.aktif ? null : TextDecoration.lineThrough,
+                            ),
+                          ),
+                        ),
+                        // Coretan saja terlalu halus di layar kecil: slot batal
+                        // diberi penanda yang terbaca sekali lihat.
+                        if (!slot.aktif) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: AppColors.danger.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(99),
+                            ),
+                            child: const Text(
+                              'Dibatalkan',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.danger,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 2),
                     Text(

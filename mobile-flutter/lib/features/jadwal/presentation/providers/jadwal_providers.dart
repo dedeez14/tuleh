@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/akses/akses.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../toko/presentation/providers/toko_providers.dart';
 import '../../data/datasources/jadwal_remote_datasource.dart';
@@ -18,10 +19,15 @@ String tanggalKey(DateTime d) =>
 
 final tanggalJadwalProvider = StateProvider<String>((ref) => tanggalKey(DateTime.now()));
 
+/// Slot hari yang dilihat. Yang berhak menata jadwal ikut melihat slot BATAL
+/// (`semua=1`) — tanpa itu slot yang dibatalkan hilang dari Android padahal
+/// desktop menampilkannya tercoret, sehingga pembatalan tampak seperti data
+/// yang lenyap dan slot yang sama dibuat dua kali.
 final jadwalHariProvider = FutureProvider<List<JadwalSlot>>((ref) async {
   ref.watch(activeTokoIdProvider);
   final tanggal = ref.watch(tanggalJadwalProvider);
-  final r = await ref.watch(jadwalRepositoryProvider).daftar(tanggal);
+  final semua = ref.watch(bisaProvider('jadwal.kelola'));
+  final r = await ref.watch(jadwalRepositoryProvider).daftar(tanggal, semua: semua);
   return r.when(ok: (v) => v, err: (e) => throw e);
 });
 

@@ -41,7 +41,7 @@ void main() {
 
   test('membership: route_key jadwal & member punya rute', () {
     final menu = menuLainDariManifest(_man(['dashboard', 'kasir', 'member', 'jadwal', 'riwayat', 'laporan']));
-    expect(menu.map((m) => m.rute), ['/pelanggan', '/jadwal', '/stok']);
+    expect(menu.map((m) => m.rute), ['/pelanggan', '/jadwal', '/pengaturan', '/stok']);
     expect(registriModul['jadwal']!.rute, '/jadwal');
   });
 
@@ -102,6 +102,21 @@ void main() {
       ['/produk', '/pelanggan', '/sesi', '/pengaturan', '/stok'],
     );
     expect(menuLainDariManifest(null).map((m) => m.rute).last, '/stok');
+  });
+
+  test('Pengaturan selalu ada walau manifest tidak mengirimnya (peran Kasir)', () {
+    // Server menyaring `menus` dengan required_permission: peran Kasir bawaan
+    // tanpa `pengaturan.lihat` tidak menerima menunya, padahal layar itu
+    // memegang setelan PERANGKAT (printer, sinkron) yang dipakai kasir.
+    final menu = menuLainDariManifest(_man(['kasir', 'produk', 'sesi']));
+    expect(menu.where((m) => m.rute == '/pengaturan'), hasLength(1));
+    expect(menu.map((m) => m.rute), ['/produk', '/sesi', '/pengaturan', '/stok']);
+  });
+
+  test('manifest yang sudah mengirim pengaturan: satu baris, di posisi manifest', () {
+    final menu = menuLainDariManifest(_man(['kasir', 'pengaturan', 'produk', 'sesi']));
+    expect(menu.where((m) => m.rute == '/pengaturan'), hasLength(1));
+    expect(menu.map((m) => m.rute), ['/pengaturan', '/produk', '/sesi', '/stok']);
   });
 
   test('setiap rute registri terdaftar di router (tak ada menu ke halaman mati)', () {

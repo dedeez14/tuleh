@@ -1,5 +1,6 @@
-// Layar Jadwal (2.32.0): daftar slot satu hari; menata slot & peserta hanya
-// muncul bila server memberi hak `jadwal.kelola` (gagal-tertutup).
+// Layar Jadwal (2.31.0): daftar slot satu hari; menata slot & peserta hanya
+// muncul bila server memberi hak `jadwal.kelola` (gagal-tertutup). Yang berhak
+// menata juga meminta slot BATAL (`semua=1`) dan melihatnya bertanda.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,6 +21,10 @@ const _penuh = JadwalSlot(
   id: 'J2', nama: 'Zumba Sore', tanggal: '2026-09-21', jamMulai: '17:00',
   kuota: 1, sisaKuota: 0, pesertaCount: 1, status: 'AKTIF',
 );
+const _batal = JadwalSlot(
+  id: 'J3', nama: 'Pilates Malam', tanggal: '2026-09-21', jamMulai: '19:00',
+  kuota: 5, sisaKuota: 5, status: 'BATAL',
+);
 const _detail = JadwalSlot(
   id: 'J1', nama: 'Yoga Pagi', tanggal: '2026-09-21', jamMulai: '07:00', jamSelesai: '08:00',
   kuota: 2, sisaKuota: 1, pesertaCount: 1, status: 'AKTIF',
@@ -30,8 +35,15 @@ class _RepoPalsu implements JadwalRepository {
   String? statusDiubah;
   IsianJadwal? disimpan;
 
+  /// Nilai `semua` yang diminta layar — cermin `semua=1` ke server.
+  bool? semuaDiminta;
+
   @override
-  Future<Result<List<JadwalSlot>>> daftar(String tanggal, {bool semua = false}) async => const Ok([_slot, _penuh]);
+  Future<Result<List<JadwalSlot>>> daftar(String tanggal, {bool semua = false}) async {
+    semuaDiminta = semua;
+    // Seperti server: slot BATAL hanya ikut bila diminta semuanya.
+    return semua ? const Ok([_slot, _penuh, _batal]) : const Ok([_slot, _penuh]);
+  }
   @override
   Future<Result<JadwalSlot>> detail(String id) async => const Ok(_detail);
   @override
@@ -88,6 +100,22 @@ void main() {
     expect(find.text('07:00–08:00'), findsOneWidget);
     expect(find.textContaining('1 / 2 peserta'), findsOneWidget);
     expect(find.textContaining('penuh'), findsOneWidget, reason: 'Zumba Sore sisa 0');
+  });
+
+  testWidgets('hak kelola: slot batal ikut diminta (semua=1) & bertanda "Dibatalkan"', (t) async {
+    final repo = _RepoPalsu();
+    await _buka(t, repo, {'jadwal.lihat', 'jadwal.kelola'});
+    expect(repo.semuaDiminta, isTrue);
+    expect(find.text('Pilates Malam'), findsOneWidget);
+    expect(find.text('Dibatalkan'), findsOneWidget);
+  });
+
+  testWidgets('tanpa hak kelola: slot batal tidak diminta (semua=0) & tak tampil', (t) async {
+    final repo = _RepoPalsu();
+    await _buka(t, repo, {'jadwal.lihat'});
+    expect(repo.semuaDiminta, isFalse);
+    expect(find.text('Pilates Malam'), findsNothing);
+    expect(find.text('Dibatalkan'), findsNothing);
   });
 
   testWidgets('tanpa hak kelola: tanpa tombol tambah, peserta hanya terbaca', (t) async {

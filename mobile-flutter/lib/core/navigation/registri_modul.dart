@@ -186,6 +186,13 @@ List<MenuLain> menuLainDariManifest(
     out.add(_dariModul(modMeja));
   }
 
+  // Pengaturan SELALU ada. Server menyaring `menus` dengan required_permission,
+  // dan peran Kasir bawaan tidak punya `pengaturan.lihat` — padahal layar ini
+  // memegang setelan PERANGKAT (printer, sinkron, diagnostik) yang justru
+  // dibutuhkan kasir dan tidak menyentuh data server.
+  final modSetelan = registriModul['pengaturan']!;
+  if (ruteSudah.add(modSetelan.rute)) out.add(_dariModul(modSetelan));
+
   out.addAll(_ekstraApp);
 
   return out;
