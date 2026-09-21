@@ -37,5 +37,45 @@ export function kodeGalat(hasil) {
 /** Toko sesi dari meta 409 SESI_BEDA_TOKO; null bila server lama tak mengirimkannya. */
 export function tokoSesi(hasil) {
   const t = hasil && hasil.meta && hasil.meta.sesi_toko
-  return t && t.id ? { id: String(t.id), nama: String(t.nama || 'toko sesi') } : null
+  if (!t || !t.id) return null
+  const keluar = { id: String(t.id), nama: String(t.nama || 'toko sesi') }
+  // Kode toko (TK-xxx) stabil — satu-satunya penanda yang bisa dicocokkan dengan daftar toko,
+  // karena id adalah ciphertext non-deterministik. Belum semua server mengirimnya.
+  if (t.kode) keluar.kode = String(t.kode)
+  return keluar
+}
+
+/** Nama/kode toko yang bisa dibandingkan: rapi, tak peduli huruf besar-kecil. */
+function rapi(nilai) {
+  return typeof nilai === 'string' ? nilai.trim().toLowerCase() : ''
+}
+
+/**
+ * Cocokkan toko sesi dari meta 409 dengan daftar toko pengguna.
+ *
+ * `id` toko adalah ciphertext non-deterministik (encrypt_id): id yang sama dienkripsi berbeda di
+ * `/tokos` dan di meta 409, jadi id TIDAK bisa dipakai membandingkan. Urutan pencocokan: `kode`
+ * (TK-xxx, stabil) lalu `nama`. Yang ketemu dipakai untuk melengkapi (bidang usaha dll.), tapi
+ * `id`-nya tetap id dari 409 — itu yang sah di server saat ini.
+ * Tak ketemu → kembalikan toko sesi apa adanya; server yang berhak menolak, bukan app.
+ */
+export function pilihTokoSesi(tokoList, sesiToko) {
+  if (!sesiToko || !sesiToko.id) return null
+  const daftar = Array.isArray(tokoList) ? tokoList : []
+  const kode = rapi(sesiToko.kode)
+  const nama = rapi(sesiToko.nama)
+  const cocok = (kode && daftar.find((t) => rapi(t.kode) === kode))
+    || (nama && daftar.find((t) => rapi(t.nama) === nama))
+  return cocok ? { ...cocok, id: sesiToko.id } : sesiToko
+}
+
+/**
+ * Tombol apa yang pantas di bawah galat checkout 409.
+ * {mode:'pindah', nama} bila sesi kasir ada di toko lain (server mengirim meta.sesi_toko),
+ * {mode:'buka-sesi'} bila 409 tanpa meta (belum ada sesi, atau server lama), null bila bukan 409.
+ */
+export function labelTombol409(hasil) {
+  if (!hasil || hasil.ok || hasil.status !== 409) return null
+  const toko = kodeGalat(hasil) === 'SESI_BEDA_TOKO' ? tokoSesi(hasil) : null
+  return toko ? { mode: 'pindah', nama: toko.nama } : { mode: 'buka-sesi' }
 }

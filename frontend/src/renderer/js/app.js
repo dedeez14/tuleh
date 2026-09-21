@@ -37,7 +37,7 @@ import { mulaiPemantau, hentikanPemantau } from './pemantau-pesanan.js'
 import { bukaBantuanPintasan } from './components/pintasan.js'
 import { bisa, isManajemen } from './akses.js'
 import { MODULES, MODULE_ACCENT, susunModul, kartuUtama } from './lib/registri-modul.js'
-import { keranjangLain, kosongkanKeranjang, ringkasKeranjang } from './lib/keranjang-toko.js'
+import { keranjangLain, kosongkanKeranjang, pilihTokoSesi, ringkasKeranjang } from './lib/keranjang-toko.js'
 import { perluMuatUlang, patchIdentitas, manifestBerubah } from './lib/identitas.js'
 
 const SCREENS = [
@@ -172,6 +172,8 @@ async function applyToko(chosen) {
     patch.sessionId = sesi.data && sesi.data.id ? sesi.data.id : null
   }
   setState(patch)
+  // Manifest satu-satunya panggilan yang menguji id toko ke server — jadi penanda berhasil.
+  return manifestResult.ok
 }
 
 /** Layar pemilih toko (full page) — resolve dengan toko yang dipilih,
@@ -250,17 +252,22 @@ async function switchToko() {
   await showScreen('home')
 }
 
-/** Pindah ke toko lain dari layar mana pun (tombol "Pindah ke …" pada 409 SESI_BEDA_TOKO). */
-export async function pindahToko(idToko) {
-  const toko = getState().tokoList.find((t) => String(t.id) === String(idToko))
-  if (!toko) {
-    toast('Toko sesi tidak ada dalam daftar toko Anda. Tutup sesi itu lebih dulu.', 'error')
-    return false
-  }
+/**
+ * Pindah ke toko sesi dari layar mana pun (tombol "Pindah ke …" pada 409 SESI_BEDA_TOKO).
+ * `sesiToko` = {id, nama, kode?} dari meta 409. Daftar toko hanya dipakai untuk melengkapi
+ * datanya (id toko = ciphertext non-deterministik, tak bisa dibandingkan); id dari 409 yang dipakai.
+ */
+export async function pindahToko(sesiToko) {
+  const toko = pilihTokoSesi(getState().tokoList, sesiToko)
+  if (!toko) return false
   kosongkanKeranjang()
-  await applyToko(toko)
+  const berhasil = await applyToko(toko)
   renderShell()
   await showScreen('pos')
+  if (!berhasil) {
+    toast(`Toko ${toko.nama || 'sesi'} tidak bisa dibuka — periksa koneksi atau hak akses Anda.`, 'error')
+    return false
+  }
   return true
 }
 

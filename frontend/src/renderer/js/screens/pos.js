@@ -16,7 +16,7 @@ import { customerViewHTML } from '../components/customer-view.js'
 import { bacaParkir, simpanParkir, tambahParkir, hapusParkir, pulihkanBaris, ringkasParkir } from '../lib/parkir.js'
 import { tanyaUkuran } from '../components/dialog-ukuran.js'
 import { apakahTerukur, labelKuantitas } from '../lib/satuan-terukur.js'
-import { catatKeranjang, kodeGalat, tokoSesi } from '../lib/keranjang-toko.js'
+import { catatKeranjang, labelTombol409, tokoSesi } from '../lib/keranjang-toko.js'
 
 const QRIS_POLL_MS = 4000 // interval cek status tagihan QRIS (kontrak: 3–5s)
 
@@ -1356,9 +1356,10 @@ function renderPos(container) {
         submitBtn.textContent = metode === 'TUNAI' ? 'Selesaikan Transaksi' : 'Sudah Bayar'
         errorEl.textContent = firstError(result)
         errorEl.classList.remove('u-hidden')
-        if (result.status === 409 && !footer.querySelector('#pay-goto-session')) {
-          // Dua bentuk 409: belum ada sesi (buka sesi) dan sesi di toko lain (pindah toko).
-          const sesiToko = kodeGalat(result) === 'SESI_BEDA_TOKO' ? tokoSesi(result) : null
+        // Dua bentuk 409: belum ada sesi (buka sesi) dan sesi di toko lain (pindah toko).
+        const aksi409 = labelTombol409(result)
+        if (aksi409) {
+          const sesiToko = aksi409.mode === 'pindah' ? tokoSesi(result) : null
           const gotoBtn = document.createElement('button')
           gotoBtn.type = 'button'
           gotoBtn.id = 'pay-goto-session'
@@ -1367,10 +1368,13 @@ function renderPos(container) {
           gotoBtn.addEventListener('click', async () => {
             modal.close()
             const { showScreen, pindahToko } = await import('../app.js')
-            if (sesiToko) await pindahToko(sesiToko.id)
+            if (sesiToko) await pindahToko(sesiToko)
             else showScreen('sessions')
           })
-          footer.prepend(gotoBtn)
+          // Percobaan kedua bisa 409 yang lain — ganti tombolnya, jangan tinggalkan label lama.
+          const lama = footer.querySelector('#pay-goto-session')
+          if (lama) lama.replaceWith(gotoBtn)
+          else footer.prepend(gotoBtn)
         }
         return
       }

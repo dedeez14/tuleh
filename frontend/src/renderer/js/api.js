@@ -45,13 +45,21 @@ function bungkusGerbang(permukaan) {
 
 export const api = bungkusGerbang(bridge)
 
+// Nilai yang bentuknya kode mesin ('SESI_BEDA_TOKO', 'BERAKHIR') — untuk dibaca program, bukan
+// dipampang ke kasir. Amplop 409 sesi-beda-toko hanya berisi errors.kode, kalimatnya di `message`.
+const KODE_MESIN = /^[A-Z][A-Z0-9_]*$/
+
 /** Ambil pesan error pertama dari envelope gagal (termasuk error validasi 422). */
 export function firstError(result) {
   if (!result || result.ok) return ''
   if (result.errors && typeof result.errors === 'object') {
-    const firstKey = Object.keys(result.errors)[0]
-    const messages = firstKey ? result.errors[firstKey] : null
-    if (Array.isArray(messages) && messages.length > 0) return messages[0]
+    for (const kunci of Object.keys(result.errors)) {
+      if (kunci === 'kode') continue
+      const pesan = result.errors[kunci]
+      if (!Array.isArray(pesan) || pesan.length === 0) continue
+      if (typeof pesan[0] === 'string' && KODE_MESIN.test(pesan[0])) continue
+      return pesan[0]
+    }
   }
   return result.message || 'Terjadi kesalahan.'
 }
