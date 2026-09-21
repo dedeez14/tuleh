@@ -34,7 +34,7 @@ ResponseBody _json(Map<String, dynamic> body, [int status = 200]) => ResponseBod
 Dio _dio(_Server s) =>
     Dio(BaseOptions(baseUrl: 'https://x.test/api', validateStatus: (_) => true))..httpClientAdapter = s;
 
-final _struk = {
+final Map<String, dynamic> _struk = {
   'id': 'T1', 'nomor': 'POS-000051', 'tanggal': '2026-09-20T09:00:00+07:00', 'status': 'SELESAI',
   'tipe_pembayaran': 'TUNAI', 'subtotal': 51000, 'total_diskon': 0, 'total_pajak': 0, 'grand_total': 51000,
   'dibayar': 100000, 'kembalian': 49000, 'total_refund': 18000, 'nilai_bersih': 33000,
