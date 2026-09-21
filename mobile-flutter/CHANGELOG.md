@@ -5,6 +5,13 @@ sebagai isi Release GitHub (workflow flutter-release.yml), dan empat baris
 pertamanya tampil di banner pembaruan dalam aplikasi. Tulis untuk kasir, bukan
 untuk programmer.
 
+## 2.30.0
+
+- **Refund dari aplikasi.** Pemilik/manajer bisa mengembalikan dana transaksi yang sudah dibayar — sebagian per item atau seluruhnya — langsung dari Riwayat → Detail Transaksi. Refund tercatat sebagai dokumen bernomor, stok bisa dikembalikan, dan laporan menyesuaikan di tanggal refund.
+- **Nota refund bisa dicetak & dibagikan.** Struk transaksi menampilkan refund yang sudah tercatat dan nilai bersihnya; nota refund dicetak ke printer thermal.
+- **Tombol Batalkan & Refund mengikuti hak akses** yang diatur pemilik di Pengaturan Hak Akses (server). Kasir tanpa hak tidak melihat tombolnya.
+- Riwayat menandai transaksi yang sudah direfund ("Refund Rp …").
+
 ## 2.29.0
 
 - **Transaksi tetap aman saat server bermasalah.** Kalau server sedang gangguan, penjualan disimpan di HP dan dikirim otomatis begitu server pulih — tidak lagi hilang atau ditolak. Satu transaksi yang bermasalah tidak lagi menahan transaksi lain.
