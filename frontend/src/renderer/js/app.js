@@ -910,7 +910,11 @@ export async function muatIdentitas({ paksa = false, now = Date.now() } = {}) {
   if (paksa) identitasPaksaTerakhir = now
   // Potret SEBELUM menunggu jawaban: getState() mengembalikan objek state yang hidup, bukan
   // salinan — membacanya sesudah await berarti membandingkan keadaan dengan dirinya sendiri.
-  const sebelum = { user: st.user, akses: st.akses, toko: st.toko, screen: st.screen, layarTersedia: layarTersedia() }
+  // layarSebelumnya = daftar yang sama: layar tanpa kartu (dibuka lewat pintasan) tidak diusir
+  // oleh penyegaran rutin — hanya layar yang BARU kehilangan pintunya (dibandingkan sesudah
+  // manifest dimuat ulang) yang ditinggalkan.
+  const daftarLayar = layarTersedia()
+  const sebelum = { user: st.user, akses: st.akses, toko: st.toko, screen: st.screen, layarTersedia: daftarLayar, layarSebelumnya: daftarLayar }
   try {
     const me = await api.auth.me()
     const putusan = putusanIdentitas(me, sebelum)
@@ -925,12 +929,16 @@ export async function muatIdentitas({ paksa = false, now = Date.now() } = {}) {
       // Menu manifest disaring server per hak akses, jadi hak berubah = menu berubah walau
       // manifest_version tidak bergerak. Muat ulang manifest+kategori+sesi SEBELUM menggambar.
       const tokoAktif = getState().toko
+      const manifestSebelum = getState().manifest
       let siap = true
       if (tokoAktif) {
         const segar = cocokkanToko(me.data.tokos, tokoAktif)
         // id dari state yang dipakai: keduanya ciphertext toko yang sama, tapi yang di state
         // sudah terbukti diterima server.
         siap = await applyToko(segar ? { ...tokoAktif, ...segar, id: tokoAktif.id } : tokoAktif)
+        // applyToko mengosongkan manifest saat gagal; kembalikan yang lama supaya Beranda tidak
+        // jatuh ke set kartu bawaan (lebih lebar dari peran) sampai restart.
+        if (!siap && manifestSebelum) setState({ manifest: manifestSebelum })
       }
       // Manifest gagal dimuat (mis. jaringan putus) → daftar kartu tak bisa dipercaya, jangan
       // mengusir siapa pun berdasarkan itu.
