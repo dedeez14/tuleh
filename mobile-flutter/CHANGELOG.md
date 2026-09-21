@@ -5,6 +5,13 @@ sebagai isi Release GitHub (workflow flutter-release.yml), dan empat baris
 pertamanya tampil di banner pembaruan dalam aplikasi. Tulis untuk kasir, bukan
 untuk programmer.
 
+## 2.31.0
+
+- **Menu Jadwal untuk gym & klinik.** Kelas dan janji temu hari ini tampil lengkap dengan jam, kuota, dan pesertanya — geser hari untuk melihat jadwal besok atau kemarin.
+- **Daftarkan peserta & tandai kehadiran** langsung dari aplikasi. Kalau kuota sudah penuh, aplikasi menolak dan memberi tahu alasannya.
+- **Menata jadwal mengikuti hak akses** yang diatur pemilik: staf tanpa hak "Kelola jadwal" tetap bisa melihat daftarnya. Membatalkan jadwal dan melepas peserta selalu dikonfirmasi dulu.
+- Menu "Lainnya" kini mengikuti pengaturan toko dari server, jadi menu baru muncul tanpa menunggu pembaruan aplikasi; menu Meja tetap tampil untuk kafe/restoran.
+
 ## 2.30.0
 
 - **Refund dari aplikasi.** Pemilik/manajer bisa mengembalikan dana transaksi yang sudah dibayar — sebagian per item atau seluruhnya — langsung dari Riwayat → Detail Transaksi. Refund tercatat sebagai dokumen bernomor, stok bisa dikembalikan, dan laporan menyesuaikan di tanggal refund.
