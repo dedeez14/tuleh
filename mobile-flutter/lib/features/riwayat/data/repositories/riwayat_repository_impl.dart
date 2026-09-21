@@ -1,5 +1,6 @@
 import '../../../../core/network/api_exception.dart';
 import '../../../../core/network/api_result.dart';
+import '../../domain/entities/refund.dart';
 import '../../domain/entities/transaksi.dart';
 import '../../domain/entities/transaksi_detail.dart';
 import '../../domain/repositories/riwayat_repository.dart';
@@ -33,6 +34,15 @@ class RiwayatRepositoryImpl implements RiwayatRepository {
   Future<Result<TransaksiDetail>> detail(String id) async {
     try {
       return Ok(await remote.detail(id));
+    } on ApiException catch (e) {
+      return Err(e);
+    }
+  }
+
+  @override
+  Future<Result<Refund>> refund(String id, PermintaanRefund permintaan) async {
+    try {
+      return Ok(await remote.refund(id, permintaan));
     } on ApiException catch (e) {
       return Err(e);
     }

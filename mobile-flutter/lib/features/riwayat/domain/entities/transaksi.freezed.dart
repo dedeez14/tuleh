@@ -15,7 +15,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$Transaksi {
 
- String get id; String get nomor; double get grandTotal; String? get tanggal; String? get status; String? get metode;
+ String get id; String get nomor; double get grandTotal; String? get tanggal; String? get status; String? get metode; double get totalRefund;
 /// Create a copy of Transaksi
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -26,16 +26,16 @@ $TransaksiCopyWith<Transaksi> get copyWith => _$TransaksiCopyWithImpl<Transaksi>
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is Transaksi&&(identical(other.id, id) || other.id == id)&&(identical(other.nomor, nomor) || other.nomor == nomor)&&(identical(other.grandTotal, grandTotal) || other.grandTotal == grandTotal)&&(identical(other.tanggal, tanggal) || other.tanggal == tanggal)&&(identical(other.status, status) || other.status == status)&&(identical(other.metode, metode) || other.metode == metode));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is Transaksi&&(identical(other.id, id) || other.id == id)&&(identical(other.nomor, nomor) || other.nomor == nomor)&&(identical(other.grandTotal, grandTotal) || other.grandTotal == grandTotal)&&(identical(other.tanggal, tanggal) || other.tanggal == tanggal)&&(identical(other.status, status) || other.status == status)&&(identical(other.metode, metode) || other.metode == metode)&&(identical(other.totalRefund, totalRefund) || other.totalRefund == totalRefund));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,nomor,grandTotal,tanggal,status,metode);
+int get hashCode => Object.hash(runtimeType,id,nomor,grandTotal,tanggal,status,metode,totalRefund);
 
 @override
 String toString() {
-  return 'Transaksi(id: $id, nomor: $nomor, grandTotal: $grandTotal, tanggal: $tanggal, status: $status, metode: $metode)';
+  return 'Transaksi(id: $id, nomor: $nomor, grandTotal: $grandTotal, tanggal: $tanggal, status: $status, metode: $metode, totalRefund: $totalRefund)';
 }
 
 
@@ -46,7 +46,7 @@ abstract mixin class $TransaksiCopyWith<$Res>  {
   factory $TransaksiCopyWith(Transaksi value, $Res Function(Transaksi) _then) = _$TransaksiCopyWithImpl;
 @useResult
 $Res call({
- String id, String nomor, double grandTotal, String? tanggal, String? status, String? metode
+ String id, String nomor, double grandTotal, String? tanggal, String? status, String? metode, double totalRefund
 });
 
 
@@ -63,7 +63,7 @@ class _$TransaksiCopyWithImpl<$Res>
 
 /// Create a copy of Transaksi
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? nomor = null,Object? grandTotal = null,Object? tanggal = freezed,Object? status = freezed,Object? metode = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? nomor = null,Object? grandTotal = null,Object? tanggal = freezed,Object? status = freezed,Object? metode = freezed,Object? totalRefund = null,}) {
   return _then(Transaksi(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,nomor: null == nomor ? _self.nomor : nomor // ignore: cast_nullable_to_non_nullable
@@ -71,7 +71,8 @@ as String,grandTotal: null == grandTotal ? _self.grandTotal : grandTotal // igno
 as double,tanggal: freezed == tanggal ? _self.tanggal : tanggal // ignore: cast_nullable_to_non_nullable
 as String?,status: freezed == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
 as String?,metode: freezed == metode ? _self.metode : metode // ignore: cast_nullable_to_non_nullable
-as String?,
+as String?,totalRefund: null == totalRefund ? _self.totalRefund : totalRefund // ignore: cast_nullable_to_non_nullable
+as double,
   ));
 }
 
@@ -156,10 +157,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String nomor,  double grandTotal,  String? tanggal,  String? status,  String? metode)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String nomor,  double grandTotal,  String? tanggal,  String? status,  String? metode,  double totalRefund)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _Transaksi() when $default != null:
-return $default(_that.id,_that.nomor,_that.grandTotal,_that.tanggal,_that.status,_that.metode);case _:
+return $default(_that.id,_that.nomor,_that.grandTotal,_that.tanggal,_that.status,_that.metode,_that.totalRefund);case _:
   return orElse();
 
 }
@@ -177,10 +178,10 @@ return $default(_that.id,_that.nomor,_that.grandTotal,_that.tanggal,_that.status
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String nomor,  double grandTotal,  String? tanggal,  String? status,  String? metode)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String nomor,  double grandTotal,  String? tanggal,  String? status,  String? metode,  double totalRefund)  $default,) {final _that = this;
 switch (_that) {
 case _Transaksi():
-return $default(_that.id,_that.nomor,_that.grandTotal,_that.tanggal,_that.status,_that.metode);case _:
+return $default(_that.id,_that.nomor,_that.grandTotal,_that.tanggal,_that.status,_that.metode,_that.totalRefund);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -197,10 +198,10 @@ return $default(_that.id,_that.nomor,_that.grandTotal,_that.tanggal,_that.status
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String nomor,  double grandTotal,  String? tanggal,  String? status,  String? metode)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String nomor,  double grandTotal,  String? tanggal,  String? status,  String? metode,  double totalRefund)?  $default,) {final _that = this;
 switch (_that) {
 case _Transaksi() when $default != null:
-return $default(_that.id,_that.nomor,_that.grandTotal,_that.tanggal,_that.status,_that.metode);case _:
+return $default(_that.id,_that.nomor,_that.grandTotal,_that.tanggal,_that.status,_that.metode,_that.totalRefund);case _:
   return null;
 
 }
@@ -212,8 +213,8 @@ return $default(_that.id,_that.nomor,_that.grandTotal,_that.tanggal,_that.status
 
 
 class _Transaksi implements Transaksi {
-  const _Transaksi({required this.id, required this.nomor, required this.grandTotal, this.tanggal, this.status, this.metode});
-  
+  const _Transaksi({required this.id, required this.nomor, required this.grandTotal, this.tanggal, this.status, this.metode, this.totalRefund = 0});
+
 
 @override final  String id;
 @override final  String nomor;
@@ -221,6 +222,7 @@ class _Transaksi implements Transaksi {
 @override final  String? tanggal;
 @override final  String? status;
 @override final  String? metode;
+@override@JsonKey() final  double totalRefund;
 
 /// Create a copy of Transaksi
 /// with the given fields replaced by the non-null parameter values.
@@ -232,16 +234,16 @@ _$TransaksiCopyWith<_Transaksi> get copyWith => __$TransaksiCopyWithImpl<_Transa
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Transaksi&&(identical(other.id, id) || other.id == id)&&(identical(other.nomor, nomor) || other.nomor == nomor)&&(identical(other.grandTotal, grandTotal) || other.grandTotal == grandTotal)&&(identical(other.tanggal, tanggal) || other.tanggal == tanggal)&&(identical(other.status, status) || other.status == status)&&(identical(other.metode, metode) || other.metode == metode));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Transaksi&&(identical(other.id, id) || other.id == id)&&(identical(other.nomor, nomor) || other.nomor == nomor)&&(identical(other.grandTotal, grandTotal) || other.grandTotal == grandTotal)&&(identical(other.tanggal, tanggal) || other.tanggal == tanggal)&&(identical(other.status, status) || other.status == status)&&(identical(other.metode, metode) || other.metode == metode)&&(identical(other.totalRefund, totalRefund) || other.totalRefund == totalRefund));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,nomor,grandTotal,tanggal,status,metode);
+int get hashCode => Object.hash(runtimeType,id,nomor,grandTotal,tanggal,status,metode,totalRefund);
 
 @override
 String toString() {
-  return 'Transaksi(id: $id, nomor: $nomor, grandTotal: $grandTotal, tanggal: $tanggal, status: $status, metode: $metode)';
+  return 'Transaksi(id: $id, nomor: $nomor, grandTotal: $grandTotal, tanggal: $tanggal, status: $status, metode: $metode, totalRefund: $totalRefund)';
 }
 
 
@@ -252,7 +254,7 @@ abstract mixin class _$TransaksiCopyWith<$Res> implements $TransaksiCopyWith<$Re
   factory _$TransaksiCopyWith(_Transaksi value, $Res Function(_Transaksi) _then) = __$TransaksiCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String nomor, double grandTotal, String? tanggal, String? status, String? metode
+ String id, String nomor, double grandTotal, String? tanggal, String? status, String? metode, double totalRefund
 });
 
 
@@ -269,7 +271,7 @@ class __$TransaksiCopyWithImpl<$Res>
 
 /// Create a copy of Transaksi
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? nomor = null,Object? grandTotal = null,Object? tanggal = freezed,Object? status = freezed,Object? metode = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? nomor = null,Object? grandTotal = null,Object? tanggal = freezed,Object? status = freezed,Object? metode = freezed,Object? totalRefund = null,}) {
   return _then(_Transaksi(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,nomor: null == nomor ? _self.nomor : nomor // ignore: cast_nullable_to_non_nullable
@@ -277,7 +279,8 @@ as String,grandTotal: null == grandTotal ? _self.grandTotal : grandTotal // igno
 as double,tanggal: freezed == tanggal ? _self.tanggal : tanggal // ignore: cast_nullable_to_non_nullable
 as String?,status: freezed == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
 as String?,metode: freezed == metode ? _self.metode : metode // ignore: cast_nullable_to_non_nullable
-as String?,
+as String?,totalRefund: null == totalRefund ? _self.totalRefund : totalRefund // ignore: cast_nullable_to_non_nullable
+as double,
   ));
 }
 

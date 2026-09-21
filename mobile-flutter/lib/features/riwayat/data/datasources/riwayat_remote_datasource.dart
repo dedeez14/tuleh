@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import '../../../../core/network/api_error_mapper.dart';
+import '../../domain/entities/refund.dart';
 import '../../domain/entities/transaksi.dart';
 import '../../domain/entities/transaksi_detail.dart';
 
@@ -25,6 +26,7 @@ class RiwayatRemoteDataSource {
     final body = await _send(() => _dio.get<dynamic>('/transaksi/$id'));
     final d = _map(body['data']);
     final rawItems = d['items'] is List ? d['items'] as List : const [];
+    final rawRefunds = d['refunds'] is List ? d['refunds'] as List : const [];
     return TransaksiDetail(
       id: (d['id'] ?? id).toString(),
       nomor: (d['nomor'] ?? d['no'] ?? '-').toString(),
@@ -39,6 +41,12 @@ class RiwayatRemoteDataSource {
       grandTotal: _double(d['grand_total'] ?? d['total']),
       dibayar: _double(d['dibayar']),
       kembalian: _double(d['kembalian']),
+      totalRefund: _double(d['total_refund']),
+      nilaiBersih: d['nilai_bersih'] == null ? null : _double(d['nilai_bersih']),
+      refunds: [
+        for (final e in rawRefunds)
+          if (e is Map) _refund(Map<String, dynamic>.from(e)),
+      ],
       items: [
         for (final e in rawItems)
           if (e is Map) _item(Map<String, dynamic>.from(e)),
@@ -50,6 +58,15 @@ class RiwayatRemoteDataSource {
   /// jurnal di-reverse di server). Hanya online — tidak diantrekan.
   Future<void> batal(String id) async {
     await _send(() => _dio.post<dynamic>('/transaksi/${Uri.encodeComponent(id)}/batal'));
+  }
+
+  /// POST /transaksi/{id}/refund → dokumen refund (201). Online saja (tidak diantrekan).
+  Future<Refund> refund(String id, PermintaanRefund permintaan) async {
+    final body = await _send(() => _dio.post<dynamic>(
+          '/transaksi/${Uri.encodeComponent(id)}/refund',
+          data: permintaan.toJson(),
+        ));
+    return _refund(_map(body['data']));
   }
 
   // ---- helper ----
@@ -81,6 +98,7 @@ class RiwayatRemoteDataSource {
         tanggal: (m['tanggal'] ?? m['created_at'] ?? m['waktu'])?.toString(),
         status: m['status']?.toString(),
         metode: (m['metode_bayar'] ?? m['tipe_pembayaran'] ?? m['metode'])?.toString(),
+        totalRefund: _double(m['total_refund']),
       );
 
   TrxItem _item(Map<String, dynamic> m) => TrxItem(
@@ -90,5 +108,36 @@ class RiwayatRemoteDataSource {
         subtotal: _double(m['subtotal']),
         satuan: m['satuan']?.toString(),
         nominalDiminta: m['nominal_diminta'] == null ? null : _double(m['nominal_diminta']),
+        id: m['id']?.toString(),
+        qtyRefund: _double(m['qty_refund']),
+        qtyBisaRefund: _double(m['qty_bisa_refund']),
       );
+
+  Refund _refund(Map<String, dynamic> m) {
+    final rawItems = m['items'] is List ? m['items'] as List : const [];
+    return Refund(
+      id: (m['id'] ?? '').toString(),
+      nomor: (m['nomor'] ?? '-').toString(),
+      tanggal: m['tanggal']?.toString(),
+      metode: m['metode']?.toString(),
+      metodeNama: m['metode_nama']?.toString(),
+      alasan: m['alasan']?.toString(),
+      oleh: m['oleh']?.toString(),
+      subtotal: _double(m['subtotal']),
+      totalPajak: _double(m['total_pajak']),
+      total: _double(m['total']),
+      items: [
+        for (final e in rawItems)
+          if (e is Map)
+            RefundItem(
+              itemId: e['item_id']?.toString(),
+              nama: (e['nama'] ?? '-').toString(),
+              satuan: e['satuan']?.toString(),
+              kuantitas: _double(e['kuantitas']),
+              total: _double(e['total']),
+              kembaliStok: e['kembali_stok'] != false,
+            ),
+      ],
+    );
+  }
 }

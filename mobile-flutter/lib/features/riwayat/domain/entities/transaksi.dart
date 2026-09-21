@@ -12,5 +12,6 @@ abstract class Transaksi with _$Transaksi {
     String? tanggal,
     String? status,
     String? metode,
+    @Default(0) double totalRefund,
   }) = _Transaksi;
 }
