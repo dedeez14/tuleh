@@ -449,7 +449,7 @@ class _DetailSlot extends ConsumerWidget {
     final kelola = ref.watch(bisaProvider('jadwal.kelola'));
 
     return detail.when(
-      loading: () => const Padding(padding: EdgeInsets.all(28), child: DaftarKerangka(jumlah: 3, tinggiBaris: 52)),
+      loading: () => const Padding(padding: EdgeInsets.all(28), child: DaftarKerangka(jumlah: 3, tinggiBaris: 64)),
       error: (e, _) => Padding(
         padding: const EdgeInsets.all(20),
         child: KeadaanGagal(error: e, onUlangi: () => ref.invalidate(jadwalDetailProvider(id))),
@@ -554,7 +554,7 @@ class _PilihPelanggan extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final daftar = ref.watch(pelangganListProvider);
     return daftar.when(
-      loading: () => const Padding(padding: EdgeInsets.all(28), child: DaftarKerangka(jumlah: 4, tinggiBaris: 52)),
+      loading: () => const Padding(padding: EdgeInsets.all(28), child: DaftarKerangka(jumlah: 4, tinggiBaris: 64)),
       error: (e, _) => Padding(
         padding: const EdgeInsets.all(20),
         child: KeadaanGagal(error: e, onUlangi: () => ref.invalidate(pelangganListProvider)),
