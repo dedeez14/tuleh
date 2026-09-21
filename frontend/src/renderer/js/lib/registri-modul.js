@@ -46,6 +46,10 @@ const APP_EXTRA_MODULES = ['keuangan', 'stok']
 // Route_key yang menuju tujuan yang sama persis (bukan sekadar berbagi layar seperti papan
 // dapur/antrian/proses yang berbeda mode) — hanya satu kartu yang dirender.
 const TUJUAN_SAMA = { member: 'pelanggan', layanan: 'produk' }
+// Kapabilitas manifest yang membuka bon meja walau katalog tidak mengirim menu `meja`
+// (katalog `fnb_kot` tidak punya menunya padahal tokonya memakai meja) — paritas
+// `_kapabilitasMeja` di Flutter dan `cakupan()` di pemantau-pesanan.js.
+const KAPABILITAS_MEJA = new Set(['tables_qr', 'tables'])
 // Route_key yang bukan kartu Beranda (dashboard = Beranda itu sendiri).
 const NON_CARD_ROUTES = new Set(['dashboard', 'home'])
 // Fallback bila manifest tak menyertakan menus (server lama / tanpa /manifest):
@@ -59,9 +63,9 @@ export function kartuUtama(id) {
 
 /**
  * Susun kartu Beranda dari menu manifest ternormalisasi.
- * @param {{menus: Array<{id, routeKey, label, order}>, manajemen: boolean, peringatan?: (routeKey) => void}} opsi
+ * @param {{menus: Array<{id, routeKey, label, order}>, manajemen: boolean, capabilities?: string[], peringatan?: (routeKey) => void}} opsi
  */
-export function susunModul({ menus, manajemen, peringatan = null }) {
+export function susunModul({ menus, manajemen, capabilities = null, peringatan = null }) {
   const out = []
   const seen = new Set()
   const tujuanSudah = new Set()
@@ -92,10 +96,24 @@ export function susunModul({ menus, manajemen, peringatan = null }) {
     for (const id of DEFAULT_MENU_IDS) push(id, '')
   }
 
+  // Bon meja digerbang KAPABILITAS toko, bukan menu: katalog `fnb_kot` tidak mengirim
+  // route_key `meja` padahal tokonya memakai bon meja, jadi kartunya hilang saat menu
+  // pindah ke manifest. Hanya bila belum ada kartu ke layar meja dari manifest.
+  const kapabilitas = Array.isArray(capabilities) ? capabilities : []
+  if (!out.some((k) => k.screen === 'peta-meja') && kapabilitas.some((c) => KAPABILITAS_MEJA.has(c))) {
+    push('meja', '')
+  }
+
   // Fitur ekstra app (keuangan, stok) memakai endpoint laporan → hanya manajemen.
   if (manajemen) {
     for (const key of APP_EXTRA_MODULES) push(key, '', true)
   }
+
+  // Lantai Pengaturan: server menyaring menu manifest per hak akses dan peran Kasir bawaan
+  // tidak memegang `pengaturan.lihat`, sehingga kasir kehilangan pintu ke setelan yang justru
+  // LOKAL perangkat (printer, sinkronisasi, info app) — bukan data server. Selalu dikembalikan
+  // bila manifest tak mengirimnya, tanpa melihat peran.
+  push('pengaturan', '')
 
   return out
 }

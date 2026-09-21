@@ -1,18 +1,14 @@
 // Layar Jadwal (gym, klinik) — slot kelas/janji temu satu hari beserta pesertanya.
 // Menata slot & peserta butuh hak `jadwal.kelola` dari server; pemegang `jadwal.lihat`
-// saja (mis. kasir bawaan) tetap bisa membuka dan membaca daftarnya.
+// saja (mis. kasir bawaan) tetap bisa membuka dan membaca daftarnya. Potongan render yang
+// digerbang hak itu ada di lib/jadwal-tampilan.js (murni, diuji di tests/jadwal-screen.test.js).
 
 import { api, firstError } from '../api.js'
 import { esc, debounce } from '../utils/format.js'
 import { toast, icons, showModal, confirmDialog, emptyStateHTML, loadingHTML } from '../components/ui.js'
 import { hariIni, geserTanggal, labelTanggal, labelKuota, slotPenuh, urutSlot, susunSlot } from '../lib/jadwal-model.js'
+import { kepalaJadwalHTML, pesertaTabelHTML, aksiDetailJadwal } from '../lib/jadwal-tampilan.js'
 import { bisa } from '../akses.js'
-
-const STATUS_PESERTA = [
-  { id: 'TERDAFTAR', label: 'Terdaftar' },
-  { id: 'HADIR', label: 'Hadir' },
-  { id: 'BATAL', label: 'Batal' }
-]
 
 export const JadwalScreen = {
   id: 'jadwal',
@@ -28,13 +24,7 @@ export const JadwalScreen = {
 
     container.innerHTML = `
       <div class="screen-page">
-        <div class="page-head">
-          <div>
-            <h1 class="page-head__title">Jadwal</h1>
-            <p class="page-head__desc">Kelas &amp; janji temu toko ini — kuota, peserta, dan kehadiran.</p>
-          </div>
-          ${kelola ? `<button type="button" class="btn btn--primary" id="jdw-add">${icons.plus}<span>Tambah Jadwal</span></button>` : ''}
-        </div>
+        ${kepalaJadwalHTML(kelola)}
 
         <div class="card jdw-hari">
           <button type="button" class="icon-btn" id="jdw-prev" title="Hari sebelumnya">‹</button>
@@ -188,18 +178,7 @@ export const JadwalScreen = {
             ${esc(labelTanggal(s.tanggal))} · ${esc(labelKuota(s))}${s.pengajar ? ` · ${esc(s.pengajar)}` : ''}
           </p>
           ${s.catatan ? `<p class="u-muted">${esc(s.catatan)}</p>` : ''}
-          ${(s.peserta || []).length
-            ? `<table class="table jdw-peserta"><thead><tr><th>Peserta</th><th>Status</th><th></th></tr></thead><tbody>
-                ${s.peserta.map((p) => `
-                  <tr data-peserta="${esc(p.id)}">
-                    <td>${esc(p.nama)}${p.telepon ? `<div class="u-faint mono">${esc(p.telepon)}</div>` : ''}</td>
-                    <td>${kelola
-                      ? `<select class="select" data-status>${STATUS_PESERTA.map((x) => `<option value="${x.id}"${x.id === p.status ? ' selected' : ''}>${x.label}</option>`).join('')}</select>`
-                      : `<span class="badge">${esc(p.status)}</span>`}</td>
-                    <td>${kelola ? `<button type="button" class="icon-btn" data-lepas title="Lepas peserta">${icons.trash}</button>` : ''}</td>
-                  </tr>`).join('')}
-              </tbody></table>`
-            : '<p class="u-muted">Belum ada peserta terdaftar.</p>'}`
+          ${pesertaTabelHTML(s.peserta, kelola)}`
       }
 
       gambar(slot)
@@ -237,19 +216,10 @@ export const JadwalScreen = {
         segarkan()
       })
 
-      if (kelola) {
-        const btnDaftar = document.createElement('button')
-        btnDaftar.className = 'btn btn--primary'
-        btnDaftar.textContent = 'Daftarkan peserta'
-        btnDaftar.addEventListener('click', () => pilihPelanggan(id, segarkan))
-        const btnUbah = document.createElement('button')
-        btnUbah.className = 'btn btn--outline'
-        btnUbah.textContent = 'Ubah jadwal'
-        btnUbah.addEventListener('click', () => { close(); bukaForm(slot) })
-        const btnBatal = document.createElement('button')
-        btnBatal.className = 'btn btn--ghost'
-        btnBatal.textContent = 'Batalkan jadwal'
-        btnBatal.addEventListener('click', async () => {
+      const penangan = {
+        daftar: () => pilihPelanggan(id, segarkan),
+        ubah: () => { close(); bukaForm(slot) },
+        batal: async () => {
           const yes = await confirmDialog({
             title: `Batalkan "${slot.nama}"?`,
             message: 'Slot disembunyikan dari daftar harian. Pendaftaran yang sudah tercatat tetap tersimpan.',
@@ -265,8 +235,16 @@ export const JadwalScreen = {
           toast('Jadwal dibatalkan.', 'success')
           close()
           muat()
-        })
-        footer.append(btnBatal, btnUbah, btnDaftar)
+        }
+      }
+      // Daftar kosong tanpa `jadwal.kelola` → kaki modal tanpa satu pun tombol tulis.
+      for (const aksi of aksiDetailJadwal(kelola)) {
+        const btn = document.createElement('button')
+        btn.className = aksi.kelas
+        btn.textContent = aksi.label
+        btn.dataset.aksi = aksi.kunci
+        btn.addEventListener('click', penangan[aksi.kunci])
+        footer.append(btn)
       }
     }
 

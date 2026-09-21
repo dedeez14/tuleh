@@ -109,13 +109,15 @@ function normalizeManifest(raw, toko) {
 }
 
 /** Kartu Beranda: menu DARI manifest (sudah terfilter peran & terurut server) +
- *  fitur ekstra app utk peran manajemen. Bila manifest tanpa menus → set default
- *  (kompatibilitas server lama). App tidak memfilter ulang berdasarkan peran. */
+ *  fitur ekstra app utk peran manajemen + bon meja bila kapabilitas toko memakainya
+ *  + lantai Pengaturan (setelan lokal perangkat). Bila manifest tanpa menus → set
+ *  default (kompatibilitas server lama). App tidak memfilter ulang berdasarkan peran. */
 function moduleList() {
   const { manifest } = getState()
   return susunModul({
     menus: manifest && Array.isArray(manifest.menus) ? manifest.menus : [],
     manajemen: isManajemen(),
+    capabilities: manifest && Array.isArray(manifest.capabilities) ? manifest.capabilities : [],
     peringatan: (key) => console.warn(`Menu manifest route_key "${key}" belum punya layar di aplikasi ini.`)
   })
 }

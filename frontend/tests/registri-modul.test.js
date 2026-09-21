@@ -50,7 +50,8 @@ test('urutan & label mengikuti manifest; route_key tak dikenal dilewati dan dila
     manajemen: false,
     peringatan: (k) => peringatan.push(k)
   })
-  assert.deepEqual(kartu.map((k) => [k.id, k.title]), [['order', 'Order Cucian'], ['riwayat', 'Riwayat Nota']])
+  // Ekor 'pengaturan' = lantai setelan lokal perangkat (diuji tersendiri di bawah).
+  assert.deepEqual(kartu.map((k) => [k.id, k.title]), [['order', 'Order Cucian'], ['riwayat', 'Riwayat Nota'], ['pengaturan', 'Pengaturan']])
   assert.deepEqual(peringatan, ['teleportasi'])
 })
 
@@ -88,5 +89,59 @@ test('dua route_key untuk satu tujuan (membership: member + pelanggan) → satu 
     ],
     manajemen: false
   })
-  assert.deepEqual(papan.map((k) => k.id), ['dapur', 'antrian'])
+  assert.deepEqual(papan.map((k) => k.id), ['dapur', 'antrian', 'pengaturan'])
+})
+
+// --- 0.9.38: dua pengaman kartu Beranda yang tidak datang dari menu manifest ---
+
+test('bon meja dari KAPABILITAS toko: katalog fnb_kot tak mengirim route_key meja', () => {
+  const kaps = (c) => R.susunModul({ menus: menu(ARKETIPE.fnb_kot), manajemen: true, capabilities: c })
+
+  const dengan = kaps(['tables_qr'])
+  const meja = dengan.filter((k) => k.screen === 'peta-meja')
+  assert.equal(meja.length, 1, 'tepat satu kartu Meja')
+  assert.equal(meja[0].id, 'meja')
+  assert.equal(meja[0].appExtra, false, 'Meja kartu biasa, bukan "Fitur app"')
+  // Sebelum fitur ekstra app (keuangan, stok).
+  const iMeja = dengan.findIndex((k) => k.id === 'meja')
+  const iEkstra = dengan.findIndex((k) => k.appExtra === true)
+  assert.ok(iMeja >= 0 && iEkstra > iMeja, 'Meja mendahului fitur ekstra app')
+
+  // Alias kapabilitas lama.
+  assert.ok(kaps(['tables']).some((k) => k.id === 'meja'), 'alias "tables" juga membuka Meja')
+
+  // Tanpa kapabilitas meja → tetap tidak ada kartunya.
+  for (const c of [undefined, null, [], ['stations'], 'tables']) {
+    assert.ok(!kaps(c).some((k) => k.screen === 'peta-meja'), `tanpa kapabilitas meja: ${JSON.stringify(c)}`)
+  }
+})
+
+test('manifest yang SUDAH mengirim meja tidak digandakan oleh kapabilitas', () => {
+  const kartu = R.susunModul({
+    menus: menu(['kasir', 'meja', 'riwayat']),
+    manajemen: false,
+    capabilities: ['tables_qr', 'tables']
+  })
+  assert.equal(kartu.filter((k) => k.screen === 'peta-meja').length, 1)
+  assert.deepEqual(kartu.map((k) => k.id).slice(0, 3), ['kasir', 'meja', 'riwayat'], 'urutan manifest dipertahankan')
+})
+
+test('lantai Pengaturan: dikembalikan bila manifest tak mengirimnya, apa pun perannya', () => {
+  // Server menyaring menu per hak akses; peran tanpa `pengaturan.lihat` kehilangan kartunya,
+  // padahal isinya setelan LOKAL perangkat (printer, sinkronisasi).
+  for (const manajemen of [true, false]) {
+    const kartu = R.susunModul({ menus: menu(['kasir', 'riwayat', 'sesi']), manajemen })
+    const set = kartu.filter((k) => k.id === 'pengaturan')
+    assert.equal(set.length, 1, `tepat satu kartu Pengaturan (manajemen=${manajemen})`)
+    assert.equal(kartu[kartu.length - 1].id, 'pengaturan', 'ditaruh paling akhir')
+    assert.equal(set[0].screen, 'settings')
+  }
+})
+
+test('manifest yang mengirim pengaturan: satu kartu, tetap pada urutan manifest', () => {
+  const kartu = R.susunModul({ menus: menu(['pengaturan', 'kasir', 'riwayat']), manajemen: false })
+  assert.equal(kartu.filter((k) => k.id === 'pengaturan').length, 1)
+  assert.deepEqual(kartu.map((k) => k.id), ['pengaturan', 'kasir', 'riwayat'])
+  // Set inti (manifest kosong) juga tidak menggandakannya.
+  assert.equal(R.susunModul({ menus: [], manajemen: false }).filter((k) => k.id === 'pengaturan').length, 1)
 })
