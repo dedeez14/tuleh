@@ -1,5 +1,6 @@
-// Modul Jadwal di Android (2.32.0): slot per hari + peserta. Kode mesin 409
-// (KUOTA_PENUH) diteruskan apa adanya supaya layar bisa membedakan penolakannya.
+// Modul Jadwal di Android (2.32.0): slot per hari + peserta. Penolakan 409
+// (KUOTA_PENUH dsb.) sampai ke layar sebagai ApiException berstatus 409 dengan
+// kalimat server apa adanya; kode mesinnya sendiri tidak diteruskan.
 
 import 'dart:convert';
 
