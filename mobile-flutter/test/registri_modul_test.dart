@@ -7,12 +7,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tuleh_pos/core/navigation/registri_modul.dart';
 import 'package:tuleh_pos/features/toko/domain/entities/toko_manifest.dart';
 
-TokoManifest _man(List<String> keys, {List<String> states = const ['SELESAI']}) => TokoManifest(
+TokoManifest _man(
+  List<String> keys, {
+  List<String> states = const ['SELESAI'],
+  List<String> capabilities = const [],
+}) => TokoManifest(
   menus: [
     for (var i = 0; i < keys.length; i++)
       ManifestMenu(id: keys[i], label: 'Label ${keys[i]}', routeKey: keys[i], order: i + 1),
   ],
   lifecycleStates: states,
+  capabilities: capabilities,
 );
 
 void main() {
@@ -38,6 +43,47 @@ void main() {
     final menu = menuLainDariManifest(_man(['dashboard', 'kasir', 'member', 'jadwal', 'riwayat', 'laporan']));
     expect(menu.map((m) => m.rute), ['/pelanggan', '/jadwal', '/stok']);
     expect(registriModul['jadwal']!.rute, '/jadwal');
+  });
+
+  test('membership katalog asli: member & pelanggan menuju layar yang sama, satu baris saja', () {
+    // Katalog `membership` (pos-katalog.json) mengirim `member` urutan 3 DAN
+    // `pelanggan` urutan 90 — keduanya membuka /pelanggan.
+    final menu = menuLainDariManifest(
+      _man(['dashboard', 'kasir', 'member', 'jadwal', 'riwayat', 'sesi', 'pelanggan', 'pengeluaran', 'laporan', 'pengaturan']),
+    );
+    expect(menu.map((m) => m.rute), [
+      '/pelanggan', '/jadwal', '/sesi', '/pengeluaran', '/pengaturan', '/stok',
+    ]);
+    expect(menu.first.label, 'Member', reason: 'route_key pertama menurut urutan manifest yang menang');
+  });
+
+  test('F&B: katalog tanpa menu meja tetap dapat baris Meja dari kapabilitas', () {
+    // Katalog `fnb_kot` tidak punya menu `meja`, tetapi tokonya memakai bon meja
+    // (capability `tables_qr`). Meja duduk sebelum fitur ekstra app.
+    final menu = menuLainDariManifest(
+      _man(
+        ['dashboard', 'kasir', 'antrian', 'produk', 'inventory', 'riwayat', 'sesi', 'pelanggan', 'pengeluaran', 'laporan', 'pengaturan'],
+        states: ['ANTRIAN', 'SELESAI'],
+        capabilities: ['tables_qr'],
+      ),
+    );
+    expect(menu.where((m) => m.rute == '/meja'), hasLength(1));
+    expect(menu.map((m) => m.rute), [
+      '/produk', '/riwayat', '/sesi', '/pelanggan', '/pengeluaran', '/pengaturan', '/meja', '/stok',
+    ]);
+    // Paritas desktop (pemantau-pesanan.js): `tables` juga membuka bon meja.
+    expect(
+      menuLainDariManifest(_man(['kasir', 'pengaturan'], capabilities: ['tables'])).map((m) => m.rute),
+      ['/pengaturan', '/meja', '/stok'],
+    );
+  });
+
+  test('manifest yang sudah punya route_key meja tidak dapat baris Meja dobel', () {
+    final menu = menuLainDariManifest(
+      _man(['kasir', 'meja', 'produk', 'pengaturan'], capabilities: ['tables_qr']),
+    );
+    expect(menu.where((m) => m.rute == '/meja'), hasLength(1));
+    expect(menu.map((m) => m.rute), ['/meja', '/produk', '/pengaturan', '/stok']);
   });
 
   test('route_key tak dikenal diabaikan & dicatat, bukan menu yang menabrak rute mati', () {

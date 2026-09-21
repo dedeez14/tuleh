@@ -39,9 +39,11 @@ class MenuLain {
   final String rute;
 }
 
-/// Label sengaja dari registri, bukan dari manifest: menu sekunder harus bernama
-/// sama di semua bidang usaha (manifest salon menamai `produk` "Layanan & Produk",
-/// dan itu dipakai sebagai judul layarnya).
+/// Label sengaja diambil dari registri, bukan dari label manifest: tiap route_key
+/// punya satu nama tetap yang dikenal app, sehingga menu sekunder tidak ikut
+/// berganti nama mengikuti penamaan bebas per bidang usaha (manifest salon
+/// menamai `produk` "Layanan & Produk", katalog F&B menamainya "Menu" — label
+/// penuh dari manifest tetap dipakai sebagai judul layarnya).
 const registriModul = <String, ModulApp>{
   'riwayat': ModulApp(
     label: 'Riwayat',
@@ -118,8 +120,17 @@ const _ekstraApp = [
   ),
 ];
 
+/// Kapabilitas manifest yang membuka bon meja walau katalog tidak mengirim menu
+/// `meja` (katalog `fnb_kot` tidak punya menunya) — paritas `cakupan()` di
+/// `pemantau-pesanan.js` desktop.
+const _kapabilitasMeja = {'tables_qr', 'tables'};
+
 /// Set inti bila manifest tidak mengirim `menus` (server lama / tanpa manifest).
 const _bawaan = ['produk', 'pelanggan', 'sesi', 'pengaturan'];
+
+/// Satu entri registri jadi satu baris menu.
+MenuLain _dariModul(ModulApp m) =>
+    MenuLain(label: m.label, deskripsi: m.deskripsi, ikon: m.ikon, rute: m.rute);
 
 /// Menu sekunder untuk lembar "Lainnya", disusun dari manifest toko aktif.
 List<MenuLain> menuLainDariManifest(
@@ -135,12 +146,21 @@ List<MenuLain> menuLainDariManifest(
   if (menus.isEmpty) {
     kunci.addAll(_bawaan);
   } else {
-    final urut = [...menus]..sort((a, b) => a.order.compareTo(b.order));
-    kunci.addAll(urut.map((m) => m.routeKey));
+    // Tie-break indeks asli: menu berbentuk string dari server lama semuanya
+    // order 0, dan List.sort tidak stabil di atas 32 elemen.
+    final urut = [for (var i = 0; i < menus.length; i++) (i, menus[i])]..sort((a, b) {
+      final selisih = a.$2.order.compareTo(b.$2.order);
+      return selisih != 0 ? selisih : a.$1.compareTo(b.$1);
+    });
+    kunci.addAll(urut.map((e) => e.$2.routeKey));
   }
 
   final out = <MenuLain>[];
   final sudah = <String>{};
+  // Dedupe kedua, per RUTE: katalog membership mengirim `member` (urutan 3) dan
+  // `pelanggan` (urutan 90) yang sama-sama membuka /pelanggan. Kunci pertama
+  // menurut urutan manifest yang menang, jadi labelnya "Member".
+  final ruteSudah = <String>{};
   for (final key in kunci) {
     if (_tujuanUtama.contains(key)) continue;
     // Papan pesanan sudah jadi tab ketiga pada toko bertahap; riwayat jadi tab
@@ -153,8 +173,19 @@ List<MenuLain> menuLainDariManifest(
       catat(key);
       continue;
     }
-    out.add(MenuLain(label: mod.label, deskripsi: mod.deskripsi, ikon: mod.ikon, rute: mod.rute));
+    if (!ruteSudah.add(mod.rute)) continue;
+    out.add(_dariModul(mod));
   }
+
+  // Bon meja digerbang kapabilitas, bukan menu — katalog `fnb_kot` tidak
+  // mengirim route_key `meja` padahal tokonya memakai meja.
+  final modMeja = registriModul['meja']!;
+  final kapabilitas = manifest?.capabilities ?? const <String>[];
+  if (!ruteSudah.contains(modMeja.rute) && kapabilitas.any(_kapabilitasMeja.contains)) {
+    ruteSudah.add(modMeja.rute);
+    out.add(_dariModul(modMeja));
+  }
+
   out.addAll(_ekstraApp);
 
   return out;
