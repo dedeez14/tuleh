@@ -72,3 +72,21 @@ test('route_key jadwal (gym & klinik) berujung ke layar Jadwal', () => {
   const kartu = R.susunModul({ menus: menu(ARKETIPE.membership), manajemen: false })
   assert.ok(kartu.some((k) => k.id === 'jadwal'), 'kartu Jadwal muncul di Beranda membership')
 })
+
+test('dua route_key untuk satu tujuan (membership: member + pelanggan) → satu kartu, yang lebih dulu menang', () => {
+  const kartu = R.susunModul({ menus: menu(ARKETIPE.membership), manajemen: false })
+  const kePelanggan = kartu.filter((k) => k.screen === 'customers')
+  assert.equal(kePelanggan.length, 1, 'hanya satu kartu ke layar pelanggan')
+  assert.equal(kePelanggan[0].id, 'member')
+  assert.equal(kePelanggan[0].title, 'Member')
+  assert.ok(kartu.some((k) => k.id === 'jadwal') && kartu.some((k) => k.id === 'sesi'), 'kartu lain tetap ada')
+  // Papan yang berbagi layar tetapi beda mode TIDAK ikut tertelan.
+  const papan = R.susunModul({
+    menus: [
+      { id: 'dapur', routeKey: 'dapur', label: '', order: 1 },
+      { id: 'antrian', routeKey: 'antrian', label: '', order: 2 }
+    ],
+    manajemen: false
+  })
+  assert.deepEqual(papan.map((k) => k.id), ['dapur', 'antrian'])
+})

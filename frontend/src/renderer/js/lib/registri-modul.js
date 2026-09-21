@@ -43,6 +43,9 @@ export const MODULE_ACCENT = {
 // mengelola menu ini; keputusan pemilik (2 Agu 2026) mempertahankannya sbg
 // nilai tambah app. Bukan pelanggaran "menu dari manifest" (itu soal filter peran).
 const APP_EXTRA_MODULES = ['keuangan', 'stok']
+// Route_key yang menuju tujuan yang sama persis (bukan sekadar berbagi layar seperti papan
+// dapur/antrian/proses yang berbeda mode) — hanya satu kartu yang dirender.
+const TUJUAN_SAMA = { member: 'pelanggan', layanan: 'produk' }
 // Route_key yang bukan kartu Beranda (dashboard = Beranda itu sendiri).
 const NON_CARD_ROUTES = new Set(['dashboard', 'home'])
 // Fallback bila manifest tak menyertakan menus (server lama / tanpa /manifest):
@@ -61,6 +64,7 @@ export function kartuUtama(id) {
 export function susunModul({ menus, manajemen, peringatan = null }) {
   const out = []
   const seen = new Set()
+  const tujuanSudah = new Set()
 
   const push = (key, label, appExtra = false) => {
     if (!key || NON_CARD_ROUTES.has(key) || seen.has(key)) return
@@ -71,6 +75,11 @@ export function susunModul({ menus, manajemen, peringatan = null }) {
       return
     }
     seen.add(key)
+    // Katalog server bisa mengirim dua route_key untuk satu tujuan (membership: member + pelanggan)
+    // → satu kartu saja; yang lebih dulu menurut urutan manifest yang dipakai.
+    const tujuan = TUJUAN_SAMA[key] || key
+    if (tujuanSudah.has(tujuan)) return
+    tujuanSudah.add(tujuan)
     out.push({ id: key, ...mod, title: label || mod.title, appExtra })
   }
 
