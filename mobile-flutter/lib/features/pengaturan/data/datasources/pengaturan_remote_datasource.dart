@@ -60,6 +60,19 @@ class PengaturanRemoteDataSource {
     );
   }
 
+  /// GET /config → kode metode pembayaran aktif (master `pos_metode_pembayaran`).
+  /// Bentuk tak terduga → daftar kosong; pemanggil memakai daftar bawaan.
+  Future<List<String>> metodePembayaran() async {
+    final body = await _send(() => _dio.get<dynamic>('/config'));
+    final d = body['data'] is Map ? Map<String, dynamic>.from(body['data'] as Map) : const <String, dynamic>{};
+    final m = d['payment_methods'];
+    return [
+      if (m is List)
+        for (final e in m)
+          if (e is String && e.isNotEmpty) e,
+    ];
+  }
+
   /// PUT /pengaturan/usaha (partial). Teks kosong → null (mengosongkan di server).
   /// [ubahSatuanBawaan] = kirim `satuan_bawaan_id` ([satuanBawaanId] null =
   /// kosongkan); false = kunci itu tidak dikirim (tidak diubah).

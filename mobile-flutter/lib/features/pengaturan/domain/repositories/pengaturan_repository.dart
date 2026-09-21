@@ -7,6 +7,10 @@ abstract interface class PengaturanRepository {
 
   Future<Result<PengaturanPembayaran>> pembayaran();
 
+  /// Kode metode pembayaran aktif. Sengaja TANPA [Result]: pemanggil satu-satunya
+  /// (`metodePembayaranProvider`) memakai daftar bawaan untuk galat apa pun.
+  Future<List<String>> metodePembayaran();
+
   Future<Result<void>> simpanProfil({
     required String nama,
     String? alamat,

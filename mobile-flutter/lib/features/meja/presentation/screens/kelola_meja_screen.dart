@@ -7,12 +7,10 @@ import '../../../../core/widgets/states.dart';
 import '../../domain/entities/meja.dart';
 import '../providers/meja_providers.dart';
 
-/// Peran yang boleh mengubah daftar meja. Server menolak selain ini dengan
-/// 403, jadi tombolnya pun disembunyikan agar tidak menjanjikan yang mustahil.
-bool bolehKelolaMeja(String? posRole) {
-  final r = (posRole ?? '').toUpperCase();
-  return r == 'OWNER' || r == 'MANAGER';
-}
+/// Kunci hak akses katalog (`pos_hak_akses`) untuk menambah/mengubah meja &
+/// stasiun. Server menolak tanpa hak ini dengan 403, jadi tombolnya pun
+/// disembunyikan agar tidak menjanjikan yang mustahil.
+const kunciKelolaMeja = 'toko.meja_stasiun';
 
 /// Daftar meja lengkap (termasuk nonaktif) untuk layar Kelola Meja.
 final daftarMejaProvider = FutureProvider.autoDispose<List<Meja>>((ref) async {

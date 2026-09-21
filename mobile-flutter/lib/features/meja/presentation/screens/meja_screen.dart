@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/akses/akses.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../../../core/offline/pengurai.dart';
 import '../../../../core/offline/rujukan_lokal.dart';
@@ -8,7 +9,6 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../core/widgets/states.dart';
 import '../../domain/entities/meja.dart';
-import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../providers/meja_providers.dart';
 import 'kelola_meja_screen.dart';
 import 'bill_detail_screen.dart';
@@ -25,8 +25,8 @@ class MejaScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Meja'),
         actions: [
-          // Hanya pemilik/manajer: server menolak peran lain dengan 403.
-          if (bolehKelolaMeja(ref.watch(authControllerProvider).valueOrNull?.role))
+          // Hanya yang punya hak kelola meja: server menolak sisanya dengan 403.
+          if (ref.watch(bisaProvider(kunciKelolaMeja)))
             IconButton(
               tooltip: 'Kelola meja',
               onPressed: () => Navigator.of(context).push(

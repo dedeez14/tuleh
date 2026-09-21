@@ -97,10 +97,19 @@ void main() {
     await t.pumpAndSettle();
     expect(find.textContaining('18.000'), findsWidgets, reason: 'perkiraan dana kembali');
 
+    // Sejak dialog konfirmasi dibuka, tombol sudah memutar CircularProgressIndicator
+    // (pemuatan dinyalakan SEBELUM dialog agar tak terkirim dua kali), dan animasi
+    // tanpa akhir itu membuat pumpAndSettle tak pernah usai — pakai pump berdurasi tetap.
+    Future<void> pumpTransisi() async {
+      await t.pump();
+      await t.pump(const Duration(milliseconds: 500));
+      await t.pump(const Duration(milliseconds: 500));
+    }
+
     await t.tap(find.text('Catat refund'));
-    await t.pumpAndSettle();
+    await pumpTransisi();
     await t.tap(find.text('Ya, catat'));
-    await t.pumpAndSettle();
+    await pumpTransisi();
 
     expect(repo.idRefund, 'T1');
     expect(repo.diterima!.baris.single.id, 'I1');

@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/network/api_client.dart';
+import '../../../kasir/domain/metode_pembayaran.dart';
 import '../../../toko/presentation/providers/toko_providers.dart';
 import '../../data/datasources/pengaturan_remote_datasource.dart';
 import '../../data/repositories/pengaturan_repository_impl.dart';
@@ -24,4 +25,16 @@ final pengaturanPembayaranProvider = FutureProvider<PengaturanPembayaran>((ref) 
   ref.watch(activeTokoIdProvider);
   final r = await ref.watch(pengaturanRepositoryProvider).pembayaran();
   return r.when(ok: (v) => v, err: (_) => PengaturanPembayaran.kosong);
+});
+
+/// Metode pembayaran aktif dari server (master data). Gagal memuat / server
+/// lama → daftar bawaan, supaya kasir tetap bisa menyelesaikan transaksi.
+final metodePembayaranProvider = FutureProvider<List<String>>((ref) async {
+  ref.watch(activeTokoIdProvider);
+  try {
+    final kode = await ref.watch(pengaturanRepositoryProvider).metodePembayaran();
+    return kode.isEmpty ? metodePembayaranBawaan : kode;
+  } catch (_) {
+    return metodePembayaranBawaan;
+  }
 });

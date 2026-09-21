@@ -47,8 +47,6 @@ class CartSheet extends ConsumerStatefulWidget {
 enum _Langkah { keranjang, bayar }
 
 class _CartSheetState extends ConsumerState<CartSheet> {
-  static const _metode = metodePembayaranBawaan;
-
   _Langkah _langkah = _Langkah.keranjang;
   String _metodeTerpilih = 'TUNAI';
   final _uangCtrl = TextEditingController();
@@ -239,6 +237,7 @@ class _CartSheetState extends ConsumerState<CartSheet> {
     final count = ref.watch(cartCountProvider);
     final cart = ref.read(cartControllerProvider.notifier);
     final pembayaran = ref.watch(pengaturanPembayaranProvider);
+    final metode = ref.watch(metodePembayaranProvider).valueOrNull ?? metodePembayaranBawaan;
     final cs = Theme.of(context).colorScheme;
 
     // Keranjang dikosongkan dari layar lain → tutup lembar ini.
@@ -281,7 +280,7 @@ class _CartSheetState extends ConsumerState<CartSheet> {
                 )
               : FormBayar(
                   total: total,
-                  metode: _metode,
+                  metode: metode,
                   terpilih: _metodeTerpilih,
                   uangCtrl: _uangCtrl,
                   saran: _saranUang(total),

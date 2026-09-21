@@ -23,7 +23,7 @@ class RiwayatRemoteDataSource {
 
   /// GET /transaksi/{id} → detail transaksi (struk).
   Future<TransaksiDetail> detail(String id) async {
-    final body = await _send(() => _dio.get<dynamic>('/transaksi/$id'));
+    final body = await _send(() => _dio.get<dynamic>('/transaksi/${Uri.encodeComponent(id)}'));
     final d = _map(body['data']);
     final rawItems = d['items'] is List ? d['items'] as List : const [];
     final rawRefunds = d['refunds'] is List ? d['refunds'] as List : const [];

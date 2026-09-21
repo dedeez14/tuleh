@@ -9,6 +9,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../core/utils/satuan_terukur.dart';
 import '../../../kasir/domain/metode_pembayaran.dart';
+import '../../../pengaturan/presentation/providers/pengaturan_providers.dart';
 import '../../domain/entities/refund.dart';
 import '../../domain/entities/transaksi_detail.dart';
 import '../providers/riwayat_providers.dart';
@@ -35,9 +36,8 @@ class _LembarRefundState extends ConsumerState<_LembarRefund> {
   late final List<TrxItem> _baris = [for (final i in widget.d.items) if (i.qtyBisaRefund > 0 && i.id != null) i];
   late final Map<String, TextEditingController> _qty = {for (final i in _baris) i.id!: TextEditingController()};
   final _alasan = TextEditingController();
-  late String _metode = metodePembayaranBawaan.contains((widget.d.tipePembayaran ?? '').toUpperCase())
-      ? widget.d.tipePembayaran!.toUpperCase()
-      : metodePembayaranBawaan.first;
+  // Dinormalkan terhadap daftar metode dari server di `build`.
+  late String _metode = (widget.d.tipePembayaran ?? '').toUpperCase();
   bool _kembaliStok = true;
   bool _loading = false;
   String? _galat;
@@ -85,6 +85,7 @@ class _LembarRefundState extends ConsumerState<_LembarRefund> {
     final baris = _validasi();
     setState(() {});
     if (baris == null) return;
+    setState(() => _loading = true);
     final ya = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -99,8 +100,10 @@ class _LembarRefundState extends ConsumerState<_LembarRefund> {
         ],
       ),
     );
-    if (ya != true || !mounted) return;
-    setState(() => _loading = true);
+    if (ya != true || !mounted) {
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
     final hasil = await ref.read(riwayatRepositoryProvider).refund(
           widget.d.id,
           PermintaanRefund(
@@ -125,6 +128,8 @@ class _LembarRefundState extends ConsumerState<_LembarRefund> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final metode = ref.watch(metodePembayaranProvider).valueOrNull ?? metodePembayaranBawaan;
+    if (!metode.contains(_metode)) _metode = metode.first;
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: ListView(
@@ -164,7 +169,7 @@ class _LembarRefundState extends ConsumerState<_LembarRefund> {
                       FilteringTextInputFormatter.allow(apakahTerukur(i.satuan) ? RegExp(r'[0-9.,]') : RegExp(r'[0-9]')),
                     ],
                     decoration: const InputDecoration(hintText: '0', isDense: true),
-                    onChanged: (_) => setState(() {}),
+                    onChanged: (_) => setState(() => _galat = null),
                   ),
                 ),
               ],
@@ -174,7 +179,7 @@ class _LembarRefundState extends ConsumerState<_LembarRefund> {
           DropdownButtonFormField<String>(
             initialValue: _metode,
             decoration: const InputDecoration(labelText: 'Metode pengembalian dana'),
-            items: [for (final m in metodePembayaranBawaan) DropdownMenuItem(value: m, child: Text(m))],
+            items: [for (final m in metode) DropdownMenuItem(value: m, child: Text(m))],
             onChanged: (v) => setState(() => _metode = v ?? _metode),
           ),
           const SizedBox(height: 10),
@@ -184,6 +189,9 @@ class _LembarRefundState extends ConsumerState<_LembarRefund> {
             maxLength: 255,
             maxLines: 2,
             decoration: const InputDecoration(labelText: 'Alasan (wajib)', hintText: 'Contoh: rasa tidak sesuai, barang rusak'),
+            onChanged: (_) {
+              if (_galat != null) setState(() => _galat = null);
+            },
           ),
           CheckboxListTile(
             value: _kembaliStok,

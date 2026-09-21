@@ -29,6 +29,9 @@ class PengaturanRepositoryImpl implements PengaturanRepository {
   }
 
   @override
+  Future<List<String>> metodePembayaran() => remote.metodePembayaran();
+
+  @override
   Future<Result<void>> simpanProfil({
     required String nama,
     String? alamat,

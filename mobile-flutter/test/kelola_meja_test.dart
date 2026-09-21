@@ -8,6 +8,7 @@ import 'dart:convert';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tuleh_pos/core/akses/akses.dart';
 import 'package:tuleh_pos/core/network/api_exception.dart';
 import 'package:tuleh_pos/features/demo/data/demo_engine.dart';
 import 'package:tuleh_pos/features/meja/data/datasources/meja_remote_datasource.dart';
@@ -50,12 +51,10 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('hak akses', () {
-    test('hanya OWNER/MANAGER yang melihat Kelola Meja', () {
-      expect(bolehKelolaMeja('OWNER'), isTrue);
-      expect(bolehKelolaMeja('manager'), isTrue);
-      expect(bolehKelolaMeja('KASIR'), isFalse);
-      expect(bolehKelolaMeja(null), isFalse);
-      expect(bolehKelolaMeja(''), isFalse);
+    test('gerbang Kelola Meja memakai kunci katalog, bukan nama peran', () {
+      expect(bisaDenganDaftar(['toko.meja_stasiun'], kunciKelolaMeja), isTrue);
+      expect(bisaDenganDaftar(['kasir.transaksi'], kunciKelolaMeja), isFalse);
+      expect(bisaDenganDaftar(null, kunciKelolaMeja), isFalse);
     });
   });
 
