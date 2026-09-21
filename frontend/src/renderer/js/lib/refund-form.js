@@ -2,7 +2,7 @@
 // baris yang masih bisa direfund, validasi sebelum ke server, dan perkiraan dana kembali.
 // Murni (tanpa DOM/state) agar bisa diuji; nilai PASTI (diskon transaksi & pajak) dihitung server.
 
-import { apakahTerukur, langkahSatuan } from './satuan-terukur.js'
+import { apakahTerukur, langkahSatuan, bulatkanKuantitas } from './satuan-terukur.js'
 
 /** Baris struk yang masih punya sisa refund, dengan langkah input sesuai satuannya. */
 export function barisRefund(struk) {
@@ -38,12 +38,23 @@ export function perkiraanRefund(struk, qty) {
 /**
  * Validasi isian → payload kanal trx:refund. Melempar Error berpesan Indonesia
  * (ditampilkan apa adanya di toast) bila isian tidak lengkap.
+ *
+ * Kuantitas ikut langkah satuannya (paritas dengan app Android): barang
+ * hitungan (langkah 1) wajib bilangan bulat, barang terukur (langkah < 1,
+ * mis. kg) dibulatkan ke kelipatan langkah satuannya sebelum diperiksa
+ * terhadap sisa dan dikirim ke server.
  */
 export function susunPermintaanRefund(struk, { qty = {}, metode, alasan, kembaliStok = true } = {}) {
   const baris = []
   for (const b of barisRefund(struk)) {
-    const n = Number(qty[b.id]) || 0
+    let n = Number(qty[b.id]) || 0
     if (n <= 0) continue
+    if (b.langkah >= 1) {
+      if (!Number.isInteger(n)) throw new Error(`Jumlah refund ${b.nama} harus bilangan bulat.`)
+    } else {
+      n = bulatkanKuantitas(n, b.satuan)
+      if (n <= 0) continue
+    }
     if (n > b.sisa + 1e-9) throw new Error(`Jumlah refund ${b.nama} melebihi sisa (${b.sisa}).`)
     baris.push({ id: b.id, kuantitas: n })
   }

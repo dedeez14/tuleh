@@ -50,3 +50,13 @@ test('susunPermintaanRefund: payload kanal trx:refund; validasi sisa, alasan, me
   assert.throws(() => F.susunPermintaanRefund(struk, { qty: { I1: 1 }, metode: 'TUNAI', alasan: 'ok' }), /minimal 3/)
   assert.throws(() => F.susunPermintaanRefund(struk, { qty: { I1: 1 }, alasan: 'Tumpah' }), /wajib dipilih/)
 })
+
+test('susunPermintaanRefund: barang hitungan wajib bulat; barang terukur dibulatkan ke langkah satuannya', () => {
+  assert.throws(() => F.susunPermintaanRefund(struk, { qty: { I1: 0.5 }, metode: 'TUNAI', alasan: 'Tumpah' }), /bilangan bulat/)
+  const p = F.susunPermintaanRefund(struk, { qty: { I3: 0.555 }, metode: 'TUNAI', alasan: 'Tumpah' })
+  assert.deepEqual(p.baris, [{ id: 'I3', kuantitas: 0.56 }])
+  // I3 (Beras, kg, sisa 2, langkah 0,01): 2,01 sudah kelipatan langkah jadi dibulatkan ke
+  // dirinya sendiri (2,01), lalu melebihi sisa 2 — memastikan pemeriksaan sisa jalan setelah
+  // pembulatan (2,004 dipakai spec awal ternyata dibulatkan turun jadi 2, jadi tak berguna di sini).
+  assert.throws(() => F.susunPermintaanRefund(struk, { qty: { I3: 2.01 }, metode: 'TUNAI', alasan: 'Tumpah' }), /melebihi sisa/)
+})
