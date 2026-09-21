@@ -15,11 +15,13 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 
 let J
+let bisa
 
 test.before(async () => {
   // lib/jadwal-tampilan.js → components/ui.js mendaftarkan listener keydown di document saat dimuat.
   global.document = { addEventListener() {} }
   J = await import('../src/renderer/js/lib/jadwal-tampilan.js')
+  ;({ bisa } = await import('../src/renderer/js/akses.js'))
 })
 
 const PESERTA = [
@@ -30,7 +32,9 @@ const PESERTA = [
 // `jadwal.lihat` saja = argumen kelola false (screens/jadwal.js: `bisa('jadwal.kelola')`).
 const AKSES_LIHAT = ['jadwal.lihat']
 const AKSES_KELOLA = ['jadwal.lihat', 'jadwal.kelola']
-const kelolaDari = (akses) => akses.includes('jadwal.kelola')
+// Gerbangnya harus resolver yang SAMA dengan layar (akses.js), bukan tiruan lokal — kalau tidak,
+// mengubah layar menjadi `const kelola = true` tak akan membuat satu tes pun merah.
+const kelolaDari = (akses) => bisa('jadwal.kelola', { akses })
 
 test('hanya jadwal.lihat: tidak ada tombol "Tambah Jadwal" di kepala halaman', () => {
   const html = J.kepalaJadwalHTML(kelolaDari(AKSES_LIHAT))
@@ -103,6 +107,8 @@ test('screens/jadwal.js merender lewat lib/jadwal-tampilan.js', () => {
   const path = require('node:path')
   const src = fs.readFileSync(path.join(__dirname, '../src/renderer/js/screens/jadwal.js'), 'utf8')
   assert.match(src, /from '\.\.\/lib\/jadwal-tampilan\.js'/)
+  // Sumber `kelola` dipaku ke resolver hak akses: tanpa ini, gerbang bisa dilepas diam-diam.
+  assert.match(src, /const kelola = bisa\('jadwal\.kelola'\)/)
   for (const fn of ['kepalaJadwalHTML(kelola)', 'pesertaTabelHTML(s.peserta, kelola)', 'aksiDetailJadwal(kelola)']) {
     assert.ok(src.includes(fn), `layar memanggil ${fn}`)
   }

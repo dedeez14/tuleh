@@ -325,6 +325,14 @@ export const HistoryScreen = {
         btnCancel.className = 'btn btn--danger-outline'
         btnCancel.textContent = labelBatal
         btnCancel.addEventListener('click', async () => {
+          // Pembatalan tidak diantrekan, dan permintaan persetujuan (daftar pemberi + tukar PIN)
+          // hanya hidup online — jangan minta kasir mengonfirmasi tindakan yang pasti gagal.
+          if (getState().online === false) {
+            toast(perluPersetujuan('transaksi.batal', { punyaHak: bisa('transaksi.batal') })
+              ? 'Persetujuan atasan hanya bisa diminta saat terhubung ke server.'
+              : 'Pembatalan hanya bisa dilakukan saat terhubung ke server.', 'error')
+            return
+          }
           const yes = await confirmDialog({
             title: 'Batalkan transaksi ini?',
             message: `Transaksi ${struk.nomor} akan dibatalkan — stok barang dikembalikan ke gudang dan jurnal penjualannya di-reverse. Tindakan ini tidak dapat diurungkan.`,

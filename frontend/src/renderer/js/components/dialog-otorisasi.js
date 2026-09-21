@@ -46,7 +46,11 @@ export async function mintaOtorisasi({ aksi, transaksiId }) {
 
     // resolve(null) dipasang di onClose; jalur sukses me-resolve token SEBELUM close() —
     // resolve kedua no-op (pola yang sama dengan confirmDialog di ui.js).
-    const { close } = showModal({ title: 'Minta persetujuan', body, footer, size: 'sm', onClose: () => { hentikanHitungMundur(); resolve(null) } })
+    // Ditutup selagi permintaan melayang (X / overlay / Esc): onClose sudah resolve(null) dan
+    // pemanggil berhenti, jadi jawaban yang datang belakangan TIDAK boleh menampilkan "diterima" —
+    // token memang terbit di server, tapi tak ada yang membatalkan/merefund.
+    let ditutup = false
+    const { close } = showModal({ title: 'Minta persetujuan', body, footer, size: 'sm', onClose: () => { ditutup = true; hentikanHitungMundur(); resolve(null) } })
     const galatEl = body.querySelector('#ot-galat')
     const pinEl = body.querySelector('#ot-pin')
     const tampilkan = (pesan) => { galatEl.textContent = pesan; galatEl.classList.toggle('u-hidden', !pesan) }
@@ -87,6 +91,7 @@ export async function mintaOtorisasi({ aksi, transaksiId }) {
       btnKirim.disabled = true
       btnKirim.textContent = 'Memeriksa…'
       const hasil = await api.keamanan.otorisasi({ pemberiId, pin, aksi, transaksiId })
+      if (ditutup) return
       btnKirim.textContent = 'Setujui'
       if (!hasil.ok || !hasil.data || !hasil.data.token) {
         pinEl.value = ''

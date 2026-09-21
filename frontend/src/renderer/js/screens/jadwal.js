@@ -239,6 +239,8 @@ export const JadwalScreen = {
       }
       // Daftar kosong tanpa `jadwal.kelola` → kaki modal tanpa satu pun tombol tulis.
       for (const aksi of aksiDetailJadwal(kelola)) {
+        // Kunci aksi baru tanpa penangan padanan: lewati, jangan melempar saat modal dibuka.
+        if (typeof penangan[aksi.kunci] !== 'function') continue
         const btn = document.createElement('button')
         btn.className = aksi.kelas
         btn.textContent = aksi.label
