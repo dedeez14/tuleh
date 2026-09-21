@@ -1,0 +1,31 @@
+/* Layar Jadwal (gym/klinik) — navigasi hari + daftar slot */
+.jdw-hari { display: flex; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-4); }
+.jdw-hari__label { font-weight: 700; min-width: 16rem; }
+.jdw-hari__input { max-width: 11rem; margin-left: auto; }
+
+.jdw-list { display: grid; gap: var(--sp-2); }
+.jdw-item {
+  display: flex; align-items: center; gap: var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-xs);
+  cursor: pointer;
+}
+.jdw-item:hover, .jdw-item:focus-visible { border-color: var(--mod-sesi); }
+.jdw-item__jam { font-weight: 700; min-width: 7.5rem; }
+.jdw-item__info { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+.jdw-item__nama { font-weight: 600; }
+.jdw-item__meta { font-size: 0.85rem; color: var(--text-2); }
+.jdw-item.is-penuh .jdw-item__meta { color: var(--mod-stasiun); }
+.jdw-item.is-batal { opacity: 0.55; }
+.jdw-item.is-batal .jdw-item__nama { text-decoration: line-through; }
+
+.jdw-form__baris { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp-3); }
+.jdw-detail__meta { margin: 0 0 var(--sp-3); color: var(--text-2); }
+.jdw-peserta { width: 100%; }
+.jdw-cari { max-height: 18rem; overflow: auto; margin-top: var(--sp-3); }
+.jdw-cari__item {
+  display: flex; justify-content: space-between; gap: var(--sp-3); width: 100%;
+  padding: var(--sp-2) var(--sp-3); background: none; border: 0;
+  border-bottom: 1px solid var(--line); cursor: pointer; text-align: left;
+}
+.jdw-cari__item:hover { background: var(--surface-2); }

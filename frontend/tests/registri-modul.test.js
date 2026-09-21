@@ -23,12 +23,11 @@ const ARKETIPE = {
   membership: ['dashboard', 'kasir', 'member', 'jadwal', 'riwayat', 'sesi', 'pelanggan', 'pengeluaran', 'laporan', 'pengaturan'],
   hospitality: ['dashboard', 'kamar', 'reservasi', 'riwayat', 'sesi', 'pelanggan', 'pengeluaran', 'laporan', 'pengaturan']
 }
-const BELUM_ADA_LAYAR = new Set(['jadwal']) // penjadwalan kelas/booking belum dibangun
 
 test('setiap route_key server (kecuali yang tercatat belum ada) punya layar', () => {
   const semua = new Set(Object.values(ARKETIPE).flat())
   for (const key of semua) {
-    if (key === 'dashboard' || BELUM_ADA_LAYAR.has(key)) continue
+    if (key === 'dashboard') continue
     assert.ok(R.MODULES[key] && R.MODULES[key].screen, `route_key tanpa layar: ${key}`)
   }
 })
@@ -66,4 +65,10 @@ test('kartu utama = pintu transaksi', () => {
   assert.equal(R.kartuUtama('kasir'), true)
   assert.equal(R.kartuUtama('order'), true)
   assert.equal(R.kartuUtama('riwayat'), false)
+})
+
+test('route_key jadwal (gym & klinik) berujung ke layar Jadwal', () => {
+  assert.equal(R.MODULES.jadwal.screen, 'jadwal')
+  const kartu = R.susunModul({ menus: menu(ARKETIPE.membership), manajemen: false })
+  assert.ok(kartu.some((k) => k.id === 'jadwal'), 'kartu Jadwal muncul di Beranda membership')
 })

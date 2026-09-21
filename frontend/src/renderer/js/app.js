@@ -31,6 +31,7 @@ import { KeuanganScreen } from './screens/keuangan.js'
 import { PengeluaranScreen } from './screens/pengeluaran.js'
 import { StokScreen } from './screens/stok.js'
 import { InventoryScreen } from './screens/inventory.js'
+import { JadwalScreen } from './screens/jadwal.js'
 import { analisisStok } from './lib/stok-store.js'
 import { mulaiPemantau, hentikanPemantau } from './pemantau-pesanan.js'
 import { bukaBantuanPintasan } from './components/pintasan.js'
@@ -40,7 +41,7 @@ import { MODULES, MODULE_ACCENT, susunModul, kartuUtama } from './lib/registri-m
 const SCREENS = [
   PosScreen, HistoryScreen, SessionsScreen, ReportsScreen, SettingsScreen,
   OrdersScreen, StationsScreen, ProductsScreen, CustomersScreen, TablesScreen, PetaMejaScreen,
-  KeuanganScreen, PengeluaranScreen, StokScreen, InventoryScreen
+  KeuanganScreen, PengeluaranScreen, StokScreen, InventoryScreen, JadwalScreen
 ]
 const LAST_TOKO_KEY = 'mpos.lastTokoId'
 

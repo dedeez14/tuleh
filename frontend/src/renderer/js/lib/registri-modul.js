@@ -23,6 +23,8 @@ export const MODULES = {
   inventory: { screen: 'inventory', title: 'Inventory', iconKey: 'box', desc: 'Tambah/kurangi stok, opname, & riwayat perubahan stok.' },
   pelanggan: { screen: 'customers', title: 'Pelanggan', iconKey: 'user', desc: 'Cari, lihat, dan tambahkan pelanggan.' },
   member: { screen: 'customers', title: 'Member', iconKey: 'user', desc: 'Cari dan kelola member beserta kontaknya.' },
+  // Membership (gym, klinik): slot kelas/janji temu per hari + pesertanya.
+  jadwal: { screen: 'jadwal', title: 'Jadwal', iconKey: 'session', desc: 'Kelas & janji temu hari ini — kuota, peserta, dan kehadiran.' },
   keuangan: { screen: 'keuangan', title: 'Keuangan', iconKey: 'report', desc: 'Omzet, laba, margin, metode bayar, dan tren.' },
   pengeluaran: { screen: 'pengeluaran', title: 'Pengeluaran', iconKey: 'wallet', desc: 'Catat biaya operasional: sewa, gaji, listrik, bahan.' },
   stok: { screen: 'stok', title: 'Stok', iconKey: 'box', desc: 'Pantau stok menipis, atur batas minimum, & saran restok.' }
@@ -31,7 +33,7 @@ export const MODULES = {
 // Peta id modul → token warna aksen (dipakai kartu Beranda; ikut dark via token)
 export const MODULE_ACCENT = {
   kasir: 'kasir', order: 'kasir', kamar: 'kasir', dapur: 'dapur', antrian: 'antrian', proses: 'proses', reservasi: 'antrian',
-  meja: 'meja', stasiun: 'stasiun', riwayat: 'riwayat', sesi: 'sesi',
+  meja: 'meja', stasiun: 'stasiun', riwayat: 'riwayat', sesi: 'sesi', jadwal: 'sesi',
   laporan: 'laporan', produk: 'produk', layanan: 'produk', inventory: 'produk', pelanggan: 'pelanggan', member: 'pelanggan',
   pengaturan: 'pengaturan', keuangan: 'laporan', pengeluaran: 'meja', stok: 'dapur'
 }
