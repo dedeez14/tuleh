@@ -55,6 +55,7 @@ const _rute = [
   '/stok',
   '/pengaturan',
   '/meja',
+  '/jadwal',
 ];
 
 void main() {

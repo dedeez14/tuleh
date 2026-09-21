@@ -458,6 +458,11 @@ class DemoEngine {
       return _ok(baru);
     }
 
+    // --- jadwal (gym/klinik) ---
+    // Tak ada toko demo berbidang membership, tapi endpoint tetap DIJAWAB agar
+    // layar Jadwal menampilkan keadaan kosong yang sah (bukan galat) di Mode Demo.
+    if (path == '/jadwal' && m == 'GET') return _ok(const []);
+
     // --- transaksi ---
     if (path == '/transaksi' && m == 'GET') {
       return _ok(_transaksi.where((t) => t['toko_id'] == toko).toList());

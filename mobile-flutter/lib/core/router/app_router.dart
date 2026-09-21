@@ -7,6 +7,7 @@ import '../../features/demo/presentation/demo_identitas_screen.dart';
 import '../../features/auth/presentation/controllers/auth_controller.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/home/presentation/screens/home_screen.dart';
+import '../../features/jadwal/presentation/screens/jadwal_screen.dart';
 import '../../features/kasir/presentation/screens/kasir_screen.dart';
 import '../../features/laporan/presentation/screens/laporan_screen.dart';
 import '../../features/meja/presentation/screens/meja_screen.dart';
@@ -128,6 +129,7 @@ const _sekunder = <(String, Widget)>[
   ('/riwayat', RiwayatScreen()),
   ('/pesanan', PapanPesananScreen()),
   ('/meja', MejaScreen()),
+  ('/jadwal', JadwalScreen()),
   ('/produk', ProdukScreen()),
   ('/pelanggan', PelangganScreen()),
   ('/pengeluaran', PengeluaranScreen()),
