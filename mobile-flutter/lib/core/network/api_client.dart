@@ -37,6 +37,11 @@ final updateRequiredProvider = StateProvider<bool>((ref) => false);
 /// Dibaca `SesiBerakhirGate` (app.dart) yang membersihkan sesi.
 final sessionExpiredProvider = StateProvider<bool>((ref) => false);
 
+/// Dinaikkan setiap endpoint ber-token menjawab 403 (hak akses ditolak).
+/// `IdentitasGate` memuat ulang `/auth/me` sekali agar gerbang tombol ikut
+/// menyesuaikan; permintaan itu sendiri tetap gagal — server yang berwenang.
+final hakDitolakProvider = StateProvider<int>((ref) => 0);
+
 /// Diisi saat endpoint tulis menjawab 402 (langganan perusahaan diblokir):
 /// pesan & tautan perpanjang dari server. `LanggananGate` menampilkan layar
 /// "Langganan berakhir"; permintaan itu TIDAK diantrekan.
@@ -98,6 +103,14 @@ final dioProvider = Provider<Dio>((ref) {
           final bertoken = o.headers['Authorization'] != null;
           if (bertoken && !_jalurTanpaSesi.contains(o.path)) {
             ref.read(sessionExpiredProvider.notifier).state = true;
+          }
+        } else if (code == 403) {
+          // Hak dicabut/ditambah pemilik saat aplikasi terbuka. `/auth/me`
+          // dikecualikan supaya 403 di sana tidak memicu /auth/me lagi tanpa
+          // ujung; permintaan tanpa token bukan urusan hak akses.
+          final bertoken = o.headers['Authorization'] != null;
+          if (bertoken && o.path != '/auth/me') {
+            ref.read(hakDitolakProvider.notifier).state++;
           }
         } else if (code == 402) {
           ref.read(langgananTerkunciProvider.notifier).state = LanggananTerkunci.dariAmplop(

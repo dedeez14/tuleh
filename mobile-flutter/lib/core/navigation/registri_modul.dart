@@ -110,6 +110,9 @@ const registriModul = <String, ModulApp>{
 /// route_key yang SUDAH menjadi tujuan utama di bilah bawah (lihat `TujuanUtama`).
 const _tujuanUtama = {'dashboard', 'home', 'kasir', 'order', 'kamar', 'laporan'};
 
+/// Rute empat tujuan utama — selalu terjangkau lewat bilah bawah/rail.
+const ruteTujuanUtama = {'/home', '/kasir', '/aktivitas', '/laporan'};
+
 /// Fitur khas app di LUAR manifest server (analisis stok UMKM) — selalu di bawah.
 const _ekstraApp = [
   MenuLain(
@@ -197,3 +200,17 @@ List<MenuLain> menuLainDariManifest(
 
   return out;
 }
+
+/// Rute yang punya PINTU untuk manifest ini: empat tujuan utama + setiap kartu
+/// di lembar "Lainnya". Dipakai penyegaran identitas (Tahap B §2b) untuk
+/// memulangkan pengguna dari layar yang haknya baru saja dicabut — server
+/// menyaring `menus` per hak akses, jadi menu yang hilang = pintu yang hilang.
+///
+/// Rute yang tak pernah muncul di sini (papan pesanan, layar rincian) memang
+/// tak punya kartu; penggunanya tidak boleh ikut terusir (lihat `layarTujuan`).
+/// Peringatan route_key tak dikenal sengaja dibungkam: daftar ini dihitung tiap
+/// penyegaran, bukan saat menggambar menu.
+Set<String> rutePunyaPintu(TokoManifest? manifest) => {
+  ...ruteTujuanUtama,
+  for (final m in menuLainDariManifest(manifest, peringatan: (_) {})) m.rute,
+};

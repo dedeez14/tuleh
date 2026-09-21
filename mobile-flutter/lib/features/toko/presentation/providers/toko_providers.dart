@@ -42,9 +42,41 @@ final activeTokoIdProvider =
 /// Manifest toko aktif — menentukan menu & alur yang tampil (papan pesanan
 /// hanya untuk bidang usaha bertahap). Kosong bila toko belum dipilih atau
 /// server belum menyediakan endpoint manifest.
-final activeManifestProvider = FutureProvider<TokoManifest>((ref) async {
-  final id = ref.watch(activeTokoIdProvider).valueOrNull;
-  if (id == null || id.isEmpty) return const TokoManifest();
-  final r = await ref.watch(tokoRepositoryProvider).manifest(id);
-  return r.when(ok: (v) => v, err: (e) => throw e);
-});
+class ManifestNotifier extends AsyncNotifier<TokoManifest> {
+  @override
+  Future<TokoManifest> build() async {
+    final id = ref.watch(activeTokoIdProvider).valueOrNull;
+    if (id == null || id.isEmpty) return const TokoManifest();
+    final r = await ref.watch(tokoRepositoryProvider).manifest(id);
+    return r.when(ok: (v) => v, err: (e) => throw e);
+  }
+
+  /// Tarik ulang manifest toko aktif TANPA membuang yang sekarang bila gagal.
+  ///
+  /// Dipakai penyegaran identitas (Tahap B §2b): server menyaring `menus` per
+  /// hak akses, jadi hak berubah = menu berubah walau `manifest_version` tidak
+  /// bergerak. Berbeda dari `ref.invalidate`, kegagalan di sini tidak
+  /// meninggalkan layar dengan galat atau menu bawaan yang lebih lebar dari
+  /// peran — manifest lama tetap berlaku sampai server terjangkau lagi.
+  ///
+  /// Toko dirujuk dengan id TERSIMPAN (yang sudah terbukti diterima server),
+  /// bukan hasil pencocokan id antar-jawaban: `encrypt_id` memakai IV acak
+  /// sehingga toko yang sama punya id berbeda di tiap jawaban.
+  ///
+  /// Mengembalikan true bila manifest baru berhasil dipasang.
+  Future<bool> segarkan() async {
+    final id = ref.read(activeTokoIdProvider).valueOrNull;
+    if (id == null || id.isEmpty) return false;
+    final r = await ref.read(tokoRepositoryProvider).manifest(id);
+    return r.when(
+      ok: (v) {
+        state = AsyncData(v);
+        return true;
+      },
+      err: (_) => false,
+    );
+  }
+}
+
+final activeManifestProvider =
+    AsyncNotifierProvider<ManifestNotifier, TokoManifest>(ManifestNotifier.new);

@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/akses/identitas_segar.dart';
 import '../../../../core/diagnostik/log_cincin.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/offline/pengurai.dart';
@@ -142,6 +143,67 @@ class AuthController extends AsyncNotifier<User?> {
   }
 
   bool get isDemo => ref.read(demoSessionProvider).active;
+
+  /// Jeda minimum antar-muat identitas saat aplikasi kembali ke depan.
+  static const jedaIdentitas = Duration(seconds: 60);
+
+  /// Jeda TERSENDIRI untuk [segarkanIdentitas] dengan `paksa` (sesudah 403).
+  /// Layar yang polling — papan pesanan 4 dtk, meja 5 dtk, stok 10 dtk — kena
+  /// 403 setiap putaran bila haknya dicabut, dan tanpa jeda ini setiap
+  /// penolakan memanggil `/auth/me` lagi. Lebih panjang dari polling tercepat,
+  /// tetapi jauh lebih pendek dari [jedaIdentitas]: 403 PERTAMA harus langsung
+  /// menyegarkan.
+  static const jedaIdentitasPaksa = Duration(seconds: 30);
+
+  DateTime? _identitasTerakhir;
+  DateTime? _identitasPaksaTerakhir;
+  bool _identitasBerjalan = false;
+
+  bool _perluMuatIdentitas({required bool paksa, required DateTime kini}) {
+    final terakhir = paksa ? _identitasPaksaTerakhir : _identitasTerakhir;
+    if (terakhir == null) return true; // jalur ini belum pernah dipakai
+    return kini.difference(terakhir) >= (paksa ? jedaIdentitasPaksa : jedaIdentitas);
+  }
+
+  /// Muat ulang identitas dari `/auth/me` (hak akses, peran, nama). Dipanggil
+  /// tiap aplikasi kembali ke depan — dengan jeda agar berpindah aplikasi
+  /// bolak-balik tak membanjiri server — dan dengan [paksa] sesudah 403 (hak
+  /// mungkin baru saja dicabut atau ditambah pemilik).
+  ///
+  /// Gagal (jaringan/gangguan) sengaja diabaikan: identitas lama tetap dipakai
+  /// dan sesi TIDAK dibersihkan — amplop kosong bukan bukti hak dicabut, dan
+  /// server tetap penentu lewat 403. Token yang benar-benar mati menjawab 401
+  /// dan ditangani `SesiBerakhirGate`.
+  ///
+  /// Mengembalikan true bila daftar hak BERUBAH: pemanggil (`IdentitasGate`)
+  /// memuat ulang manifest sebelum menilai menu, karena server menyaring menu
+  /// per hak akses sedangkan `manifest_version` tidak bergerak.
+  Future<bool> segarkanIdentitas({bool paksa = false, DateTime? sekarang}) async {
+    // Potret SEBELUM menunggu jawaban; dibandingkan lagi sesudahnya.
+    final sebelum = state.valueOrNull;
+    // Sedang berjalan → jangan menumpuk: 403 beruntun dari beberapa layar
+    // sekaligus cukup menghasilkan satu panggilan (sekaligus penjaga rekursi).
+    if (sebelum == null || isDemo || _identitasBerjalan) return false;
+    final kini = sekarang ?? DateTime.now();
+    if (!_perluMuatIdentitas(paksa: paksa, kini: kini)) return false;
+    _identitasBerjalan = true;
+    if (paksa) _identitasPaksaTerakhir = kini;
+    try {
+      final hasil = await ref.read(authRepositoryProvider).currentUser();
+      // Distempel juga saat gagal: perangkat tanpa sinyal tak perlu mencoba
+      // lagi setiap kembali ke depan.
+      _identitasTerakhir = kini;
+      final user = hasil.valueOrNull;
+      if (user == null) return false;
+      // Pengguna keluar akun / sesi berakhir selagi jawaban ditunggu → jangan
+      // menghidupkan identitas lama lagi.
+      if (!identical(state.valueOrNull, sebelum)) return false;
+      state = AsyncData(user);
+      return kunciAkses(sebelum.akses) != kunciAkses(user.akses);
+    } finally {
+      _identitasBerjalan = false;
+    }
+  }
 
   Future<void> logout() async {
     ref.read(demoSessionProvider).stop();
