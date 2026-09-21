@@ -362,11 +362,78 @@ class _DetailSlot extends ConsumerWidget {
 
   final String id;
 
-  Future<void> _jalankan(BuildContext context, WidgetRef ref, Future<dynamic> Function() aksi) async {
+  /// Aksi destruktif (lepas peserta, batalkan jadwal) wajib dikonfirmasi — pola yang sama
+  /// dengan layar Meja; tidak ada "aktifkan kembali" dari aplikasi.
+  Future<bool> _konfirmasi(BuildContext context, {required String judul, required String isi, required String tombol}) async {
+    final ya = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(judul),
+        content: Text(isi),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Kembali')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(tombol),
+          ),
+        ],
+      ),
+    );
+    return ya == true;
+  }
+
+  Future<void> _lepasPeserta(BuildContext context, WidgetRef ref, PesertaJadwal p) async {
+    final ya = await _konfirmasi(
+      context,
+      judul: 'Lepas ${p.nama} dari jadwal?',
+      isi: 'Peserta dihapus dari daftar slot ini dan kuotanya kembali tersedia.',
+      tombol: 'Lepas',
+    );
+    if (!ya || !context.mounted) return;
+    await _jalankan(
+      context,
+      ref,
+      () => ref.read(jadwalRepositoryProvider).lepasPeserta(id, p.id),
+      sukses: '${p.nama} dilepas dari jadwal.',
+    );
+  }
+
+  Future<void> _batalkanJadwal(BuildContext context, WidgetRef ref, JadwalSlot s) async {
+    final ya = await _konfirmasi(
+      context,
+      judul: 'Batalkan jadwal "${s.nama}"?',
+      isi: 'Slot ditandai batal dan tidak bisa diaktifkan lagi dari aplikasi. '
+          'Peserta yang sudah terdaftar tetap tercatat.',
+      tombol: 'Batalkan jadwal',
+    );
+    if (!ya || !context.mounted) return;
+    await _jalankan(
+      context,
+      ref,
+      () => ref.read(jadwalRepositoryProvider).batal(id),
+      sukses: 'Jadwal "${s.nama}" dibatalkan.',
+    );
+  }
+
+  /// Jalankan aksi tulis; sukses → muat ulang detail + kabar singkat, gagal → kalimat server
+  /// (409 KUOTA_PENUH/SUDAH_TERDAFTAR/JADWAL_BATAL tampil apa adanya).
+  Future<void> _jalankan(
+    BuildContext context,
+    WidgetRef ref,
+    Future<dynamic> Function() aksi, {
+    required String sukses,
+  }) async {
     final messenger = ScaffoldMessenger.of(context);
     final hasil = await aksi();
+    if (!context.mounted) return;
     hasil.when(
-      ok: (_) => ref.invalidate(jadwalDetailProvider(id)),
+      ok: (_) {
+        ref.invalidate(jadwalDetailProvider(id));
+        messenger
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(backgroundColor: AppColors.success, content: Text(sukses)));
+      },
       err: (e) {
         final pesan = e is ApiException ? (e.firstError() ?? e.message) : '$e';
         messenger
@@ -413,8 +480,13 @@ class _DetailSlot extends ConsumerWidget {
                         key: ValueKey('jdw-status-${p.id}'),
                         icon: const Icon(Icons.more_vert_rounded),
                         onSelected: (nilai) => nilai == 'LEPAS'
-                            ? _jalankan(context, ref, () => ref.read(jadwalRepositoryProvider).lepasPeserta(id, p.id))
-                            : _jalankan(context, ref, () => ref.read(jadwalRepositoryProvider).ubahStatusPeserta(id, p.id, nilai)),
+                            ? _lepasPeserta(context, ref, p)
+                            : _jalankan(
+                                context,
+                                ref,
+                                () => ref.read(jadwalRepositoryProvider).ubahStatusPeserta(id, p.id, nilai),
+                                sukses: '${p.nama}: ${_statusPeserta[nilai] ?? nilai}.',
+                              ),
                         itemBuilder: (_) => [
                           for (final e in _statusPeserta.entries)
                             PopupMenuItem(value: e.key, child: Text(e.value)),
@@ -439,7 +511,7 @@ class _DetailSlot extends ConsumerWidget {
             ),
             if (s.aktif)
               TextButton(
-                onPressed: () => _jalankan(context, ref, () => ref.read(jadwalRepositoryProvider).batal(id)),
+                onPressed: () => _batalkanJadwal(context, ref, s),
                 style: TextButton.styleFrom(foregroundColor: AppColors.danger),
                 child: const Text('Batalkan jadwal'),
               ),

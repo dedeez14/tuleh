@@ -129,6 +129,7 @@ void main() {
     await t.pumpAndSettle();
     await t.tap(find.text('Hadir').last);
     await t.pumpAndSettle();
+    await t.pump(const Duration(seconds: 5)); // habiskan pewaktu SnackBar sukses
 
     expect(repo.statusDiubah, 'HADIR');
   });
