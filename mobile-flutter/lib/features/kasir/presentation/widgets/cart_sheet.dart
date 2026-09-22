@@ -32,6 +32,7 @@ import 'keranjang_kartu_tambahan.dart';
 import 'lembar_ukuran.dart';
 import 'parkir_sheet.dart';
 import '../../../../core/offline/pengurai.dart';
+import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../../../products/presentation/providers/products_provider.dart';
 import '../providers/checkout_providers.dart';
 import '../screens/kasir_screen.dart' show bukaSesiDenganUmpanBalik;
@@ -51,8 +52,14 @@ String? validasiUangMuka(double uangMuka, double total) {
 /// Disimpan DI LUAR state lembar: lembar ponsel boleh ditutup lalu dibuka lagi
 /// setelah kiriman gagal jaringan, dan kirim ulang muatan yang sama harus tetap
 /// memakai ref yang sama (server bisa saja sudah mencatat kiriman pertama).
-/// Dibuang (null) setelah kiriman keranjang APA PUN sukses — nota maupun Lunas.
-final refNotaProvider = StateProvider<RefNota?>((ref) => null);
+/// Dibuang (null) setelah kiriman keranjang APA PUN sukses — nota maupun Lunas —
+/// dan otomatis saat toko aktif atau pengguna berganti (seperti keranjang): muatan
+/// identik di toko/pengguna lain tidak boleh memutar ulang nota yang lama.
+final refNotaProvider = StateProvider<RefNota?>((ref) {
+  ref.watch(activeTokoIdProvider.select((t) => t.valueOrNull));
+  ref.watch(authControllerProvider.select((a) => a.valueOrNull?.id));
+  return null;
+});
 
 /// Lembar keranjang — daftar item, metode bayar, uang diterima, lalu bayar.
 ///
