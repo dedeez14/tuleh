@@ -303,6 +303,104 @@ void main() {
       expect(salin.labelSisa, 'Dibayar saat serah');
     });
 
+    test('nomor antrian dicetak di bawah nomor nota (teks & ESC/POS)', () {
+      // Untuk laundry/bengkel inilah alasan utama nota dicetak: pelanggan
+      // menyebut nomor antriannya saat mengambil barang.
+      final s = Struk(
+        namaToko: 'Tuléh Laundry',
+        nomor: 'ORD/0001',
+        noAntrian: 'B-003',
+        waktu: DateTime(2026, 9, 22, 10),
+        total: 28000,
+        baris: const [StrukBaris(nama: 'Cuci Kering', kuantitas: 1, harga: 28000)],
+        uangMuka: 10000,
+        sisa: 18000,
+      );
+      for (final teks in [const StrukTeks().bangun(s), const StrukEscPos().pratinjau(s)]) {
+        final baris = teks.split('\n');
+        final iNomor = baris.indexWhere((b) => b.contains('ORD/0001'));
+        final iAntrian = baris.indexWhere((b) => b.contains('No. antrian'));
+        expect(iNomor, greaterThanOrEqualTo(0));
+        expect(iAntrian, iNomor + 1, reason: 'tepat di bawah nomor nota');
+        expect(baris[iAntrian], contains('B-003'));
+        for (final b in baris) {
+          expect(b.length, lessThanOrEqualTo(32), reason: b);
+        }
+      }
+      // Tanpa nomor antrian (minimarket) tak ada baris tambahan.
+      expect(
+        const StrukTeks().bangun(dasar(uangMuka: 10000, sisa: 18000)),
+        isNot(contains('No. antrian')),
+      );
+      final k = Struk.fromJson(s.toJson());
+      expect(k.noAntrian, 'B-003');
+      expect(s.salinDengan(nomor: 'ORD/0002').noAntrian, 'B-003');
+    });
+
+    test('label uang muka membawa metode nota, baris "Bayar" tak ikut tercetak', () {
+      final s = Struk(
+        namaToko: 'Tuléh Laundry',
+        nomor: 'ORD/0001',
+        waktu: DateTime(2026, 9, 22, 10),
+        total: 28000,
+        baris: const [StrukBaris(nama: 'Cuci Kering', kuantitas: 1, harga: 28000)],
+        uangMuka: 10000,
+        sisa: 18000,
+        labelUangMuka: 'Uang muka (QRIS)',
+      );
+      for (final teks in [const StrukTeks().bangun(s), const StrukEscPos().pratinjau(s)]) {
+        expect(teks, contains('Uang muka (QRIS)'));
+        expect(teks, isNot(contains('Bayar ')));
+      }
+      expect(Struk.fromJson(s.toJson()).labelUangMuka, 'Uang muka (QRIS)');
+      expect(s.salinDengan(nomor: 'X').labelUangMuka, 'Uang muka (QRIS)');
+    });
+
+    test('strukDariServer melengkapi QR kaki, diskon, nomor antrian & baris per nominal', () {
+      final s = strukDariServer({
+        'nomor': 'ORD/9',
+        'no_antrian': 'B-007',
+        'tanggal': '2026-09-22T10:00:00+07:00',
+        'status': 'BELUM LUNAS',
+        'subtotal': 30000,
+        'total_diskon': 2000,
+        'grand_total': 28000,
+        'sisa': 28000,
+        'items': [
+          {'nama': null, 'kuantitas': 1, 'harga': 28000, 'nominal_diminta': 20000},
+        ],
+      }, namaToko: 'T');
+      expect(s.barcode, 'ORD/9', reason: 'QR kaki struk memakai nomor nota');
+      expect(s.noAntrian, 'B-007');
+      expect(s.diskon, 2000);
+      expect(s.baris.single.nama, '-', reason: 'nama kosong tidak jadi "null"');
+      expect(s.baris.single.nominalDiminta, 20000);
+    });
+
+    test('strukDariServer menjepit sisa negatif & membaca metode huruf kecil', () {
+      final s = strukDariServer({
+        'nomor': 'POS-9',
+        'tanggal': '2026-09-22T12:00:00+07:00',
+        'status': 'SELESAI',
+        'tipe_pembayaran': 'tunai',
+        'grand_total': 28000,
+        'dibayar': 30000,
+        'kembalian': 2000,
+        'items': const [],
+      }, namaToko: 'T');
+      expect(s.dibayar, 30000, reason: 'metode huruf kecil tetap dikenali TUNAI');
+
+      final aneh = strukDariServer({
+        'nomor': 'POS-10',
+        'tanggal': '2026-09-22T12:00:00+07:00',
+        'status': 'SELESAI',
+        'grand_total': 10000,
+        'uang_muka': 15000, // data melenceng: DP > grand_total
+        'items': const [],
+      }, namaToko: 'T');
+      expect(aneh.sisa, 0, reason: 'tak pernah negatif');
+    });
+
     test('strukDariServer: nota bayar nanti / uang muka / pelunasan ber-DP / transaksi biasa', () {
       final item = [
         {'nama': 'Cuci Kering', 'kuantitas': 1, 'harga': 28000, 'subtotal': 28000},
@@ -336,7 +434,10 @@ void main() {
         'sisa': 18000,
         'items': item,
       }, namaToko: 'T');
-      expect(dp.metode, 'QRIS');
+      // Nota UANG MUKA tak boleh mencetak baris "Bayar QRIS" (terbaca seolah
+      // lunas); metodenya menempel pada label uang muka, sama dengan desktop.
+      expect(dp.metode, isNull);
+      expect(dp.labelUangMuka, 'Uang muka (QRIS)');
       expect(dp.uangMuka, 10000);
       expect(dp.sisa, 18000);
       expect(dp.labelSisa, 'Sisa');

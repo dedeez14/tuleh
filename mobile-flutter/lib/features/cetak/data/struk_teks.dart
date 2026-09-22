@@ -34,6 +34,10 @@ class StrukTeks {
       garis();
     }
     b.add(_duaKolom('No', s.nomor));
+    // Nomor antrian: yang disebut pelanggan laundry/bengkel saat mengambil.
+    if (s.noAntrian?.isNotEmpty ?? false) {
+      b.add(_duaKolom('No. antrian', s.noAntrian!));
+    }
     if (s.rujukan?.isNotEmpty ?? false) b.add(_duaKolom('Transaksi', s.rujukan!));
     b.add(_duaKolom('Waktu', _waktu(s.waktu)));
     if (s.kasir?.isNotEmpty ?? false) {
@@ -56,7 +60,7 @@ class StrukTeks {
       b.add(_duaKolom(s.judul == null ? 'Bayar' : 'Dikembalikan via', s.metode!));
     }
     // Fase 3: nota DP & struk pelunasan — uang muka lalu sisa tagihan.
-    if ((s.uangMuka ?? 0) > 0) b.add(_duaKolom('Uang muka', fmtIDR(s.uangMuka!)));
+    if ((s.uangMuka ?? 0) > 0) b.add(_duaKolom(s.labelUangMuka, fmtIDR(s.uangMuka!)));
     if (s.sisa != null) b.add(_duaKolom(s.labelSisa, fmtIDR(s.sisa!)));
     if (s.dibayar != null) b.add(_duaKolom('Tunai', fmtIDR(s.dibayar!)));
     if ((s.kembalian ?? 0) > 0) b.add(_duaKolom('Kembali', fmtIDR(s.kembalian!)));

@@ -69,6 +69,8 @@ class Struk {
     this.uangMuka,
     this.sisa,
     this.labelSisa = 'Sisa',
+    this.labelUangMuka = 'Uang muka',
+    this.noAntrian,
   });
 
   final String namaToko;
@@ -121,6 +123,15 @@ class Struk {
   /// Label baris [sisa]: 'Sisa' (nota) / 'Dibayar saat serah' (struk pelunasan).
   final String labelSisa;
 
+  /// Label baris [uangMuka]. Nota DP memakai 'Uang muka (QRIS)' — metodenya
+  /// menempel di sini karena nota BELUM lunas tak boleh mencetak baris
+  /// `Bayar <metode>` yang terbaca seolah sudah dibayar penuh (cermin desktop).
+  final String labelUangMuka;
+
+  /// Nomor antrian pesanan. Untuk laundry/bengkel/doorsmeer inilah yang
+  /// disebut pelanggan saat mengambil barang, jadi ikut dicetak di nota.
+  final String? noAntrian;
+
   /// Baris terukur dihitung satu item: "0,74 kg" bukan nol item (0,4 kg
   /// membulat ke nol) dan bukan pula 0,74 item.
   int get jumlahItem =>
@@ -159,9 +170,11 @@ class Struk {
     'rujukan': rujukan,
     'alasan': alasan,
     'label_total': labelTotal,
-    'uangMuka': uangMuka,
+    'uang_muka': uangMuka,
     'sisa': sisa,
-    'labelSisa': labelSisa,
+    'label_sisa': labelSisa,
+    'label_uang_muka': labelUangMuka,
+    'no_antrian': noAntrian,
   };
 
   factory Struk.fromJson(Map<String, dynamic> j) {
@@ -200,9 +213,11 @@ class Struk {
       rujukan: j['rujukan']?.toString(),
       alasan: j['alasan']?.toString(),
       labelTotal: (j['label_total'] ?? 'TOTAL').toString(),
-      uangMuka: (j['uangMuka'] as num?)?.toDouble(),
+      uangMuka: (j['uang_muka'] as num?)?.toDouble(),
       sisa: (j['sisa'] as num?)?.toDouble(),
-      labelSisa: (j['labelSisa'] as String?) ?? 'Sisa',
+      labelSisa: (j['label_sisa'] as String?) ?? 'Sisa',
+      labelUangMuka: (j['label_uang_muka'] as String?) ?? 'Uang muka',
+      noAntrian: j['no_antrian']?.toString(),
     );
   }
 
@@ -231,5 +246,7 @@ class Struk {
     uangMuka: uangMuka,
     sisa: sisa,
     labelSisa: labelSisa,
+    labelUangMuka: labelUangMuka,
+    noAntrian: noAntrian,
   );
 }

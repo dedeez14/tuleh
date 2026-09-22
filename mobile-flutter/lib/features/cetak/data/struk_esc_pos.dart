@@ -68,6 +68,10 @@ class StrukEscPos {
 
     // --- info transaksi ---
     b.addAll(_duaKolom(g, 'No', s.nomor));
+    // Nomor antrian: yang disebut pelanggan laundry/bengkel saat mengambil.
+    if (s.noAntrian?.isNotEmpty ?? false) {
+      b.addAll(_duaKolom(g, 'No. antrian', s.noAntrian!));
+    }
     if (s.rujukan?.isNotEmpty ?? false) {
       b.addAll(_duaKolom(g, 'Transaksi', s.rujukan!));
     }
@@ -113,7 +117,7 @@ class StrukEscPos {
     }
     // Fase 3: nota DP & struk pelunasan — uang muka lalu sisa tagihan.
     if ((s.uangMuka ?? 0) > 0) {
-      b.addAll(_duaKolom(g, 'Uang muka', fmtIDR(s.uangMuka!)));
+      b.addAll(_duaKolom(g, s.labelUangMuka, fmtIDR(s.uangMuka!)));
     }
     if (s.sisa != null) {
       b.addAll(_duaKolom(g, s.labelSisa, fmtIDR(s.sisa!)));
@@ -232,6 +236,7 @@ class StrukEscPos {
       '-' * _kolom,
       if (s.judul != null) ...[_tengah(s.judul!), '-' * _kolom],
       _pasangan('No', s.nomor),
+      if (s.noAntrian?.isNotEmpty ?? false) _pasangan('No. antrian', s.noAntrian!),
       if (s.rujukan?.isNotEmpty ?? false) _pasangan('Transaksi', s.rujukan!),
       _pasangan('Waktu', _waktu(s.waktu)),
       if (s.kasir != null && s.kasir!.isNotEmpty)
@@ -249,7 +254,7 @@ class StrukEscPos {
       _pasangan(s.labelTotal, fmtIDR(s.total)),
       if (s.metode != null && s.metode!.isNotEmpty)
         _pasangan(s.judul == null ? 'Bayar' : 'Dikembalikan via', s.metode!),
-      if ((s.uangMuka ?? 0) > 0) _pasangan('Uang muka', fmtIDR(s.uangMuka!)),
+      if ((s.uangMuka ?? 0) > 0) _pasangan(s.labelUangMuka, fmtIDR(s.uangMuka!)),
       if (s.sisa != null) _pasangan(s.labelSisa, fmtIDR(s.sisa!)),
       if (s.dibayar != null) _pasangan('Tunai', fmtIDR(s.dibayar!)),
       if (s.kembalian != null && s.kembalian! > 0)
