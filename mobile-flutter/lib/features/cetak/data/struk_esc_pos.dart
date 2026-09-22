@@ -111,6 +111,13 @@ class StrukEscPos {
     if (s.metode != null && s.metode!.isNotEmpty) {
       b.addAll(_duaKolom(g, s.judul == null ? 'Bayar' : 'Dikembalikan via', s.metode!));
     }
+    // Fase 3: nota DP & struk pelunasan — uang muka lalu sisa tagihan.
+    if ((s.uangMuka ?? 0) > 0) {
+      b.addAll(_duaKolom(g, 'Uang muka', fmtIDR(s.uangMuka!)));
+    }
+    if (s.sisa != null) {
+      b.addAll(_duaKolom(g, s.labelSisa, fmtIDR(s.sisa!)));
+    }
     if (s.dibayar != null) {
       b.addAll(_duaKolom(g, 'Tunai', fmtIDR(s.dibayar!)));
     }
@@ -242,6 +249,8 @@ class StrukEscPos {
       _pasangan(s.labelTotal, fmtIDR(s.total)),
       if (s.metode != null && s.metode!.isNotEmpty)
         _pasangan(s.judul == null ? 'Bayar' : 'Dikembalikan via', s.metode!),
+      if ((s.uangMuka ?? 0) > 0) _pasangan('Uang muka', fmtIDR(s.uangMuka!)),
+      if (s.sisa != null) _pasangan(s.labelSisa, fmtIDR(s.sisa!)),
       if (s.dibayar != null) _pasangan('Tunai', fmtIDR(s.dibayar!)),
       if (s.kembalian != null && s.kembalian! > 0)
         _pasangan('Kembali', fmtIDR(s.kembalian!)),

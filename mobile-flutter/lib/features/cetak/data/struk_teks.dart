@@ -55,6 +55,9 @@ class StrukTeks {
     if (s.metode?.isNotEmpty ?? false) {
       b.add(_duaKolom(s.judul == null ? 'Bayar' : 'Dikembalikan via', s.metode!));
     }
+    // Fase 3: nota DP & struk pelunasan — uang muka lalu sisa tagihan.
+    if ((s.uangMuka ?? 0) > 0) b.add(_duaKolom('Uang muka', fmtIDR(s.uangMuka!)));
+    if (s.sisa != null) b.add(_duaKolom(s.labelSisa, fmtIDR(s.sisa!)));
     if (s.dibayar != null) b.add(_duaKolom('Tunai', fmtIDR(s.dibayar!)));
     if ((s.kembalian ?? 0) > 0) b.add(_duaKolom('Kembali', fmtIDR(s.kembalian!)));
     if (s.alasan?.trim().isNotEmpty ?? false) {

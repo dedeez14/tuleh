@@ -4,6 +4,7 @@ import 'package:tuleh_pos/features/cetak/data/printer_service.dart';
 import 'package:tuleh_pos/features/cetak/data/struk_esc_pos.dart';
 import 'package:tuleh_pos/features/cetak/data/struk_teks.dart';
 import 'package:tuleh_pos/features/cetak/domain/entities/struk.dart';
+import 'package:tuleh_pos/features/cetak/domain/struk_server.dart';
 
 /// Penyusun struk thermal. Yang diuji adalah perataan kolom dan isi — bagian
 /// yang membuat struk terlihat berantakan di kertas bila salah, dan satu-satunya
@@ -251,6 +252,143 @@ void main() {
       expect(ulang.alasan, nota.alasan);
       expect(ulang.labelTotal, 'TOTAL REFUND');
       expect(Struk.fromJson(_struk().toJson()).labelTotal, 'TOTAL');
+    });
+  });
+
+  group('uang muka (Fase 3)', () {
+    Struk dasar({
+      double? uangMuka,
+      double? sisa,
+      String labelSisa = 'Sisa',
+      String? metode,
+    }) => Struk(
+      namaToko: 'Tuléh Laundry',
+      nomor: 'ORD/0001',
+      waktu: DateTime(2026, 9, 22, 10),
+      total: 28000,
+      baris: const [StrukBaris(nama: 'Cuci Kering', kuantitas: 1, harga: 28000)],
+      metode: metode,
+      uangMuka: uangMuka,
+      sisa: sisa,
+      labelSisa: labelSisa,
+    );
+
+    test('nota DP mencetak Uang muka & Sisa, ≤ 32 kolom, di teks dan ESC/POS', () {
+      final s = dasar(uangMuka: 10000, sisa: 18000, metode: 'TUNAI');
+      for (final teks in [const StrukTeks().bangun(s), const StrukEscPos().pratinjau(s)]) {
+        expect(teks, contains('Uang muka'));
+        expect(teks, contains('Sisa'));
+        expect(teks, contains('18.000'));
+        for (final baris in teks.split('\n')) {
+          expect(baris.length, lessThanOrEqualTo(32), reason: baris);
+        }
+      }
+    });
+
+    test('struk lama tanpa uang muka tidak berubah', () {
+      final s = dasar(metode: 'TUNAI');
+      expect(const StrukTeks().bangun(s), isNot(contains('Uang muka')));
+      expect(const StrukTeks().bangun(s), isNot(contains('Sisa')));
+    });
+
+    test('JSON bolak-balik menyimpan uangMuka, sisa, labelSisa', () {
+      final s = dasar(uangMuka: 10000, sisa: 18000, labelSisa: 'Dibayar saat serah');
+      final k = Struk.fromJson(s.toJson());
+      expect(k.uangMuka, 10000);
+      expect(k.sisa, 18000);
+      expect(k.labelSisa, 'Dibayar saat serah');
+      final salin = s.salinDengan(nomor: 'ORD/0002');
+      expect(salin.uangMuka, 10000);
+      expect(salin.sisa, 18000);
+      expect(salin.labelSisa, 'Dibayar saat serah');
+    });
+
+    test('strukDariServer: nota bayar nanti / uang muka / pelunasan ber-DP / transaksi biasa', () {
+      final item = [
+        {'nama': 'Cuci Kering', 'kuantitas': 1, 'harga': 28000, 'subtotal': 28000},
+      ];
+      final nanti = strukDariServer({
+        'nomor': 'ORD/1',
+        'tanggal': '2026-09-22T10:00:00+07:00',
+        'status': 'BELUM LUNAS',
+        'tipe_pembayaran': 'BAYAR SAAT AMBIL',
+        'grand_total': 28000,
+        'dibayar': 0,
+        'kembalian': 0,
+        'uang_muka': 0,
+        'sisa': 28000,
+        'items': item,
+      }, namaToko: 'T');
+      expect(nanti.metode, isNull);
+      expect(nanti.uangMuka, isNull);
+      expect(nanti.sisa, 28000);
+      expect(nanti.dibayar, isNull);
+
+      final dp = strukDariServer({
+        'nomor': 'ORD/2',
+        'tanggal': '2026-09-22T10:00:00+07:00',
+        'status': 'UANG MUKA',
+        'tipe_pembayaran': 'QRIS',
+        'grand_total': 28000,
+        'dibayar': 10000,
+        'kembalian': 0,
+        'uang_muka': 10000,
+        'sisa': 18000,
+        'items': item,
+      }, namaToko: 'T');
+      expect(dp.metode, 'QRIS');
+      expect(dp.uangMuka, 10000);
+      expect(dp.sisa, 18000);
+      expect(dp.labelSisa, 'Sisa');
+
+      final akhir = strukDariServer({
+        'nomor': 'POS-1',
+        'tanggal': '2026-09-22T12:00:00+07:00',
+        'status': 'SELESAI',
+        'tipe_pembayaran': 'TUNAI',
+        'grand_total': 28000,
+        'dibayar': 28000,
+        'kembalian': 0,
+        'uang_muka': 10000,
+        'items': item,
+      }, namaToko: 'T');
+      expect(akhir.uangMuka, 10000);
+      expect(akhir.sisa, 18000);
+      expect(akhir.labelSisa, 'Dibayar saat serah');
+      expect(akhir.dibayar, isNull, reason: 'tak ada baris "Tunai" ganda');
+
+      final biasa = strukDariServer({
+        'nomor': 'POS-2',
+        'tanggal': '2026-09-22T12:00:00+07:00',
+        'status': 'SELESAI',
+        'tipe_pembayaran': 'TUNAI',
+        'grand_total': 28000,
+        'dibayar': 30000,
+        'kembalian': 2000,
+        'items': item,
+      }, namaToko: 'T');
+      expect(biasa.uangMuka, isNull);
+      expect(biasa.dibayar, 30000);
+      expect(biasa.kembalian, 2000);
+    });
+
+    test('strukDariServer: nominal berupa teks desimal dibaca sebagai angka', () {
+      final s = strukDariServer({
+        'nomor': 'POS-3',
+        'tanggal': '2026-09-22T12:00:00+07:00',
+        'status': 'SELESAI',
+        'tipe_pembayaran': 'QRIS',
+        'grand_total': '28000.00',
+        'uang_muka': '10000.00',
+        'items': [
+          {'nama': 'Cuci Kering', 'kuantitas': '1', 'harga': '28000.00'},
+        ],
+      }, namaToko: 'T');
+      expect(s.total, 28000);
+      expect(s.uangMuka, 10000);
+      expect(s.sisa, 18000);
+      expect(s.kembalian, isNull);
+      expect(s.baris.single.harga, 28000);
     });
   });
 }

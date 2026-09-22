@@ -66,6 +66,9 @@ class Struk {
     this.rujukan,
     this.alasan,
     this.labelTotal = 'TOTAL',
+    this.uangMuka,
+    this.sisa,
+    this.labelSisa = 'Sisa',
   });
 
   final String namaToko;
@@ -108,6 +111,16 @@ class Struk {
   /// Label baris total: "TOTAL" untuk transaksi, "TOTAL REFUND" untuk nota refund.
   final String labelTotal;
 
+  /// Uang muka pesanan (Fase 3): nota DP & struk pelunasan. `null` = tak ada baris.
+  final double? uangMuka;
+
+  /// Tagihan tersisa (nota) atau yang dibayar saat serah (struk pelunasan ber-DP).
+  /// `null` = tak ada baris.
+  final double? sisa;
+
+  /// Label baris [sisa]: 'Sisa' (nota) / 'Dibayar saat serah' (struk pelunasan).
+  final String labelSisa;
+
   /// Baris terukur dihitung satu item: "0,74 kg" bukan nol item (0,4 kg
   /// membulat ke nol) dan bukan pula 0,74 item.
   int get jumlahItem =>
@@ -146,6 +159,9 @@ class Struk {
     'rujukan': rujukan,
     'alasan': alasan,
     'label_total': labelTotal,
+    'uangMuka': uangMuka,
+    'sisa': sisa,
+    'labelSisa': labelSisa,
   };
 
   factory Struk.fromJson(Map<String, dynamic> j) {
@@ -184,6 +200,9 @@ class Struk {
       rujukan: j['rujukan']?.toString(),
       alasan: j['alasan']?.toString(),
       labelTotal: (j['label_total'] ?? 'TOTAL').toString(),
+      uangMuka: (j['uangMuka'] as num?)?.toDouble(),
+      sisa: (j['sisa'] as num?)?.toDouble(),
+      labelSisa: (j['labelSisa'] as String?) ?? 'Sisa',
     );
   }
 
@@ -209,5 +228,8 @@ class Struk {
     rujukan: rujukan,
     alasan: alasan,
     labelTotal: labelTotal,
+    uangMuka: uangMuka,
+    sisa: sisa,
+    labelSisa: labelSisa,
   );
 }
