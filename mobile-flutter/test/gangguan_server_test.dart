@@ -146,6 +146,34 @@ void main() {
       expect(e.cobaLagiSetelah, const Duration(seconds: 30));
       expect(e.isGangguan, isTrue);
     });
+
+    test('firstError menyembunyikan kode mesin; kalimat validasi tetap tampil', () {
+      // 422 biasa: kalimat server per-field yang memang untuk dibaca kasir.
+      const biasa = ApiException(
+        message: 'Data tidak sah.',
+        statusCode: 422,
+        errors: {'kas_awal': ['Kas awal wajib diisi.']},
+      );
+      expect(biasa.firstError(), 'Kas awal wajib diisi.');
+
+      // 422/409 berkode: `errors.kode` untuk PROGRAM. Pemanggil memakai
+      // `firstError() ?? message`, jadi null di sini berarti kalimat server.
+      const berkode = ApiException(
+        message: 'Pilih toko dulu sebelum membuka sesi.',
+        statusCode: 422,
+        errors: {'kode': ['SESI_BUTUH_TOKO']},
+      );
+      expect(berkode.firstError(), isNull);
+      expect(berkode.firstError() ?? berkode.message, 'Pilih toko dulu sebelum membuka sesi.');
+
+      // Kode mesin di kunci lain pun dilewati; kalimat berikutnya yang dipakai.
+      const campur = ApiException(
+        message: 'Gagal.',
+        statusCode: 422,
+        errors: {'kode': ['SESI_BEDA_TOKO'], 'toko_id': ['TOKO_TIDAK_AKTIF'], 'items': ['Keranjang kosong.']},
+      );
+      expect(campur.firstError(), 'Keranjang kosong.');
+    });
   });
 
   group('checkout langsung', () {

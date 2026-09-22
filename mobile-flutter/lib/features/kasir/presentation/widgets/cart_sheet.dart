@@ -172,17 +172,27 @@ class _CartSheetState extends ConsumerState<CartSheet> {
       // mesinnya (errors.kode) hanya dibaca program untuk memilih tombol.
       if (e.statusCode == 409) {
         final sesi = kodeGalat(e) == 'SESI_BEDA_TOKO' ? tokoSesi(e) : null;
-        if (sesi != null) {
-          final cocok = pilihTokoSesi(
-            ref.read(tokoListProvider).valueOrNull ?? const [],
-            sesi,
-          );
-          final nama = cocok?.nama ?? sesi.nama;
+        final cocok = sesi == null
+            ? null
+            : pilihTokoSesi(
+                ref.read(tokoListProvider).valueOrNull ?? const [],
+                sesi,
+              );
+        if (cocok != null) {
           _pesan(
             e.message,
             gagal: true,
-            aksi: ('Pindah ke $nama', () => _pindahToko(cocok?.id ?? sesi.id, nama)),
+            aksi: ('Pindah ke ${cocok.nama}', () => _pindahToko(cocok.id, cocok.nama)),
           );
+        } else if (sesi != null) {
+          // Toko sesi TIDAK ada di daftar `/tokos` pengguna ini. Tombol pindah
+          // tidak ditawarkan: id pada amplop 409 adalah ciphertext yang tak
+          // dikenal baris `/tokos` mana pun, dan memilihnya hanya klaim kosong
+          // — Beranda (cabang yang hidup berdampingan dengan kasir) menyetel
+          // ulang toko aktif ke toko pertama dalam satu frame, lalu checkout
+          // berikutnya 409 lagi. Kalimat server sudah memuat jalan keluarnya
+          // ("pilih toko itu atau tutup sesi dulu"), jadi itu yang ditampilkan.
+          _pesan(e.message, gagal: true);
         } else {
           _pesan(e.message, gagal: true, aksi: ('Buka sesi', _bukaSesi));
         }
@@ -200,10 +210,10 @@ class _CartSheetState extends ConsumerState<CartSheet> {
   /// CartController (yang mendengarkan toko aktif) — item toko lain memang tak
   /// sah di sini.
   ///
-  /// [id] diutamakan dari daftar `/tokos` bila tokonya ketemu, supaya layar
-  /// lain yang membandingkan id (beranda, katalog) mengenalinya; bila tidak,
-  /// id dari amplop 409 dipakai — ciphertext-nya berbeda tetapi tetap sah di
-  /// server.
+  /// [id] SELALU id dari daftar `/tokos` (baris yang cocok lewat kode/nama),
+  /// tak pernah id dari amplop 409: layar lain membandingkan toko aktif dengan
+  /// baris daftar itu, dan id amplop — ciphertext dengan IV acak — tak cocok
+  /// dengan satu pun di antaranya.
   Future<void> _pindahToko(String id, String nama) async {
     await ref.read(activeTokoIdProvider.notifier).select(id);
     if (!mounted) return;
@@ -275,8 +285,11 @@ class _CartSheetState extends ConsumerState<CartSheet> {
     final metode = ref.watch(metodePembayaranProvider).valueOrNull ?? metodePembayaranBawaan;
     // Toko yang mematikan TUNAI: tanpa normalisasi tak ada chip terpilih, UI
     // kembalian tetap tampil, dan checkout mengirim metode yang ditolak server
-    // (422, Rule::in kode aktif). Daftar provider dijamin tidak kosong.
-    if (!metode.contains(_metodeTerpilih)) _metodeTerpilih = metode.first;
+    // (422, Rule::in kode aktif). Daftar kosong (server menjawab `[]`) jatuh ke
+    // metode cadangan pertama, bukan melempar dari dalam build.
+    if (!metode.contains(_metodeTerpilih)) {
+      _metodeTerpilih = metode.isEmpty ? metodePembayaranBawaan.first : metode.first;
+    }
     final cs = Theme.of(context).colorScheme;
 
     // Keranjang dikosongkan dari layar lain → tutup lembar ini.

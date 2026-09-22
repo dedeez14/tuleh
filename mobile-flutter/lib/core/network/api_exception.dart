@@ -55,11 +55,26 @@ class ApiException implements Exception {
   /// 426 → wajib perbarui aplikasi (Auto-Update).
   bool get isUpgradeRequired => statusCode == 426;
 
+  /// Pesan validasi pertama yang LAYAK DIBACA kasir, atau null bila tak ada —
+  /// pemanggil jatuh ke [message], kalimat dari server.
+  ///
+  /// Kunci `kode` dan nilai berbentuk kode mesin (`SESI_BUTUH_TOKO`) dilewati:
+  /// itu penanda untuk program, bukan kalimat. Tanpa saringan ini, 422
+  /// `errors.kode=['SESI_BUTUH_TOKO']` dari `/sesi/buka` terpampang apa adanya
+  /// di layar kasir. Paritas `firstError()` di `api.js` desktop (7de4db4).
   String? firstError() {
-    if (errors == null || errors!.isEmpty) return null;
-    final first = errors!.values.first;
-    return first.isNotEmpty ? first.first : null;
+    final map = errors;
+    if (map == null || map.isEmpty) return null;
+    for (final entri in map.entries) {
+      if (entri.key == 'kode' || entri.value.isEmpty) continue;
+      final pesan = entri.value.first;
+      if (_kodeMesin.hasMatch(pesan)) continue;
+      return pesan;
+    }
+    return null;
   }
+
+  static final _kodeMesin = RegExp(r'^[A-Z][A-Z0-9_]*$');
 
   @override
   String toString() => 'ApiException($statusCode): $message';
