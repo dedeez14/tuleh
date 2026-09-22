@@ -14,6 +14,7 @@ test('mode bayar: Lunas saja, kecuali alur toko PAYMENT_OR_LATER', () => {
   assert.deepEqual(D.modeBayarTersedia({ transactionFlow: ['PAYMENT'] }), ['LUNAS'])
   assert.deepEqual(D.modeBayarTersedia(null), ['LUNAS'])
   assert.deepEqual(D.modeBayarTersedia({ transactionFlow: ['PAYMENT_OR_LATER'] }), ['LUNAS', 'NANTI', 'DP'])
+  assert.deepEqual(D.modeBayarTersedia({ transaction_flow: ['PAYMENT_OR_LATER'] }), ['LUNAS', 'NANTI', 'DP'], 'kunci mentah server/Mode Demo')
 })
 
 test('total nota = harga × kuantitas (sama dengan hitungan server, tanpa diskon/pajak)', () => {
@@ -45,6 +46,7 @@ test('ringkas bayar kartu papan', () => {
   assert.equal(D.ringkasBayar({ bayar: 'BELUM', total: 28000 }, rp), `Belum bayar · ${rp(28000)}`, 'server lama tanpa sisa')
   assert.equal(D.ringkasBayar({ bayar: 'LUNAS', total: 28000 }, rp), '')
   assert.equal(D.ringkasBayar({ bayar: 'BON', total: 28000 }, rp), '')
+  assert.equal(D.ringkasBayar({ bayar: 'DP', sisa: 18000, total: 28000 }, rp), `DP ${rp(0)} · sisa ${rp(18000)}`, 'dibayar kosong bukan NaN')
 })
 
 test('perlu dilunasi: BELUM & DP saja (BON lewat bill)', () => {

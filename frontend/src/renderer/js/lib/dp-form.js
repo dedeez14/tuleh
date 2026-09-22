@@ -4,7 +4,8 @@
 
 /** Kasir selalu bisa Lunas; Bayar nanti & Uang muka hanya bila alur toko PAYMENT_OR_LATER. */
 export function modeBayarTersedia(manifest) {
-  const alur = (manifest && manifest.transactionFlow) || []
+  // Manifest desktop memakai transactionFlow; Mode Demo & jawaban mentah server memakai transaction_flow.
+  const alur = (manifest && (manifest.transactionFlow || manifest.transaction_flow)) || []
   return alur.includes('PAYMENT_OR_LATER') ? ['LUNAS', 'NANTI', 'DP'] : ['LUNAS']
 }
 
@@ -32,7 +33,7 @@ export function susunNota({ mode, items, idPelanggan, catatan, uangMuka, metodeU
 /** Teks ringkas kartu papan: "DP Rp10.000 · sisa Rp18.000" / "Belum bayar · Rp28.000" / '' (lunas, bon). */
 export function ringkasBayar(order, fmt) {
   if (!order) return ''
-  if (order.bayar === 'DP') return `DP ${fmt(order.dibayar)} · sisa ${fmt(Number(order.sisa) || 0)}`
+  if (order.bayar === 'DP') return `DP ${fmt(Number(order.dibayar) || 0)} · sisa ${fmt(Number(order.sisa) || 0)}`
   if (order.bayar === 'BELUM') return `Belum bayar · ${fmt(Number(order.sisa) || Number(order.total) || 0)}`
   return ''
 }

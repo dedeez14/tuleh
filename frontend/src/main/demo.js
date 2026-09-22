@@ -1140,7 +1140,7 @@ const handlers = {
 
   // Nota "bayar saat ambil" (laundry): masuk papan proses TANPA struk;
   // struk terbit saat pelunasan (order:lunasi) di tahap penyerahan.
-  'order:simpanNota': ({ items, idPelanggan, catatan } = {}) => {
+  'order:simpanNota': ({ items, idPelanggan, catatan, bayar = 'NANTI', dp } = {}) => {
     const manifest = MANIFESTS[activeTokoId]
     if (!(manifest?.transaction_flow || []).includes('PAYMENT_OR_LATER')) {
       return err(422, 'Toko ini tidak mendukung bayar saat ambil.')
@@ -1159,6 +1159,15 @@ const handlers = {
       total = round2(total + p.harga_jual * qty)
     }
 
+    const modeBayar = String(bayar || 'NANTI').toUpperCase()
+    if (modeBayar !== 'NANTI' && modeBayar !== 'DP') return err(422, 'Cara bayar nota tidak dikenal.')
+    let uangMuka = 0
+    if (modeBayar === 'DP') {
+      uangMuka = round2(Number(dp && dp.jumlah) || 0)
+      if (!(uangMuka > 0) || uangMuka >= total) return err(422, `Uang muka harus lebih dari Rp0 dan kurang dari total pesanan (Rp${total.toLocaleString('id-ID')}).`)
+      if (!(dp && dp.tipePembayaran)) return err(422, 'Pilih metode pembayaran uang muka.')
+    }
+
     const cust = idPelanggan ? pelanggan.find((c) => c.id === idPelanggan) : null
     const order = buatOrder({
       tokoId: activeTokoId,
@@ -1166,7 +1175,12 @@ const handlers = {
       total,
       pelangganNama: cust ? cust.nama : null
     })
-    order.bayar = 'BELUM'
+    order.bayar = modeBayar === 'DP' ? 'DP' : 'BELUM'
+    order.dibayar = uangMuka
+    order.sisa = round2(total - uangMuka)
+    order.pembayaran = modeBayar === 'DP'
+      ? [{ id: `${order.id}-dp`, jenis: 'DP', jumlah: uangMuka, tipe_pembayaran: dp.tipePembayaran, waktu: order.created_at, kasir: USER.name }]
+      : []
     if (catatan) order.catatan = String(catatan).slice(0, 300)
     orders.push(order)
 
@@ -1175,15 +1189,17 @@ const handlers = {
       id: order.id,
       nomor: order.nomor,
       tanggal: order.created_at,
-      status: 'BELUM LUNAS',
+      status: modeBayar === 'DP' ? 'UANG MUKA' : 'BELUM LUNAS',
       pelanggan: order.pelanggan,
       kasir: USER.name,
-      tipe_pembayaran: 'BAYAR SAAT AMBIL',
+      tipe_pembayaran: modeBayar === 'DP' ? dp.tipePembayaran : 'BAYAR SAAT AMBIL',
       subtotal: total,
       total_diskon: 0,
       total_pajak: 0,
       grand_total: total,
-      dibayar: 0,
+      dibayar: uangMuka,
+      uang_muka: uangMuka,
+      sisa: round2(total - uangMuka),
       kembalian: 0,
       no_antrian: order.no_antrian,
       token_lacak: order.token_lacak,
@@ -1200,7 +1216,7 @@ const handlers = {
   'order:lunasi': ({ id, tipePembayaran = 'TUNAI' } = {}) => {
     const order = orders.find((o) => o.id === id)
     if (!order) return err(404, 'Pesanan tidak ditemukan.')
-    if (order.bayar !== 'BELUM') return err(409, 'Pesanan ini sudah lunas.')
+    if (order.bayar !== 'BELUM' && order.bayar !== 'DP') return err(409, 'Pesanan ini sudah lunas.')
     const sesi = sesiAktif(order.toko_id)
     if (!sesi) return err(409, 'Belum ada sesi kasir terbuka.')
 
@@ -1217,10 +1233,13 @@ const handlers = {
     })
     struk.no_antrian = order.no_antrian
     struk.token_lacak = order.token_lacak
+    struk.uang_muka = Number(order.dibayar) || 0
     transaksi = [struk, ...transaksi]
     tambahKeSesi(sesi, struk)
 
     order.bayar = 'LUNAS'
+    order.dibayar = order.total
+    order.sisa = 0
     const states = lifecycleStates(order.toko_id)
     order.stage = states[states.length - 1] // SELESAI/diserahkan
     order.updated_at = new Date().toISOString()
@@ -1229,13 +1248,21 @@ const handlers = {
 
   // ---------- Pesanan hidup (KDS / Papan Proses) ----------
 
-  'order:list': ({ stage } = {}) => {
+  'order:list': ({ stage, bayar } = {}) => {
     const states = lifecycleStates(activeTokoId)
     const terminal = states[states.length - 1]
     let rows = orders.filter((o) => o.toko_id === activeTokoId)
     rows = stage ? rows.filter((o) => o.stage === stage) : rows.filter((o) => o.stage !== terminal)
+    // Saringan cara bayar (mis. ?bayar=DP atau BELUM,DP) — sama dengan kontrak server.
+    const daftarBayar = bayar ? String(bayar).split(',').map((s) => s.trim().toUpperCase()) : null
+    rows = rows.filter((o) => !daftarBayar || daftarBayar.includes(o.bayar))
     rows = [...rows].sort((a, b) => a.created_at.localeCompare(b.created_at))
-    return ok(rows)
+    // Pesanan seed/lama belum punya dibayar/sisa — diisi saat daftar dikembalikan.
+    return ok(rows.map((o) => ({
+      ...o,
+      sisa: o.sisa ?? (o.bayar === 'BELUM' ? o.total : 0),
+      dibayar: o.dibayar ?? (o.bayar === 'LUNAS' ? o.total : 0)
+    })))
   },
 
   'order:transition': ({ id, to } = {}) => {

@@ -223,3 +223,42 @@ test('laundry: nota bayar-saat-ambil → pelunasan menerbitkan struk & menyerahk
   assert.equal(lunas.data.struk.grand_total, 3 * kiloan.harga_jual)
   assert.equal(demo.handlers['order:lunasi']({ id: simpan.data.order.id }).status, 409)
 })
+
+test('laundry: nota uang muka → papan menampilkan sisa → pelunasan memakai uang muka', () => {
+  const kiloan = demo.handlers['produk:list']({}).data.find((p) => p.satuan === 'Kg')
+  const total = 4 * kiloan.harga_jual
+
+  assert.equal(demo.handlers['order:simpanNota']({
+    items: [{ idProduk: kiloan.id, harga: kiloan.harga_jual, kuantitas: 4 }], bayar: 'DP', dp: { jumlah: total, tipePembayaran: 'TUNAI' }
+  }).status, 422, 'uang muka sebesar total ditolak')
+
+  const simpan = demo.handlers['order:simpanNota']({
+    items: [{ idProduk: kiloan.id, harga: kiloan.harga_jual, kuantitas: 4 }], bayar: 'DP', dp: { jumlah: 10000, tipePembayaran: 'TUNAI' }
+  })
+  assert.equal(simpan.ok, true)
+  assert.equal(simpan.data.order.bayar, 'DP')
+  assert.equal(simpan.data.order.dibayar, 10000)
+  assert.equal(simpan.data.order.sisa, total - 10000)
+  assert.equal(simpan.data.nota.status, 'UANG MUKA')
+  assert.equal(simpan.data.nota.uang_muka, 10000)
+  assert.equal(simpan.data.nota.sisa, total - 10000)
+
+  const hanyaDp = demo.handlers['order:list']({ bayar: 'DP' }).data
+  assert.ok(hanyaDp.some((o) => o.id === simpan.data.order.id))
+  assert.ok(hanyaDp.every((o) => o.bayar === 'DP'), 'saringan ?bayar=DP')
+
+  const lunas = demo.handlers['order:lunasi']({ id: simpan.data.order.id, tipePembayaran: 'TUNAI' })
+  assert.equal(lunas.ok, true)
+  assert.equal(lunas.data.order.bayar, 'LUNAS')
+  assert.equal(lunas.data.order.sisa, 0)
+  assert.equal(lunas.data.struk.uang_muka, 10000)
+})
+
+test('laundry: nota bayar nanti kini membawa sisa (bukan Rp0/kembalian)', () => {
+  const kiloan = demo.handlers['produk:list']({}).data.find((p) => p.satuan === 'Kg')
+  const simpan = demo.handlers['order:simpanNota']({ items: [{ idProduk: kiloan.id, harga: kiloan.harga_jual, kuantitas: 2 }] })
+  assert.equal(simpan.data.nota.status, 'BELUM LUNAS')
+  assert.equal(simpan.data.nota.uang_muka, 0)
+  assert.equal(simpan.data.nota.sisa, 2 * kiloan.harga_jual)
+  assert.equal(simpan.data.order.sisa, 2 * kiloan.harga_jual)
+})
