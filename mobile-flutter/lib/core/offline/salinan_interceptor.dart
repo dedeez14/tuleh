@@ -21,7 +21,9 @@ import 'salinan_store.dart';
 ///   koneksi offline. Tanpa salinan → jawaban/galat asli diteruskan (koneksi
 ///   tetap ditandai offline). Tanpa ini, membuka aplikasi saat server sedang
 ///   gangguan melempar kasir ke layar masuk walau salinan `/auth/me` ada.
-/// - Jawaban lain (2xx, 4xx) = server terjangkau → online.
+/// - Jawaban lain (2xx, 4xx) = server terjangkau → online. 429 berkode domain
+///   (`errors.kode`, mis. kuncian PIN) termasuk di sini: itu penolakan yang
+///   disengaja server, bukan gangguan.
 /// - Saat sudah diketahui offline, GET dijawab dari salinan SEGERA tanpa
 ///   menunggu timeout; permintaan tulis tetap dicoba ke jaringan (fase 2:
 ///   antrean).
@@ -64,6 +66,21 @@ class SalinanInterceptor extends Interceptor {
     final code = r.statusCode ?? 0;
     final body = r.data;
     return code >= 200 && code < 300 && body is Map && body['success'] == true;
+  }
+
+  /// 429 yang membawa kode galat domain (`errors.kode`, mis. `PIN_TERKUNCI`)
+  /// BUKAN gangguan: server menolak dengan sadar dan jawabannya harus sampai
+  /// utuh ke layar. Tanpa pengecualian ini, pengguna yang salah PIN lima kali
+  /// menyalakan pita "offline" seluruh aplikasi dan GET berikutnya dijawab
+  /// dari salinan — padahal servernya baik-baik saja. Kontrak `errors.kode`
+  /// ini ditetapkan server (`KeamananController::terkunciPin()`).
+  static bool _penolakanDomain(Response<dynamic> r) {
+    if ((r.statusCode ?? 0) != 429) return false;
+    final body = r.data;
+    if (body is! Map) return false;
+    final errors = body['errors'];
+    final kode = errors is Map ? errors['kode'] : null;
+    return kode is List ? kode.isNotEmpty : kode != null;
   }
 
   static bool _gagalJaringan(DioException e) => switch (e.type) {
@@ -113,7 +130,7 @@ class SalinanInterceptor extends Interceptor {
     final o = response.requestOptions;
     final code = response.statusCode ?? 0;
     final dariSalinan = response.headers.value(headerSalinan) != null;
-    if (!dariSalinan && statusGangguan(code)) {
+    if (!dariSalinan && statusGangguan(code) && !_penolakanDomain(response)) {
       if (_bolehSalin(o)) {
         final r = await _dariSalinan(o);
         if (r != null) {

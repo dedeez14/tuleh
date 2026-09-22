@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/akses/akses.dart';
 import '../../../../core/diagnostik/diagnostik.dart';
 import '../../../../core/layout/lebar.dart';
 import '../../../../core/network/api_client.dart';
@@ -12,6 +13,8 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/tema_provider.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../../../cetak/presentation/screens/printer_screen.dart';
+import '../../../keamanan/presentation/providers/keamanan_providers.dart';
+import '../../../keamanan/presentation/screens/pin_persetujuan_screen.dart';
 import '../../../langganan/presentation/langganan_providers.dart';
 import '../../../pemantau/presentation/pemantau_providers.dart';
 import '../../../toko/domain/entities/toko.dart';
@@ -124,6 +127,7 @@ class PengaturanScreen extends ConsumerWidget {
               ),
             ),
           ),
+          const _EntriPinPersetujuan(),
           const _EntriTema(),
           const _EntriDukungan(),
           _tile(context, Icons.storefront_outlined, 'Toko aktif',
@@ -257,6 +261,47 @@ Future<void> keluarDenganPenjagaAntrean(BuildContext context, WidgetRef ref) asy
   if (keSinkron == true && context.mounted) {
     await Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute<void>(builder: (_) => const SinkronisasiScreen()),
+    );
+  }
+}
+
+/// Entri "PIN persetujuan saya" (Tahap B §2c).
+///
+/// Dua gerbang berbeda, keduanya milik server:
+/// - hak `keamanan.pin` menentukan boleh-tidaknya MENYETEL PIN (PUT/DELETE
+///   digerbang hak itu juga di server) — tanpa hak, entri disembunyikan
+///   karena formulirnya pasti dijawab 403 (gagal-tertutup);
+/// - `boleh_setel` menentukan BERMAKNA-tidaknya PIN itu (server: pemilik hak
+///   batal/refund). Tidak bermakna bukan berarti disembunyikan: entrinya tetap
+///   tampil dan layarnya menjelaskan alasannya, bukan menawarkan formulir.
+class _EntriPinPersetujuan extends ConsumerWidget {
+  const _EntriPinPersetujuan();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!ref.watch(bisaProvider('keamanan.pin'))) return const SizedBox.shrink();
+    final cs = Theme.of(context).colorScheme;
+    final status = ref.watch(statusPinProvider).valueOrNull;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        key: const Key('entri-pin-persetujuan'),
+        leading: Icon(Icons.pin_outlined, color: cs.primary),
+        title: const Text('PIN persetujuan saya'),
+        subtitle: Text(
+          status == null
+              ? 'Untuk menyetujui pembatalan & refund kasir'
+              : !status.bolehSetel
+              ? 'Belum berlaku untuk akun Anda'
+              : status.ada
+              ? 'PIN aktif — dipakai menyetujui pembatalan & refund kasir'
+              : 'Belum diatur — kasir belum bisa meminta persetujuan Anda',
+        ),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute<void>(builder: (_) => const PinPersetujuanScreen()),
+        ),
+      ),
     );
   }
 }
