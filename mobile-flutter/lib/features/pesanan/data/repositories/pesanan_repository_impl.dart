@@ -1,5 +1,6 @@
 import '../../../../core/network/api_exception.dart';
 import '../../../../core/network/api_result.dart';
+import '../../domain/entities/hasil_pesanan.dart';
 import '../../domain/entities/pesanan.dart';
 import '../../domain/repositories/pesanan_repository.dart';
 import '../datasources/pesanan_remote_datasource.dart';
@@ -10,16 +11,16 @@ class PesananRepositoryImpl implements PesananRepository {
   final PesananRemoteDataSource remote;
 
   @override
-  Future<Result<List<Pesanan>>> list({String? stage}) async {
+  Future<Result<List<Pesanan>>> list({String? stage, String? bayar}) async {
     try {
-      return Ok(await remote.list(stage: stage));
+      return Ok(await remote.list(stage: stage, bayar: bayar));
     } on ApiException catch (e) {
       return Err(e);
     }
   }
 
   @override
-  Future<Result<Pesanan>> transition(
+  Future<Result<HasilTransisi>> transition(
     String id, {
     required String to,
     String? tipePembayaran,
@@ -27,6 +28,33 @@ class PesananRepositoryImpl implements PesananRepository {
     try {
       return Ok(
         await remote.transition(id, to: to, tipePembayaran: tipePembayaran),
+      );
+    } on ApiException catch (e) {
+      return Err(e);
+    }
+  }
+
+  @override
+  Future<Result<NotaPesanan>> buatNota({
+    required String bayar,
+    required List<ItemNota> items,
+    String? idPelanggan,
+    String? catatan,
+    num? uangMuka,
+    String? metodeUangMuka,
+    required String clientRef,
+  }) async {
+    try {
+      return Ok(
+        await remote.buatNota(
+          bayar: bayar,
+          items: items,
+          idPelanggan: idPelanggan,
+          catatan: catatan,
+          uangMuka: uangMuka,
+          metodeUangMuka: metodeUangMuka,
+          clientRef: clientRef,
+        ),
       );
     } on ApiException catch (e) {
       return Err(e);

@@ -157,6 +157,11 @@ void main() {
       expect(aksiKartu(o, _salon), AksiKartu.lunasi);
     });
 
+    test('pesanan DP di tahap sebelum terakhir → Lunasi & Serahkan', () {
+      final o = _order(stage: 'SIAP_AMBIL', bayar: 'DP');
+      expect(aksiKartu(o, const ['ANTRIAN', 'SIAP_AMBIL', 'SELESAI']), AksiKartu.lunasi);
+    });
+
     test('pesanan yang sudah terminal tidak punya aksi', () {
       expect(aksiKartu(_order(stage: 'SELESAI'), _bakso), isNull);
     });

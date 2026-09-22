@@ -96,7 +96,7 @@ AksiKartu? aksiKartu(Pesanan o, List<String> states) {
   final next = tahapBerikut(o.stage, states);
   if (next == null) return null;
   final terakhir = next == tahapTerminal(states);
-  if (terakhir && o.belumBayar) return AksiKartu.lunasi;
+  if (terakhir && o.perluDilunasi) return AksiKartu.lunasi;
   return terakhir ? AksiKartu.selesai : AksiKartu.maju;
 }
 

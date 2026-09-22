@@ -435,6 +435,85 @@ void main() {
       expect(d['stage'], 'SELESAI');
       expect(d['bayar'], 'LUNAS');
     });
+
+    test('POST /orders DP di Mode Demo → nota UANG MUKA; ?bayar=DP; pelunasan memuat struk.uang_muka', () {
+      const toko = {'toko_id': 'TOKO-3'};
+      final produk = (dataOf(get('/produk', query: toko)) as List)
+          .firstWhere((p) => p['kode'] == 'SAT-001') as Map;
+
+      final r = post('/orders', query: toko, body: {
+        'bayar': 'DP',
+        'dp': {'jumlah': 5000, 'tipe_pembayaran': 'TUNAI'},
+        'items': [
+          {'id_produk': produk['id'], 'kuantitas': 1},
+        ],
+        'client_ref': 'd1',
+      });
+      expect(r.status, 201);
+      final order = (dataOf(r) as Map)['order'] as Map;
+      final nota = (dataOf(r) as Map)['nota'] as Map;
+      expect(order['bayar'], 'DP');
+      expect(order['dibayar'], 5000);
+      expect(order['sisa'], (produk['harga_jual'] as num) - 5000);
+      expect((order['pembayaran'] as List).single['jenis'], 'DP');
+      expect(nota['status'], 'UANG MUKA');
+      expect(nota['uang_muka'], 5000);
+
+      // Saringan bayar: pesanan uang muka ikut, pesanan lunas tidak.
+      final dp = dataOf(get('/orders', query: {...toko, 'bayar': 'DP'})) as List;
+      expect(dp.map((o) => o['id']), contains(order['id']));
+      expect(dp.every((o) => o['bayar'] == 'DP'), isTrue);
+
+      // Majukan sampai tahap terakhir; transisi penutup melunasi + menerbitkan struk.
+      const tahap = ['DIPROSES', 'PENCUCIAN', 'PENGERINGAN', 'LIPAT', 'SIAP_AMBIL'];
+      for (final t in tahap) {
+        expect(
+          post('/orders/${order['id']}/transition', query: toko, body: {'to': t}).body['success'],
+          true,
+          reason: 'maju ke $t',
+        );
+      }
+      final akhir = post('/orders/${order['id']}/transition', query: toko, body: {
+        'to': 'SELESAI',
+        'tipe_pembayaran': 'TUNAI',
+      });
+      final d = dataOf(akhir) as Map;
+      expect(d['bayar'], 'LUNAS');
+      expect(d['sisa'], 0);
+      final struk = d['struk'] as Map;
+      expect(struk['uang_muka'], 5000);
+      expect(struk['grand_total'], produk['harga_jual']);
+    });
+
+    test('POST /orders menolak uang muka di luar batas & toko tanpa bayar-nanti', () {
+      const toko = {'toko_id': 'TOKO-3'};
+      final produk = (dataOf(get('/produk', query: toko)) as List)
+          .firstWhere((p) => p['kode'] == 'SAT-001') as Map;
+      final items = [
+        {'id_produk': produk['id'], 'kuantitas': 1},
+      ];
+
+      expect(
+        post('/orders', query: toko, body: {
+          'bayar': 'DP',
+          'dp': {'jumlah': produk['harga_jual'], 'tipe_pembayaran': 'TUNAI'},
+          'items': items,
+        }).status,
+        422,
+      );
+      expect(post('/orders', query: toko, body: {'bayar': 'LUNAS', 'items': items}).status, 422);
+      // Minimarket (tanpa PAYMENT_OR_LATER) tidak menerima nota bayar-nanti.
+      final mini = (dataOf(get('/produk', query: {'toko_id': 'TOKO-1'})) as List).first as Map;
+      expect(
+        post('/orders', query: {'toko_id': 'TOKO-1'}, body: {
+          'bayar': 'NANTI',
+          'items': [
+            {'id_produk': mini['id'], 'kuantitas': 1},
+          ],
+        }).status,
+        422,
+      );
+    });
   });
 
   group('bon meja', () {

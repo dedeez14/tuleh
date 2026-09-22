@@ -657,10 +657,25 @@ class DemoEngine {
       rows = stage != null && stage.isNotEmpty
           ? rows.where((o) => o['stage'] == stage)
           : rows.where((o) => o['stage'] != terminal);
+      final bayar = (query['bayar'] as String?)
+          ?.split(',')
+          .map((s) => s.trim().toUpperCase())
+          .where((s) => s.isNotEmpty)
+          .toSet();
+      if (bayar != null && bayar.isNotEmpty) {
+        rows = rows.where((o) => bayar.contains('${o['bayar']}'));
+      }
       final out = rows.toList()
         ..sort((a, b) => '${a['created_at']}'.compareTo('${b['created_at']}'));
+      // Pesanan seed dibuat sebelum Fase 3 — lengkapi kunci uang muka.
+      for (final o in out) {
+        o['dibayar'] ??= o['bayar'] == 'LUNAS' ? o['total'] : 0;
+        o['sisa'] ??= o['bayar'] == 'BELUM' ? o['total'] : 0;
+        o['pembayaran'] ??= <Map<String, dynamic>>[];
+      }
       return _ok(out);
     }
+    if (path == '/orders' && m == 'POST') return _buatNota(toko, data);
     if (seg.length == 3 && seg[0] == 'orders' && seg[2] == 'transition') {
       return _transisi(Uri.decodeComponent(seg[1]), data);
     }
@@ -1292,10 +1307,138 @@ class DemoEngine {
     return _ok(null);
   }
 
+  /// `POST /orders` (Fase 3) — nota bayar nanti (`NANTI`) atau uang muka (`DP`).
+  /// Hanya untuk toko ber-alur `PAYMENT_OR_LATER`; uang muka harus di antara
+  /// Rp0 dan total pesanan. Belum ada transaksi: uangnya baru DP.
+  DemoResponse _buatNota(String toko, Map<String, dynamic> data) {
+    if (_sesiAktif(toko) == null) {
+      return _err(409, 'Belum ada sesi kasir terbuka.');
+    }
+    final bayar = '${data['bayar'] ?? ''}'.toUpperCase();
+    if (bayar != 'NANTI' && bayar != 'DP') {
+      return _err(422, 'Cara bayar nota tidak dikenal.');
+    }
+    final dp = bayar == 'DP';
+    final alur = (demoManifests[toko]?['transaction_flow'] as List?) ?? const [];
+    if (!alur.contains('PAYMENT_OR_LATER')) {
+      return _err(
+        422,
+        dp
+            ? 'Toko ini tidak mendukung uang muka.'
+            : 'Toko ini tidak mendukung bayar saat ambil.',
+      );
+    }
+    final tahap = _tahapan(toko);
+    if (tahap.isEmpty) return _err(422, 'Toko ini tidak mendukung bayar saat ambil.');
+
+    final rawItems = data['items'];
+    if (rawItems is! List || rawItems.isEmpty) {
+      return _err(422, 'Keranjang masih kosong.');
+    }
+    final items = <Map<String, dynamic>>[];
+    var total = 0.0;
+    for (final raw in rawItems) {
+      if (raw is! Map) continue;
+      final p = _cariProduk(toko, '${raw['id_produk']}');
+      if (p == null) return _err(422, 'Item tidak ditemukan di katalog.');
+      final qty = (raw['kuantitas'] as num?)?.toDouble() ?? 0;
+      if (qty <= 0) return _err(422, 'Kuantitas "${p['nama']}" tidak valid.');
+      final harga = (p['harga_jual'] as num).toDouble();
+      final subtotal = harga * qty;
+      total += subtotal;
+      items.add({
+        'id_produk': p['id'],
+        'nama': p['nama'],
+        'kuantitas': qty,
+        'harga': harga,
+        'subtotal': subtotal,
+        'satuan': p['satuan'],
+        'catatan': null,
+      });
+    }
+    if (items.isEmpty) return _err(422, 'Keranjang masih kosong.');
+
+    final rawDp = data['dp'];
+    final uangMuka = dp && rawDp is Map
+        ? ((rawDp['jumlah'] as num?)?.toDouble() ?? 0)
+        : 0.0;
+    final metode = rawDp is Map ? '${rawDp['tipe_pembayaran'] ?? 'TUNAI'}' : 'TUNAI';
+    if (dp && (uangMuka <= 0 || uangMuka >= total)) {
+      return _err(422, 'Uang muka harus lebih dari Rp0 dan kurang dari total pesanan.');
+    }
+
+    final now = DateTime.now();
+    final idPelanggan = '${data['id_pelanggan'] ?? ''}';
+    final pelanggan = idPelanggan.isEmpty
+        ? null
+        : _pelanggan.firstWhere(
+            (c) => '${c['id']}' == idPelanggan,
+            orElse: () => const {},
+          )['nama'];
+
+    _nOrder += 1;
+    final noAntrian = _nomorAntrian(toko);
+    final order = <String, dynamic>{
+      'id': 'ORD-$_nOrder',
+      'toko_id': toko,
+      'nomor': 'ORD/${_nOrder.toString().padLeft(4, '0')}',
+      'no_antrian': noAntrian,
+      'meja': null,
+      'ronde': null,
+      'stage': tahap.first,
+      'bayar': dp ? 'DP' : 'BELUM',
+      'pelanggan': pelanggan,
+      'catatan': data['catatan'],
+      'total': total,
+      'dibayar': dp ? uangMuka : 0,
+      'sisa': total - (dp ? uangMuka : 0),
+      'pembayaran': <Map<String, dynamic>>[
+        if (dp)
+          {
+            'id': 'B-$_nOrder',
+            'jenis': 'DP',
+            'jumlah': uangMuka,
+            'tipe_pembayaran': metode,
+            'waktu': _iso(now),
+            'kasir': demoUser['name'],
+          },
+      ],
+      'created_at': _iso(now),
+      'items': items,
+    };
+    _orders.add(order);
+    // Uang muka BUKAN transaksi: di server ia masuk kotak `penerimaan_dp` sesi
+    // penerimanya, yang belum dimiliki rekap sesi Mode Demo — sengaja tidak
+    // ditambahkan ke total penjualan supaya tidak terhitung dua kali.
+
+    return _ok({
+      'order': order,
+      'nota': {
+        'nomor': order['nomor'],
+        'tanggal': _iso(now),
+        'status': dp ? 'UANG MUKA' : 'BELUM LUNAS',
+        'kasir': demoUser['name'],
+        'pelanggan': pelanggan,
+        'tipe_pembayaran': dp ? metode : 'BAYAR SAAT AMBIL',
+        'subtotal': total,
+        'total_diskon': 0,
+        'total_pajak': 0,
+        'grand_total': total,
+        'dibayar': order['dibayar'],
+        'kembalian': 0,
+        'uang_muka': dp ? uangMuka : 0,
+        'sisa': order['sisa'],
+        'no_antrian': noAntrian,
+        'items': items,
+      },
+    }, status: 201);
+  }
+
   DemoResponse _transisi(String id, Map<String, dynamic> data) {
     final o = _orders.firstWhere((x) => x['id'] == id, orElse: () => const {});
     if (o.isEmpty) return _err(404, 'Pesanan tidak ditemukan.');
-    final tahap = _tahapan('${o['toko_id']}');
+    final toko = '${o['toko_id']}';
+    final tahap = _tahapan(toko);
     final idx = tahap.indexOf('${o['stage']}');
     if (idx == -1 || idx == tahap.length - 1) {
       return _err(409, 'Pesanan sudah selesai.');
@@ -1305,8 +1448,62 @@ class DemoEngine {
     if (to != null && to != next && to != 'SELESAI') {
       return _err(409, 'Transisi tidak valid. Berikutnya harus $next.');
     }
-    o['stage'] = to == 'SELESAI' ? tahap.last : next;
-    if (data['tipe_pembayaran'] != null) o['bayar'] = 'LUNAS';
-    return _ok(o);
+    final tujuan = to == 'SELESAI' ? tahap.last : next;
+    o['stage'] = tujuan;
+
+    // Pelunasan: hanya nota bayar-nanti / uang muka yang bisa dilunasi di sini
+    // (bon meja dilunasi lewat /bills/{id}/settle).
+    final perluDilunasi = o['bayar'] == 'BELUM' || o['bayar'] == 'DP';
+    if (data['tipe_pembayaran'] == null || !perluDilunasi) return _ok(o);
+
+    final tipe = '${data['tipe_pembayaran']}';
+    final total = (o['total'] as num?)?.toDouble() ?? 0;
+    final uangMuka = (o['dibayar'] as num?)?.toDouble() ?? 0;
+    o['bayar'] = 'LUNAS';
+    o['dibayar'] = total;
+    o['sisa'] = 0;
+    if (tujuan != tahap.last) return _ok(o);
+
+    final now = DateTime.now();
+    _nTrx += 1;
+    final struk = <String, dynamic>{
+      'id': 'TRX-$_nTrx',
+      'toko_id': toko,
+      'nomor': 'TRX/${_nTrx.toString().padLeft(4, '0')}',
+      'tanggal': _iso(now),
+      'status': 'SELESAI',
+      'pelanggan': o['pelanggan'],
+      'kasir': demoUser['name'],
+      'tipe_pembayaran': tipe,
+      'metode_bayar': tipe,
+      'subtotal': total,
+      'total_diskon': 0,
+      'total_pajak': 0,
+      'grand_total': total,
+      // Uang muka sudah diterima saat pesanan dibuat — yang ditagih kini sisanya.
+      'uang_muka': uangMuka,
+      'dibayar': total,
+      'kembalian': 0,
+      'no_antrian': o['no_antrian'],
+      'items': o['items'],
+    };
+    _transaksi.insert(0, struk);
+    (o['pembayaran'] as List?)?.add({
+      'id': 'B-${o['id']}-LUNAS',
+      'jenis': 'PELUNASAN',
+      'jumlah': total - uangMuka,
+      'tipe_pembayaran': tipe,
+      'waktu': _iso(now),
+      'kasir': demoUser['name'],
+    });
+    final sesi = _sesiAktif(toko);
+    if (sesi != null) {
+      // Yang DITERIMA di sesi ini hanya sisanya; nilai penjualannya tetap penuh.
+      _tambahKeSesi(sesi, tipe, total - uangMuka);
+      if (uangMuka > 0) {
+        sesi['total_penjualan'] = (sesi['total_penjualan'] as num) + uangMuka;
+      }
+    }
+    return _ok({...o, 'struk': struk});
   }
 }
