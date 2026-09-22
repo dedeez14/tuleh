@@ -8,6 +8,8 @@ import { esc, fmtIDR, fmtNumber, fmtTime, debounce } from '../utils/format.js'
 import { toast, icons, emptyStateHTML, loadingHTML, showModal } from '../components/ui.js'
 import { ting } from '../utils/suara.js'
 import { stageLabel } from '../lib/stage-label.js'
+import { ringkasBayar, perluDilunasi } from '../lib/dp-form.js'
+import { buildReceiptHTML, printReceipt, cetakOtomatisBilaDiatur } from '../components/receipt.js'
 
 const POLL_MS = 4000
 // Ambang umur pesanan: alur pendek (dapur F&B) dihitung menit; alur panjang
@@ -51,6 +53,7 @@ export const OrdersScreen = {
     let alive = true
     let busy = false
     let idSebelumnya = null // untuk deteksi pesanan baru (bunyi ting)
+    let rowsTerakhir = [] // baris papan terakhir — dipakai modal pelunasan (sisa & uang muka)
 
     container.innerHTML = `
       <div class="ord">
@@ -90,7 +93,7 @@ export const OrdersScreen = {
           </div>
           ${order.meja && order.ronde ? `<div class="ord-card__ronde">Ronde ${esc(order.ronde)}</div>` : ''}
           ${order.pelanggan && order.pelanggan !== order.meja ? `<div class="ord-card__cust">${esc(order.pelanggan)}</div>` : ''}
-          ${order.bayar === 'BELUM' && !belumBayar ? '<span class="badge badge--warn">BELUM BAYAR</span>' : ''}
+          ${ringkasBayar(order, fmtIDR) && !belumBayar ? `<span class="badge ${order.bayar === 'DP' ? 'badge--info' : 'badge--warn'}">${esc(ringkasBayar(order, fmtIDR))}</span>` : ''}
           <ul class="ord-card__items">${itemsHTML}</ul>
           <div class="ord-card__foot">
             <span class="ord-card__meta num">${fmtIDR(order.total)} · ${fmtTime(order.created_at)}${order.kasir
@@ -99,7 +102,7 @@ export const OrdersScreen = {
               ? `<button type="button" class="btn btn--sm btn--primary" data-confirm-pay>
                    Konfirmasi Bayar
                  </button>`
-              : isTerakhir && order.bayar === 'BELUM'
+              : isTerakhir && perluDilunasi(order)
                 ? `<button type="button" class="btn btn--sm btn--dark" data-lunasi>
                      Lunasi & Serahkan
                    </button>`
@@ -149,6 +152,7 @@ export const OrdersScreen = {
       const idSekarang = new Set(rows.map((o) => o.id))
       if (idSebelumnya && [...idSekarang].some((id) => !idSebelumnya.has(id))) ting()
       idSebelumnya = idSekarang
+      rowsTerakhir = rows
       renderBoard(rows)
     }
 
@@ -174,13 +178,20 @@ export const OrdersScreen = {
       const lunasiBtn = e.target.closest('[data-lunasi]')
       if (lunasiBtn) {
         // Pelunasan nota bayar-saat-ambil: pilih metode, terbitkan struk, serahkan
-        const metodeList = getState().paymentMethods?.length ? getState().paymentMethods : ['TUNAI', 'TRANSFER', 'QRIS']
+        // QRIS Otomatis membuat tagihan senilai total di layar kasir — pelunasan papan memakai metode dasar.
+        const metodeDasar = (getState().paymentMethods || []).filter((m) => m !== 'QRIS_AUTO')
+        const metodeList = metodeDasar.length ? metodeDasar : ['TUNAI', 'TRANSFER', 'QRIS']
+        const order = rowsTerakhir.find((o) => o.id === card.dataset.id) || {}
+        // Pesanan ber-uang-muka hanya menagih sisanya; server lama tanpa `sisa` jatuh ke total.
+        const sisa = Number(order.sisa) || Number(order.total) || 0
+        const infoDp = order.bayar === 'DP' ? `<p class="field__hint">Uang muka ${fmtIDR(order.dibayar)} sudah diterima.</p>` : ''
         const body = document.createElement('div')
         body.innerHTML = `
           <p class="u-muted" style="margin-bottom:var(--sp-3)">
-            Pilih metode pembayaran pelunasan — struk akan tercetak dan pesanan
-            ditandai selesai/diserahkan.
+            Tagihan <b class="num">${fmtIDR(sisa)}</b> — pilih metode pembayaran pelunasan;
+            struk akan tercetak dan pesanan ditandai selesai/diserahkan.
           </p>
+          ${infoDp}
           <div class="segmented" id="lns-metode">
             ${metodeList.map((m, i) => `
               <button type="button" class="segmented__item${i === 0 ? ' is-active' : ''}" data-m="${esc(m)}">${esc(m)}</button>`).join('')}
@@ -206,6 +217,16 @@ export const OrdersScreen = {
           }
           close()
           toast(`Nota ${result.data?.order?.no_antrian || ''} lunas & diserahkan.`, 'success')
+          // Struk akhir (sudah mengurangkan uang muka) tampil & tercetak sesuai pengaturan printer.
+          if (result.data && result.data.struk) {
+            const isi = document.createElement('div')
+            isi.innerHTML = buildReceiptHTML(result.data.struk)
+            const kaki = document.createElement('div')
+            kaki.innerHTML = `<button type="button" class="btn btn--outline" id="lns-cetak">${icons.print}<span>Cetak Struk</span></button>`
+            showModal({ title: 'Struk pelunasan', body: isi, footer: kaki, size: 'sm' })
+            kaki.querySelector('#lns-cetak').addEventListener('click', () => printReceipt(result.data.struk))
+            cetakOtomatisBilaDiatur(result.data.struk)
+          }
           muat()
         })
         return

@@ -11,6 +11,7 @@ import { esc, fmtIDR, fmtNumber, parseAmount, debounce } from '../utils/format.j
 import { toast, showModal, confirmDialog, emptyStateHTML, loadingHTML, icons } from '../components/ui.js'
 import { buildReceiptHTML, printReceipt, tombolBagikanStruk, cetakOtomatisBilaDiatur } from '../components/receipt.js'
 import { lineTotals, cartTotals, kembalian, shortfall, quickCashOptions, clampQty, diskonGabungan } from '../lib/cart.js'
+import { modeBayarTersedia, totalNota, validasiUangMuka, susunNota } from '../lib/dp-form.js'
 import { midtransBoleh, qrisAksi, sisaDetik, formatSisa, harusFallbackStatis } from '../lib/qris-flow.js'
 import { customerViewHTML } from '../components/customer-view.js'
 import { bacaParkir, simpanParkir, tambahParkir, hapusParkir, pulihkanBaris, ringkasParkir } from '../lib/parkir.js'
@@ -915,9 +916,25 @@ function renderPos(container) {
     }
     let metode = methodDefs.some((d) => d.value === 'TUNAI') ? 'TUNAI' : methodDefs[0].value
 
+    // Toko dengan alur "bayar saat ambil" (mis. laundry) boleh menyimpan nota tanpa pembayaran
+    // (Bayar nanti) atau dengan uang muka (DP); pelunasan dilakukan di Papan Pesanan saat penyerahan.
+    const modeTersedia = modeBayarTersedia(getState().manifest)
+    const bolehBayarNanti = modeTersedia.length > 1
+    let modeBayar = 'LUNAS'
+    // Satu client_ref per modal: kirim ulang nota (jaringan putus-nyambung) = pesanan yang sama di server.
+    const clientRefNota = (globalThis.crypto && crypto.randomUUID) ? crypto.randomUUID() : `nota-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    const itemsNota = () => cart.map((l) => ({ idProduk: l.produk.id, harga: hargaJual(l.produk), kuantitas: Number(l.kuantitas) || 0 }))
+    const adaDiskon = () => Number(diskonTransaksi) > 0 || cart.some((l) => Number(l.diskonPersen) > 0)
+
     const body = document.createElement('div')
     body.className = 'pos-pay'
     body.innerHTML = `
+      ${bolehBayarNanti ? `
+      <div class="segmented pos-pay__mode" id="pay-mode" role="radiogroup" aria-label="Cara bayar">
+        <button type="button" class="segmented__item is-active" role="radio" aria-checked="true" data-mode="LUNAS">Lunas</button>
+        <button type="button" class="segmented__item" role="radio" aria-checked="false" data-mode="NANTI">Bayar nanti</button>
+        <button type="button" class="segmented__item" role="radio" aria-checked="false" data-mode="DP">Uang muka</button>
+      </div>` : ''}
       <div class="segmented pos-pay__methods" id="pay-methods">
         ${methodDefs.map((d) => `
           <button type="button" class="segmented__item pos-pay__method" data-metode="${esc(d.value)}">${esc(d.label)}</button>`).join('')}
@@ -929,7 +946,7 @@ function renderPos(container) {
       <div id="pay-method-extra"></div>
       <div id="pay-cash-block">
         <div class="field">
-          <label class="field__label" for="pay-input">Dibayar</label>
+          <label class="field__label" for="pay-input" id="pay-input-label">Dibayar</label>
           <input class="input input--lg num" id="pay-input" type="text" inputmode="numeric"
                  placeholder="0" autocomplete="off" />
           <div class="field__hint num" id="pay-fmt">${fmtIDR(0)}</div>
@@ -937,23 +954,16 @@ function renderPos(container) {
         <div class="pos-pay__quick" id="pay-quick"></div>
         <div class="pos-pay__status" id="pay-status"></div>
       </div>
+      <div class="pos-pay__dp-info u-hidden" id="pay-dp-info"></div>
       <div class="field">
         <label class="field__label" for="pay-note">Catatan (opsional)</label>
         <textarea class="textarea" id="pay-note" rows="2" placeholder="Misal: pesanan dibungkus"></textarea>
       </div>
       <div class="field__error u-hidden" id="pay-error"></div>`
 
-    // Toko dengan alur "bayar saat ambil" (mis. laundry) dapat menyimpan nota
-    // tanpa pembayaran — pelunasan dilakukan di Papan Proses saat penyerahan.
-    const bolehBayarNanti = (getState().manifest?.transactionFlow || []).includes('PAYMENT_OR_LATER')
-
     const footer = document.createElement('div')
     footer.className = 'pos-pay__footer'
     footer.innerHTML = `
-      ${bolehBayarNanti ? `
-        <button type="button" class="btn btn--outline btn--block" id="pay-later">
-          Simpan Nota — Bayar Saat Ambil
-        </button>` : ''}
       <button type="button" class="btn btn--primary btn--lg btn--block" id="pay-submit" disabled>
         Selesaikan Transaksi
       </button>`
@@ -983,10 +993,30 @@ function renderPos(container) {
     const noteEl = body.querySelector('#pay-note')
     const errorEl = body.querySelector('#pay-error')
     const submitBtn = footer.querySelector('#pay-submit')
+    const modeEl = body.querySelector('#pay-mode')
+    const dpInfoEl = body.querySelector('#pay-dp-info')
+    const payLabelEl = body.querySelector('#pay-input-label')
 
     function updateStatus() {
       const dibayar = parseAmount(payInput.value)
       payFmt.textContent = fmtIDR(dibayar)
+      if (modeBayar === 'NANTI') {
+        dpInfoEl.classList.remove('pos-pay__dp-info--galat')
+        dpInfoEl.textContent = `Total nota ${fmtIDR(totalNota(itemsNota()))} dibayar saat pesanan diambil.`
+        submitBtn.disabled = false
+        return
+      }
+      if (modeBayar === 'DP') {
+        // Batas uang muka dihitung seperti server (harga katalog × kuantitas, tanpa diskon/pajak).
+        const total = totalNota(itemsNota())
+        const galat = validasiUangMuka({ jumlah: dibayar, total, metode })
+        statusEl.className = 'pos-pay__status pos-pay__status--idle'
+        statusEl.innerHTML = `<span>Total nota</span><span class="num">${fmtIDR(total)}</span>`
+        dpInfoEl.textContent = galat || `Sisa dibayar saat ambil: ${fmtIDR(total - dibayar)}`
+        dpInfoEl.classList.toggle('pos-pay__dp-info--galat', !!galat)
+        submitBtn.disabled = !!galat
+        return
+      }
       const kurang = shortfall(dibayar, grandTotal)
       if (!payInput.value.trim()) {
         statusEl.className = 'pos-pay__status pos-pay__status--idle'
@@ -1020,6 +1050,17 @@ function renderPos(container) {
       body.querySelectorAll('.pos-pay__method').forEach((btn) => {
         btn.classList.toggle('is-active', btn.dataset.metode === metode)
       })
+      if (modeBayar === 'DP') {
+        // Uang muka: yang diketik adalah nominal DP, bukan uang diterima senilai total —
+        // jadi tanpa QR/rekening senilai total dan tanpa tombol nominal cepat.
+        extraEl.innerHTML = ''
+        cashBlock.classList.remove('u-hidden')
+        quickEl.classList.add('u-hidden')
+        submitBtn.textContent = 'Simpan Nota + Uang Muka'
+        updateStatus()
+        payInput.focus()
+        return
+      }
       if (metode === 'TUNAI') {
         // Lapis TUNAI: input uang diterima + nominal cepat + kembalian.
         extraEl.innerHTML = ''
@@ -1062,9 +1103,44 @@ function renderPos(container) {
       }
     }
 
+    // Lunas / Bayar nanti / Uang muka — hanya tampil di toko ber-alur PAYMENT_OR_LATER.
+    function applyMode(mode) {
+      modeBayar = mode
+      modeEl.querySelectorAll('[data-mode]').forEach((b) => {
+        const aktif = b.dataset.mode === mode
+        b.classList.toggle('is-active', aktif)
+        b.setAttribute('aria-checked', aktif ? 'true' : 'false')
+      })
+      const nanti = mode === 'NANTI'
+      const dp = mode === 'DP'
+      // Bayar nanti: tak ada uang masuk → metode & nominal disembunyikan.
+      // Uang muka: metode dasar saja — QRIS Otomatis membuat tagihan senilai total, bukan DP.
+      body.querySelector('#pay-methods').classList.toggle('u-hidden', nanti)
+      body.querySelector('[data-metode="QRIS_AUTO"]')?.classList.toggle('u-hidden', dp)
+      if (dp && metode === 'QRIS_AUTO') metode = methodDefs.some((d) => d.value === 'TUNAI') ? 'TUNAI' : methodDefs[0].value
+      dpInfoEl.classList.toggle('u-hidden', mode === 'LUNAS')
+      payLabelEl.textContent = dp ? 'Uang muka diterima' : 'Dibayar'
+      if (nanti) {
+        stopQris()
+        extraEl.innerHTML = ''
+        cashBlock.classList.add('u-hidden')
+        submitBtn.textContent = 'Simpan Nota — Bayar Saat Ambil'
+        updateStatus()
+      } else {
+        if (dp) payInput.value = ''
+        applyMetode() // metode aktif menentukan tampilan & label tombol
+      }
+      // Display Pelanggan tak boleh memampang "kembalian" untuk nota yang belum lunas.
+      if (nanti || dp) { cdPayment = null; pushCustomerDisplay() }
+    }
+    modeEl?.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-mode]')
+      if (b) applyMode(b.dataset.mode)
+    })
+
     body.querySelector('#pay-methods').addEventListener('click', (e) => {
       const btn = e.target.closest('.pos-pay__method')
-      if (!btn) return
+      if (!btn || modeBayar === 'NANTI') return // Bayar nanti tak menerima uang — pintasan F5–F7 pun diabaikan
       metode = btn.dataset.metode
       applyMetode()
     })
@@ -1093,13 +1169,13 @@ function renderPos(container) {
       if (e.key === 'Enter' && !submitBtn.disabled) submitBtn.click()
     })
 
-    function showSuccess(struk) {
+    function showSuccess(struk, opsi = {}) {
       const change = Number(struk.kembalian) || 0
       body.className = ''
       body.innerHTML = `
         <div class="pos-done">
           <div class="pos-done__icon">${icons.check}</div>
-          <div class="pos-done__title">Transaksi berhasil</div>
+          <div class="pos-done__title">${esc(opsi.judul || 'Transaksi berhasil')}</div>
           <div class="pos-done__no mono">${esc(struk.nomor || '')}</div>
           ${struk.no_antrian ? `
             <div class="pos-done__queue">
@@ -1141,7 +1217,6 @@ function renderPos(container) {
       }
       cart = []
       diskonTransaksi = 0
-    diskonTransaksi = 0
       pelanggan = null
       if (!disposed) {
         renderCart()
@@ -1314,7 +1389,52 @@ function renderPos(container) {
       finalizeSuccess(result.data)
     }
 
+    // Nota bayar-nanti / uang muka: pesanan masuk Papan Pesanan, struk penuh terbit saat pelunasan.
+    async function simpanNota() {
+      errorEl.classList.add('u-hidden')
+      if (adaDiskon()) {
+        errorEl.textContent = 'Diskon belum bisa dipakai untuk nota bayar nanti atau uang muka — hapus diskon atau pilih Lunas.'
+        errorEl.classList.remove('u-hidden')
+        return
+      }
+      // Nota & uang muka hanya online: uang + kewajiban tak boleh diantrekan diam-diam.
+      if (getState().online === false) {
+        errorEl.textContent = 'Nota bayar nanti dan uang muka hanya bisa disimpan saat terhubung ke server.'
+        errorEl.classList.remove('u-hidden')
+        return
+      }
+      const labelTombol = submitBtn.textContent
+      submitBtn.disabled = true
+      submitBtn.textContent = 'Menyimpan nota…'
+      const result = await api.order.simpanNota(susunNota({
+        mode: modeBayar,
+        items: itemsNota(),
+        idPelanggan: pelanggan ? pelanggan.id : undefined,
+        catatan: noteEl.value.trim() || undefined,
+        uangMuka: parseAmount(payInput.value),
+        metodeUangMuka: metode,
+        clientRef: clientRefNota
+      }))
+      if (modalClosed) return // modal ditutup selagi nota dikirim
+      if (!result.ok) {
+        submitBtn.disabled = false
+        submitBtn.textContent = labelTombol
+        errorEl.textContent = firstError(result)
+        errorEl.classList.remove('u-hidden')
+        return
+      }
+      cart = []
+      diskonTransaksi = 0
+      pelanggan = null
+      if (!disposed) renderCart()
+      // Panel sukses memakai nota tanda-terima (belum lunas / uang muka) + QR lacak;
+      // cetak otomatis dijalankan showSuccess().
+      showSuccess(result.data.nota, { judul: modeBayar === 'DP' ? 'Nota & uang muka tersimpan' : 'Nota tersimpan' })
+    }
+
     async function submitCheckout() {
+      // Bayar nanti / uang muka tidak lewat checkout — nota disimpan sebagai pesanan.
+      if (modeBayar !== 'LUNAS') { await simpanNota(); return }
       // QRIS Otomatis punya alurnya sendiri (buat tagihan → QR → poll → checkout).
       if (metode === 'QRIS_AUTO') { await startQrisAuto(); return }
       const dibayar = parseAmount(payInput.value)
@@ -1384,38 +1504,6 @@ function renderPos(container) {
     }
 
     submitBtn.addEventListener('click', submitCheckout)
-
-    const laterBtn = footer.querySelector('#pay-later')
-    if (laterBtn) {
-      laterBtn.addEventListener('click', async () => {
-        laterBtn.disabled = true
-        laterBtn.textContent = 'Menyimpan nota…'
-        const result = await api.order.simpanNota({
-          items: cart.map((l) => ({
-            idProduk: l.produk.id,
-            harga: hargaJual(l.produk),
-            kuantitas: Number(l.kuantitas) || 0
-          })),
-          idPelanggan: pelanggan ? pelanggan.id : undefined,
-          catatan: noteEl.value.trim() || undefined
-        })
-        if (!result.ok) {
-          laterBtn.disabled = false
-          laterBtn.textContent = 'Simpan Nota — Bayar Saat Ambil'
-          errorEl.textContent = firstError(result)
-          errorEl.classList.remove('u-hidden')
-          return
-        }
-        cart = []
-        diskonTransaksi = 0
-      diskonTransaksi = 0
-    diskonTransaksi = 0
-        pelanggan = null
-        if (!disposed) renderCart()
-        // Panel sukses memakai nota tanda-terima (belum lunas) + QR lacak
-        showSuccess(result.data.nota)
-      })
-    }
 
     applyMetode()
   }

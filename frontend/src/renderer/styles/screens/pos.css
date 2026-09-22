@@ -924,3 +924,29 @@
   opacity: 0.45;
   cursor: not-allowed;
 }
+
+/* ---------- Cara bayar nota: Lunas / Bayar nanti / Uang muka ---------- */
+
+/* Sejajar dengan pemilih metode di bawahnya: satu baris penuh, bagi rata. */
+.pos-pay__mode {
+  display: flex;
+  width: 100%;
+  margin-bottom: var(--sp-3);
+}
+
+.pos-pay__mode .segmented__item {
+  flex: 1;
+  text-align: center;
+}
+
+/* Sisa tagihan / pesan galat uang muka — di bawah kolom nominal. */
+.pos-pay__dp-info {
+  margin-top: var(--sp-2);
+  font-size: var(--text-sm);
+  color: var(--text-2);
+}
+
+.pos-pay__dp-info--galat {
+  color: var(--danger);
+  font-weight: 600;
+}
