@@ -1,3 +1,4 @@
+import '../../../../core/utils/format.dart';
 import '../entities/pesanan.dart';
 
 /// Logika murni papan pesanan (tanpa Flutter/Riverpod) — cermin orders.js &
@@ -98,6 +99,15 @@ AksiKartu? aksiKartu(Pesanan o, List<String> states) {
   final terakhir = next == tahapTerminal(states);
   if (terakhir && o.perluDilunasi) return AksiKartu.lunasi;
   return terakhir ? AksiKartu.selesai : AksiKartu.maju;
+}
+
+/// Pil status bayar di kartu papan; string kosong = tak ada pil.
+/// Uang muka menyebut DP yang sudah diterima DAN sisa yang masih ditagih,
+/// karena itulah dua angka yang ditanyakan kasir saat menyerahkan pesanan.
+String ringkasBayar(Pesanan o) {
+  if (o.adalahDp) return 'DP ${fmtIDR(o.dibayar)} · sisa ${fmtIDR(o.sisa)}';
+  if (o.belumBayar) return 'Belum bayar · ${fmtIDR(o.sisa)}';
+  return '';
 }
 
 /// Teks tombol untuk [aksiKartu].

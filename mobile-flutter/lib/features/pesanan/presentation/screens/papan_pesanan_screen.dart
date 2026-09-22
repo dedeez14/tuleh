@@ -3,13 +3,19 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/layout/lebar.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/format.dart';
+import '../../../cetak/domain/struk_server.dart';
+import '../../../demo/demo_session.dart';
+import '../../../kasir/domain/metode_pembayaran.dart';
+import '../../../pengaturan/presentation/providers/pengaturan_providers.dart';
 import '../../../toko/presentation/providers/toko_providers.dart';
 import '../../domain/entities/pesanan.dart';
 import '../../domain/logic/papan_logic.dart';
 import '../providers/pesanan_providers.dart';
+import '../widgets/lembar_struk_pesanan.dart';
 
 /// Papan Pesanan — KDS dapur / Antrian / Papan Proses dalam satu layar.
 /// Kolom (tab) dibaca dari `manifest.lifecycle.states` toko aktif, jadi layar
@@ -111,7 +117,7 @@ class _PapanPesananScreenState extends ConsumerState<PapanPesananScreen> {
 
     setState(() => _busyId = o.id);
     try {
-      await ref
+      final hasil = await ref
           .read(pesananAksiProvider)
           .transition(
             o.id,
@@ -124,9 +130,30 @@ class _PapanPesananScreenState extends ConsumerState<PapanPesananScreen> {
             ? 'Pesanan ${o.label} lunas & diserahkan.'
             : 'Pesanan ${o.label} → ${stageLabel(next)}.',
       );
+      // Transisi yang MELUNASI menerbitkan transaksi akhir; struknya ikut di
+      // balasan (server lama tidak mengirimnya — tanpa lembar, tetap sukses).
+      final strukServer = hasil.struk;
+      if (strukServer != null) {
+        final usaha = ref.read(profilUsahaProvider).valueOrNull;
+        final struk = strukDariServer(
+          strukServer,
+          namaToko: usaha?.nama ?? 'Tuléh POS',
+          alamat: usaha?.alamat,
+          telepon: usaha?.telepon,
+          catatanKaki: usaha?.strukFooter,
+          logoUrl: (usaha?.strukTampilLogo ?? false) ? usaha?.logo : null,
+          demo: ref.read(demoSessionProvider).active,
+        );
+        if (!mounted) return;
+        await tampilkanLembar<void>(
+          context,
+          builder: (_) =>
+              LembarStrukPesanan(struk: struk, judul: 'Struk pelunasan'),
+        );
+      }
     } on ApiException catch (e) {
       if (!mounted) return;
-      _snack(e.message, error: true);
+      _snack(e.firstError() ?? e.message, error: true);
       ref.invalidate(pesananListProvider); // selaraskan dgn kondisi server
     } finally {
       if (mounted) setState(() => _busyId = null);
@@ -136,9 +163,15 @@ class _PapanPesananScreenState extends ConsumerState<PapanPesananScreen> {
   /// Konfirmasi bayar & pelunasan butuh metode pembayaran (cermin papan desktop).
   Future<String?> _pilihPembayaran(Pesanan o, AksiKartu aksi) async {
     final manifest = ref.read(activeManifestProvider).valueOrNull;
-    final modes = manifest?.paymentModes.isNotEmpty == true
-        ? manifest!.paymentModes
-        : const ['TUNAI', 'QRIS', 'TRANSFER'];
+    // Master `pos_metode_pembayaran` lebih dulu (toko boleh mematikan TUNAI);
+    // manifest lalu daftar cadangan hanya dipakai bila server belum menjawab.
+    final modes =
+        ref.read(metodePembayaranProvider).valueOrNull ??
+        (manifest?.paymentModes.isNotEmpty == true
+            ? manifest!.paymentModes
+            : metodePembayaranBawaan);
+    // Pesanan DP menagih SISANYA, bukan total — uang mukanya sudah diterima.
+    final tagihan = o.perluDilunasi ? o.sisa : o.total;
 
     return showModalBottomSheet<String>(
       context: context,
@@ -164,12 +197,21 @@ class _PapanPesananScreenState extends ConsumerState<PapanPesananScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '${o.label} · ${fmtIDR(o.total)}',
+                    '${o.label} · ${fmtIDR(tagihan)}',
                     style: TextStyle(
                       color: Theme.of(sheetContext).colorScheme.onSurface
                           .withValues(alpha: 0.65),
                     ),
                   ),
+                  if (o.adalahDp)
+                    Text(
+                      'Uang muka ${fmtIDR(o.dibayar)} sudah diterima.',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: Theme.of(sheetContext).colorScheme.onSurface
+                            .withValues(alpha: 0.65),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -356,6 +398,8 @@ class _Kartu extends StatelessWidget {
         ? Colors.orange.shade700
         : cs.onSurface.withValues(alpha: 0.55);
     final aksi = aksiKartu(pesanan, states);
+    final ringkas = ringkasBayar(pesanan);
+    final warnaPil = pesanan.adalahDp ? AppColors.warn : cs.error;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -442,23 +486,28 @@ class _Kartu extends StatelessWidget {
                   style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
               ),
-              if (pesanan.belumBayar) ...[
+              if (ringkas.isNotEmpty) ...[
                 const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: cs.error.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    'Belum bayar',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: cs.error,
+                // DP bukan keadaan bermasalah (uangnya sudah masuk sebagian),
+                // jadi warnanya peringatan — bukan merah "belum bayar".
+                Flexible(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: warnaPil.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      ringkas,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: warnaPil,
+                      ),
                     ),
                   ),
                 ),

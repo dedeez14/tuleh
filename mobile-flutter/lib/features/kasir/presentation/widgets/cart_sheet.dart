@@ -10,7 +10,12 @@ import '../../../../core/utils/rupiah_input.dart';
 import '../../../../core/widgets/motion.dart';
 import '../../../../core/widgets/states.dart';
 import '../../../cetak/domain/entities/struk.dart';
+import '../../../cetak/domain/struk_server.dart';
 import '../../../demo/demo_session.dart';
+import '../../../keamanan/presentation/widgets/dialog_otorisasi.dart';
+import '../../../pesanan/domain/entities/hasil_pesanan.dart';
+import '../../../pesanan/presentation/providers/pesanan_providers.dart';
+import '../../../pesanan/presentation/widgets/lembar_struk_pesanan.dart';
 import 'hasil_transaksi_sheet.dart';
 import '../../../pengaturan/presentation/providers/pengaturan_providers.dart';
 import '../../../sesi/presentation/providers/sesi_providers.dart';
@@ -35,6 +40,16 @@ import '../screens/kasir_screen.dart' show bukaSesiDenganUmpanBalik;
 /// Dibuat dua langkah agar layar tidak padat: langkah "Keranjang" untuk
 /// memeriksa dan mengoreksi item, langkah "Pembayaran" untuk memilih metode
 /// dan menghitung kembalian. Tombol utama selalu di bawah, dalam jangkauan ibu jari.
+/// Pesan galat uang muka; null = sah. Batas sama dengan server: uang muka
+/// harus di antara Rp0 dan total pesanan (bayar penuh = pilih Lunas).
+String? validasiUangMuka(double uangMuka, double total) {
+  if (uangMuka <= 0) return 'Isi uang muka lebih dari Rp0.';
+  if (uangMuka >= total) {
+    return 'Uang muka harus kurang dari total pesanan. Untuk bayar penuh pilih Lunas.';
+  }
+  return null;
+}
+
 class CartSheet extends ConsumerStatefulWidget {
   const CartSheet({super.key, this.tertanam = false});
 
@@ -55,11 +70,19 @@ class _CartSheetState extends ConsumerState<CartSheet> {
   /// menonaktifkan TUNAI, dan mengirimkannya tetap akan ditolak server (422).
   String _metodeTerpilih = 'TUNAI';
   final _uangCtrl = TextEditingController();
+  final _uangMukaCtrl = TextEditingController();
+  ModeBayar _mode = ModeBayar.lunas;
   bool _loading = false;
+
+  /// Satu `client_ref` per nota yang sedang dikonfirmasi: kirim ulang setelah
+  /// gagal jaringan menghasilkan pesanan yang SAMA (server `pos.idempoten`),
+  /// bukan pesanan kembar. Dikosongkan sesudah nota tersimpan.
+  String? _clientRefNota;
 
   @override
   void dispose() {
     _uangCtrl.dispose();
+    _uangMukaCtrl.dispose();
     super.dispose();
   }
 
@@ -209,6 +232,95 @@ class _CartSheetState extends ConsumerState<CartSheet> {
     }
   }
 
+  /// Simpan keranjang sebagai NOTA PESANAN: bayar saat ambil (`NANTI`) atau
+  /// dengan uang muka (`DP`). Bukan checkout — belum ada transaksi, dan untuk
+  /// DP uangnya tercatat sebagai uang muka di sesi kasir penerimanya.
+  Future<void> _simpanNota() async {
+    final items = ref.read(cartControllerProvider);
+    final total = ref.read(cartGrandTotalProvider);
+    final meta = ref.read(keranjangMetaProvider);
+    if (items.isEmpty) return;
+    // Server menghitung total nota dari harga katalog; diskon keranjang tak
+    // ikut terkirim, jadi menyimpannya akan menagih lebih saat pelunasan.
+    if (meta.diskonPersen > 0) {
+      _pesan(
+        'Diskon belum bisa dipakai untuk nota bayar nanti atau uang muka — '
+        'hapus diskon atau pilih Lunas.',
+        gagal: true,
+      );
+      return;
+    }
+    // Uang + kewajiban tidak diantrekan diam-diam (antrean offline = Fase 4).
+    if (!pastikanOnline(
+      context,
+      ref,
+      'Nota bayar nanti dan uang muka hanya bisa disimpan saat terhubung ke server.',
+    )) {
+      return;
+    }
+    final dp = _mode == ModeBayar.dp;
+    final uangMuka = parseRupiah(_uangMukaCtrl.text);
+    // Pengaman kedua: tombol sudah dikunci _Kaki, tapi `dp.jumlah: null`
+    // tak boleh pernah sampai ke server.
+    if (dp && validasiUangMuka(uangMuka, total) != null) return;
+
+    setState(() => _loading = true);
+    try {
+      final hasil = await ref
+          .read(pesananAksiProvider)
+          .buatNota(
+            bayar: dp ? 'DP' : 'NANTI',
+            items: [
+              for (final e in items)
+                ItemNota(
+                  idProduk: e.product.id,
+                  kuantitas: e.qty,
+                  harga: e.product.harga,
+                ),
+            ],
+            idPelanggan: meta.pelanggan?.id,
+            catatan: meta.catatan,
+            uangMuka: dp ? uangMuka : null,
+            metodeUangMuka: dp ? _metodeTerpilih : null,
+            clientRef: _clientRefNota ??= ref
+                .read(checkoutRepositoryProvider)
+                .buatClientRef(),
+          );
+      if (!mounted) return;
+      _clientRefNota = null;
+      final usaha = ref.read(profilUsahaProvider).valueOrNull;
+      final struk = strukDariServer(
+        hasil.nota,
+        namaToko: usaha?.nama ?? 'Tuléh POS',
+        alamat: usaha?.alamat,
+        telepon: usaha?.telepon,
+        catatanKaki: usaha?.strukFooter,
+        logoUrl: (usaha?.strukTampilLogo ?? false) ? usaha?.logo : null,
+        demo: ref.read(demoSessionProvider).active,
+      );
+      ref.read(cartControllerProvider.notifier).clear();
+      ref.invalidate(activeSesiProvider); // uang muka ikut rekap kas
+      _uangMukaCtrl.clear();
+      setState(() {
+        _mode = ModeBayar.lunas;
+        _langkah = _Langkah.keranjang;
+      });
+      HapticFeedback.mediumImpact();
+      await tampilkanLembar<void>(
+        context,
+        builder: (_) => LembarStrukPesanan(
+          struk: struk,
+          judul: dp ? 'Nota & uang muka tersimpan' : 'Nota tersimpan',
+        ),
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      _pesan(e.firstError() ?? e.message, gagal: true);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   void _bukaSesi() => bukaSesiDenganUmpanBalik(context, ref);
 
   /// Pindah ke toko tempat sesi kasir terbuka. Keranjang ikut dikosongkan oleh
@@ -295,6 +407,18 @@ class _CartSheetState extends ConsumerState<CartSheet> {
     if (!metode.contains(_metodeTerpilih)) {
       _metodeTerpilih = metode.isEmpty ? metodePembayaranBawaan.first : metode.first;
     }
+    // Nota bayar-nanti & uang muka hanya untuk toko ber-alur PAYMENT_OR_LATER
+    // (laundry, bengkel, salon, doorsmeer, konter HP …). Minimarket: Lunas saja,
+    // dan pemilih modenya tidak dirender sama sekali.
+    final manifest = ref.watch(activeManifestProvider).valueOrNull;
+    final modeTersedia = (manifest?.bolehBayarNanti ?? false)
+        ? const [ModeBayar.lunas, ModeBayar.nanti, ModeBayar.dp]
+        : const [ModeBayar.lunas];
+    if (!modeTersedia.contains(_mode)) _mode = ModeBayar.lunas;
+    final uangMuka = parseRupiah(_uangMukaCtrl.text);
+    final galatUangMuka = _mode == ModeBayar.dp
+        ? validasiUangMuka(uangMuka, total)
+        : null;
     final cs = Theme.of(context).colorScheme;
 
     // Keranjang dikosongkan dari layar lain → tutup lembar ini.
@@ -344,6 +468,14 @@ class _CartSheetState extends ConsumerState<CartSheet> {
                   pembayaran: pembayaran,
                   onPilihMetode: (m) => setState(() => _metodeTerpilih = m),
                   onUbahUang: () => setState(() {}),
+                  modeTersedia: modeTersedia,
+                  mode: _mode,
+                  onPilihMode: (m) => setState(() => _mode = m),
+                  uangMukaCtrl: _uangMukaCtrl,
+                  galatUangMuka: galatUangMuka,
+                  sisaUangMuka: galatUangMuka == null && _mode == ModeBayar.dp
+                      ? total - uangMuka
+                      : null,
                 ),
         ),
         if (items.isNotEmpty)
@@ -353,8 +485,10 @@ class _CartSheetState extends ConsumerState<CartSheet> {
             metode: _metodeTerpilih,
             uangDiterima: _uangDiterima,
             loading: _loading,
+            mode: _mode,
+            bolehKirimNota: galatUangMuka == null,
             onLanjut: () => setState(() => _langkah = _Langkah.bayar),
-            onBayar: _bayar,
+            onBayar: _mode == ModeBayar.lunas ? _bayar : _simpanNota,
             cs: cs,
           ),
       ],
@@ -461,6 +595,8 @@ class _Kaki extends StatelessWidget {
     required this.metode,
     required this.uangDiterima,
     required this.loading,
+    required this.mode,
+    required this.bolehKirimNota,
     required this.onLanjut,
     required this.onBayar,
     required this.cs,
@@ -471,6 +607,12 @@ class _Kaki extends StatelessWidget {
   final String metode;
   final double uangDiterima;
   final bool loading;
+
+  /// Lunas = checkout; nanti/dp = nota pesanan (label & gerbang tombol beda).
+  final ModeBayar mode;
+
+  /// Uang muka sah (atau mode bayar-nanti yang memang tanpa nominal).
+  final bool bolehKirimNota;
   final VoidCallback onLanjut;
   final VoidCallback onBayar;
   final ColorScheme cs;
@@ -478,13 +620,19 @@ class _Kaki extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bayar = langkah == _Langkah.bayar;
-    final tunai = metode == 'TUNAI';
+    final lunas = mode == ModeBayar.lunas;
+    final tunai = lunas && metode == 'TUNAI';
     final kembalian = uangDiterima - total;
     final kurang = tunai && uangDiterima > 0 && kembalian < 0;
     final belumIsi = tunai && uangDiterima <= 0;
     // Tunai tanpa nominal atau kurang: Bayar dikunci; kasir tahu sebabnya
-    // dari baris di atas tombol, bukan dari snackbar setelah gagal.
-    final bisaBayar = !bayar || !tunai || (!belumIsi && !kurang);
+    // dari baris di atas tombol, bukan dari snackbar setelah gagal. Nota uang
+    // muka dikunci dengan cara yang sama (galatnya tampil di kolom nominal).
+    final bisaBayar = !bayar
+        ? true
+        : lunas
+        ? (!tunai || (!belumIsi && !kurang))
+        : bolehKirimNota;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
@@ -573,12 +721,19 @@ class _Kaki extends StatelessWidget {
                       color: AppColors.mint900,
                     ),
                   )
-                : Text(
-                    bayar ? 'Bayar ${fmtIDR(total)}' : 'Lanjut ke pembayaran',
-                  ),
+                : Text(_label(bayar)),
           ),
         ],
       ),
     );
+  }
+
+  String _label(bool bayar) {
+    if (!bayar) return 'Lanjut ke pembayaran';
+    return switch (mode) {
+      ModeBayar.lunas => 'Bayar ${fmtIDR(total)}',
+      ModeBayar.nanti => 'Simpan Nota — Bayar Saat Ambil',
+      ModeBayar.dp => 'Simpan Nota + Uang Muka',
+    };
   }
 }

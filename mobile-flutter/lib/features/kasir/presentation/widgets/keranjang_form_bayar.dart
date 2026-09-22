@@ -12,6 +12,18 @@ import '../../../../core/widgets/motion.dart';
 import '../../../../core/widgets/states.dart';
 import '../../../pengaturan/domain/entities/pengaturan_pembayaran.dart';
 
+/// Cara bayar keranjang (Fase 3): Lunas = checkout; Bayar nanti & Uang muka =
+/// nota pesanan (`POST /orders`), hanya untuk toko ber-alur `PAYMENT_OR_LATER`.
+enum ModeBayar { lunas, nanti, dp }
+
+extension ModeBayarLabel on ModeBayar {
+  String get label => switch (this) {
+    ModeBayar.lunas => 'Lunas',
+    ModeBayar.nanti => 'Bayar nanti',
+    ModeBayar.dp => 'Uang muka',
+  };
+}
+
 class FormBayar extends StatelessWidget {
   const FormBayar({
     super.key,
@@ -23,6 +35,12 @@ class FormBayar extends StatelessWidget {
     required this.pembayaran,
     required this.onPilihMetode,
     required this.onUbahUang,
+    this.modeTersedia = const [ModeBayar.lunas],
+    this.mode = ModeBayar.lunas,
+    this.onPilihMode,
+    this.uangMukaCtrl,
+    this.galatUangMuka,
+    this.sisaUangMuka,
   });
 
   final double total;
@@ -34,47 +52,113 @@ class FormBayar extends StatelessWidget {
   final ValueChanged<String> onPilihMetode;
   final VoidCallback onUbahUang;
 
+  /// Cara bayar yang boleh dipilih di toko ini. Satu pilihan (Lunas saja) =
+  /// pemilih tidak dirender sama sekali, persis tampilan sebelum Fase 3.
+  final List<ModeBayar> modeTersedia;
+  final ModeBayar mode;
+  final ValueChanged<ModeBayar>? onPilihMode;
+
+  /// Kolom nominal uang muka (mode [ModeBayar.dp]).
+  final TextEditingController? uangMukaCtrl;
+
+  /// Pesan galat inline uang muka; null = sah (tombol kirim terbuka).
+  final String? galatUangMuka;
+
+  /// Sisa tagihan yang akan ditagih saat pesanan diambil; null = tak ditampilkan.
+  final double? sisaUangMuka;
+
   static IconData _ikon(String m) => switch (m) {
     'TUNAI' => Icons.payments_outlined,
     'QRIS' => Icons.qr_code_2_rounded,
     _ => Icons.account_balance_outlined,
   };
 
+  Widget _judulKecil(BuildContext context, String teks) => Text(
+    teks,
+    style: TextStyle(
+      fontSize: 12.5,
+      fontWeight: FontWeight.w800,
+      letterSpacing: 0.3,
+      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final tunai = terpilih == 'TUNAI';
+    final nanti = mode == ModeBayar.nanti;
+    final dp = mode == ModeBayar.dp;
+    // Kembalian hanya relevan untuk pembayaran penuh; uang muka memakai
+    // kolomnya sendiri dan nota bayar-nanti tidak menerima uang sama sekali.
+    final tunai = terpilih == 'TUNAI' && mode == ModeBayar.lunas;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
       children: [
-        Text(
-          'Metode pembayaran',
-          style: TextStyle(
-            fontSize: 12.5,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0.3,
-            color: cs.onSurface.withValues(alpha: 0.6),
-          ),
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            for (final m in metode) ...[
-              Expanded(
-                child: PilihanMetode(
-                  label: m,
-                  ikon: _ikon(m),
-                  aktif: m == terpilih,
-                  onTap: () => onPilihMetode(m),
-                ),
-              ),
-              if (m != metode.last) const SizedBox(width: 8),
+        if (modeTersedia.length > 1) ...[
+          _judulKecil(context, 'Cara bayar'),
+          const SizedBox(height: 10),
+          SegmentedButton<ModeBayar>(
+            showSelectedIcon: false,
+            segments: [
+              for (final m in modeTersedia)
+                ButtonSegment<ModeBayar>(value: m, label: Text(m.label)),
             ],
-          ],
-        ),
-        const SizedBox(height: 22),
-        if (tunai) ...[
+            selected: {mode},
+            onSelectionChanged: (s) => onPilihMode?.call(s.first),
+          ),
+          const SizedBox(height: 22),
+        ],
+        if (nanti)
+          CatatanKecil(
+            ikon: Icons.schedule_rounded,
+            teks:
+                'Total nota ${fmtIDR(total)} dibayar saat pesanan diambil. '
+                'Nota tersimpan tanpa uang masuk sekarang.',
+          )
+        else ...[
+          _judulKecil(context, dp ? 'Metode uang muka' : 'Metode pembayaran'),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              for (final m in metode) ...[
+                Expanded(
+                  child: PilihanMetode(
+                    label: m,
+                    ikon: _ikon(m),
+                    aktif: m == terpilih,
+                    onTap: () => onPilihMetode(m),
+                  ),
+                ),
+                if (m != metode.last) const SizedBox(width: 8),
+              ],
+            ],
+          ),
+          const SizedBox(height: 22),
+        ],
+        // Bayar nanti: tak ada metode maupun nominal — panduan QRIS/transfer
+        // di bawah pun tidak berlaku (belum ada uang yang diterima).
+        if (nanti)
+          const SizedBox.shrink()
+        else if (dp) ...[
+          TextField(
+            key: const ValueKey('nota-uang-muka'),
+            controller: uangMukaCtrl,
+            keyboardType: TextInputType.number,
+            inputFormatters: const [RupiahInputFormatter()],
+            onChanged: (_) => onUbahUang(),
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+            decoration: InputDecoration(
+              labelText: 'Uang muka',
+              prefixText: 'Rp ',
+              hintText: '0',
+              errorText: galatUangMuka,
+              helperText: galatUangMuka == null && sisaUangMuka != null
+                  ? 'Sisa dibayar saat ambil: ${fmtIDR(sisaUangMuka!)}'
+                  : 'Dari total ${fmtIDR(total)}',
+            ),
+          ),
+        ] else if (tunai) ...[
           Text(
             'Uang diterima',
             style: TextStyle(

@@ -167,6 +167,47 @@ void main() {
     });
   });
 
+  group('ringkasBayar (pil kartu)', () {
+    test('uang muka menampilkan DP dan sisanya', () {
+      const o = Pesanan(
+        id: 'ORD-1',
+        stage: 'DIPROSES',
+        bayar: 'DP',
+        total: 28000,
+        dibayar: 10000,
+        sisa: 18000,
+      );
+      expect(ringkasBayar(o), 'DP ${fmtIDR(10000)} · sisa ${fmtIDR(18000)}');
+    });
+
+    test('nota bayar-nanti menampilkan tagihan penuh', () {
+      const o = Pesanan(
+        id: 'ORD-2',
+        stage: 'DIPROSES',
+        bayar: 'BELUM',
+        total: 28000,
+        sisa: 28000,
+      );
+      expect(ringkasBayar(o), 'Belum bayar · ${fmtIDR(28000)}');
+    });
+
+    test('pesanan lunas / bon meja tanpa pil', () {
+      expect(ringkasBayar(_order(stage: 'ANTRIAN')), '');
+      expect(ringkasBayar(_order(stage: 'ANTRIAN', bayar: 'BON')), '');
+      expect(ringkasBayar(_order(stage: 'ANTRIAN', bayar: null)), '');
+    });
+
+    test('server lama tanpa `sisa`: nota BELUM tetap memakai totalnya', () {
+      final o = Pesanan.fromJson(const {
+        'id': 'ORD-3',
+        'stage': 'ANTRIAN',
+        'bayar': 'BELUM',
+        'total': 28000,
+      });
+      expect(ringkasBayar(o), 'Belum bayar · ${fmtIDR(28000)}');
+    });
+  });
+
   group('umur pesanan', () {
     test('dihitung dari created_at, tidak pernah negatif', () {
       final now = DateTime(2026, 9, 4, 12, 0);
