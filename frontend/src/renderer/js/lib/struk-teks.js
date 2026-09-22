@@ -29,9 +29,12 @@ export function barisPembayaran (struk) {
     return out
   }
   if (uangMuka > 0) {
+    // Sisa yang dibayar saat pengambilan dihitung dari grand_total, bukan dari `dibayar`,
+    // supaya struk tetap benar walau kelak `dibayar` berarti uang yang diserahkan (bukan total).
+    const sisaDibayar = Math.max(0, (Number(struk.grand_total) || 0) - uangMuka)
     return [
       { label: 'Uang muka', nilai: uangMuka, kurang: true },
-      { label: labelPembayaranStruk(struk), nilai: Number(struk.dibayar) - uangMuka },
+      { label: labelPembayaranStruk(struk), nilai: sisaDibayar },
       { label: 'Kembalian', nilai: Number(struk.kembalian) || 0 }
     ]
   }
