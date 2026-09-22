@@ -75,3 +75,29 @@ export function tagihanPelunasan(order) {
   const total = Number(order && order.total)
   return Number.isFinite(total) && total > 0 ? total : null
 }
+
+/**
+ * Sidik isi nota (tanpa client_ref) — kunci pengikat client_ref. Server memutar ulang jawaban lama per
+ * (pengguna, endpoint, client_ref) TANPA melihat isi body, jadi ref hanya boleh dipakai ulang untuk isi yang sama.
+ * Harga tak ikut: server menghargai pesanan dari katalog.
+ */
+export function sidikNota(nota) {
+  const n = nota || {}
+  return JSON.stringify({
+    bayar: n.bayar || null,
+    items: (n.items || []).map((i) => ({ idProduk: i.idProduk, kuantitas: Number(i.kuantitas) || 0 })),
+    idPelanggan: n.idPelanggan ?? null,
+    catatan: n.catatan ?? null,
+    dp: n.dp ? { jumlah: Number(n.dp.jumlah) || 0, tipePembayaran: n.dp.tipePembayaran || null } : null
+  })
+}
+
+/**
+ * client_ref untuk kiriman nota berikutnya. Sidik sama dengan kiriman terakhir → ref lama (kirim ulang sesudah
+ * timeout aman: server memutar ulang pesanan yang sama); sidik beda → ref baru dari `buatRef()`.
+ * @returns {{ ref: string, sidik: string }} keadaan baru — simpan pemanggil untuk kiriman berikutnya.
+ */
+export function refUntuk(state, sidik, buatRef) {
+  if (state && state.ref && state.sidik === sidik) return { ref: state.ref, sidik }
+  return { ref: buatRef(), sidik }
+}

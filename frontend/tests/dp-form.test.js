@@ -89,3 +89,35 @@ test('tagihan pelunasan: sisa, jatuh ke total; tak pernah Rp0', () => {
   assert.equal(D.tagihanPelunasan({}), null)
   assert.equal(D.tagihanPelunasan(null), null)
 })
+
+test('client_ref nota: sidik sama → ref lama (kirim ulang aman)', () => {
+  let n = 0
+  const buat = () => `ref-${++n}`
+  const nota = { bayar: 'DP', items: [{ idProduk: 'P1', harga: 8000, kuantitas: 2 }], catatan: 'x', dp: { jumlah: 5000, tipePembayaran: 'TUNAI' } }
+  const s1 = D.refUntuk(null, D.sidikNota(nota), buat)
+  assert.equal(s1.ref, 'ref-1')
+  const s2 = D.refUntuk(s1, D.sidikNota({ ...nota, clientRef: 'ref-1', items: [{ idProduk: 'P1', harga: 10000, kuantitas: 2 }] }), buat)
+  assert.equal(s2.ref, 'ref-1', 'harga & client_ref tak ikut sidik')
+  assert.equal(n, 1)
+})
+
+test('client_ref nota: sidik beda (mode / uang muka / metode / item / catatan) → ref baru', () => {
+  let n = 0
+  const buat = () => `ref-${++n}`
+  const dasar = { bayar: 'DP', items: [{ idProduk: 'P1', kuantitas: 2 }], dp: { jumlah: 5000, tipePembayaran: 'TUNAI' } }
+  let st = D.refUntuk(null, D.sidikNota(dasar), buat)
+  const varian = [
+    { ...dasar, bayar: 'NANTI', dp: undefined },
+    { ...dasar, dp: { jumlah: 6000, tipePembayaran: 'TUNAI' } },
+    { ...dasar, dp: { jumlah: 6000, tipePembayaran: 'QRIS' } },
+    { ...dasar, items: [{ idProduk: 'P1', kuantitas: 3 }], dp: { jumlah: 6000, tipePembayaran: 'QRIS' } },
+    { ...dasar, items: [{ idProduk: 'P1', kuantitas: 3 }], dp: { jumlah: 6000, tipePembayaran: 'QRIS' }, catatan: 'cepat' }
+  ]
+  const refs = new Set([st.ref])
+  for (const v of varian) {
+    st = D.refUntuk(st, D.sidikNota(v), buat)
+    refs.add(st.ref)
+  }
+  assert.equal(refs.size, varian.length + 1, 'tiap isi berbeda mendapat ref baru')
+  assert.notEqual(D.sidikNota(dasar), D.sidikNota({ ...dasar, idPelanggan: 'C1' }), 'pelanggan ikut sidik')
+})

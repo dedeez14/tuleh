@@ -11,7 +11,7 @@ import { esc, fmtIDR, fmtNumber, parseAmount, debounce } from '../utils/format.j
 import { toast, showModal, confirmDialog, emptyStateHTML, loadingHTML, icons } from '../components/ui.js'
 import { buildReceiptHTML, printReceipt, tombolBagikanStruk, cetakOtomatisBilaDiatur } from '../components/receipt.js'
 import { lineTotals, cartTotals, kembalian, shortfall, quickCashOptions, clampQty, diskonGabungan } from '../lib/cart.js'
-import { modeBayarTersedia, totalNota, validasiUangMuka, susunNota, hargaNota, blokUangMuka, pilihTombolMetode, tombolMetodeTerlihat } from '../lib/dp-form.js'
+import { modeBayarTersedia, totalNota, validasiUangMuka, susunNota, hargaNota, blokUangMuka, pilihTombolMetode, tombolMetodeTerlihat, sidikNota, refUntuk } from '../lib/dp-form.js'
 import { midtransBoleh, qrisAksi, sisaDetik, formatSisa, harusFallbackStatis } from '../lib/qris-flow.js'
 import { customerViewHTML } from '../components/customer-view.js'
 import { bacaParkir, simpanParkir, tambahParkir, hapusParkir, pulihkanBaris, ringkasParkir } from '../lib/parkir.js'
@@ -921,8 +921,11 @@ function renderPos(container) {
     const modeTersedia = modeBayarTersedia(getState().manifest)
     const bolehBayarNanti = modeTersedia.length > 1
     let modeBayar = 'LUNAS'
-    // Satu client_ref per modal: kirim ulang nota (jaringan putus-nyambung) = pesanan yang sama di server.
-    const clientRefNota = (globalThis.crypto && crypto.randomUUID) ? crypto.randomUUID() : `nota-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    // client_ref terikat ke sidik isi nota: server memutar ulang jawaban lama per (pengguna, endpoint, client_ref)
+    // tanpa melihat body. Kirim ulang isi yang sama (timeout padahal tersimpan) → ref lama = pesanan yang sama;
+    // isi berubah (mode / uang muka / metode / catatan) → ref baru, bukan pesanan lama yang diputar ulang.
+    let refNota = null // { ref, sidik } kiriman nota terakhir di modal ini
+    const buatRefNota = () => (globalThis.crypto && crypto.randomUUID) ? crypto.randomUUID() : `nota-${Date.now()}-${Math.random().toString(36).slice(2)}`
     // Harga katalog (hargaNota), bukan hargaJual: server menghargai pesanan dari produk.harga_jual — promo kasir
     // tidak ikut — jadi total nota & batas uang muka di layar = angka yang diputuskan server.
     const itemsNota = () => cart.map((l) => ({ idProduk: l.produk.id, harga: hargaNota(l.produk), kuantitas: Number(l.kuantitas) || 0 }))
@@ -1439,15 +1442,17 @@ function renderPos(container) {
       const labelTombol = submitBtn.textContent
       submitBtn.disabled = true
       submitBtn.textContent = 'Menyimpan nota…'
-      const result = await api.order.simpanNota(susunNota({
+      const nota = susunNota({
         mode: modeBayar,
         items: itemsNota(),
         idPelanggan: pelanggan ? pelanggan.id : undefined,
         catatan: noteEl.value.trim() || undefined,
         uangMuka: parseAmount(payInput.value),
-        metodeUangMuka: metode,
-        clientRef: clientRefNota
-      }))
+        metodeUangMuka: metode
+      })
+      refNota = refUntuk(refNota, sidikNota(nota), buatRefNota)
+      nota.clientRef = refNota.ref
+      const result = await api.order.simpanNota(nota)
       if (result.ok) {
         // Nota sudah tercatat di server → keranjang WAJIB kosong, juga bila modal ditutup selagi menunggu;
         // kalau tidak, keranjang yang sama bisa dijual/dinotakan dua kali.
