@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/network/api_exception.dart';
+import '../../../../core/offline/koneksi.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../domain/entities/otorisasi.dart';
 import '../../domain/galat_pin.dart';
@@ -25,6 +26,19 @@ String labelAksi(String dasar, {required bool punyaHak}) =>
 String alasanOffline(String dasar, {required bool punyaHak}) => punyaHak
     ? '$dasar hanya bisa dilakukan saat terhubung ke internet.'
     : 'Persetujuan atasan hanya bisa diminta saat terhubung ke internet.';
+
+/// Aksi bertoken (batal/refund) hanya hidup online: aksinya tidak diantrekan,
+/// dan permintaan persetujuan (daftar pemberi + tukar PIN) juga butuh server.
+/// Diperiksa SEBELUM tiap konfirmasi merusak — jangan minta kasir menyetujui
+/// tindakan yang pasti gagal — termasuk di lembar refund, karena koneksi bisa
+/// putus selagi lembar/dialognya terbuka.
+bool pastikanOnline(BuildContext context, WidgetRef ref, String alasan) {
+  if (ref.read(koneksiProvider).online) return true;
+  ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(SnackBar(backgroundColor: AppColors.danger, content: Text(alasan)));
+  return false;
+}
 
 /// Pesan galat isian dialog; null = sah. Padanan `validasiIsianOtorisasi()` desktop.
 String? galatIsianOtorisasi({required String pemberiId, required String pin}) {

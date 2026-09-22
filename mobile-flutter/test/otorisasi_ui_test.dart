@@ -43,12 +43,21 @@ const _detail = TransaksiDetail(
 );
 
 class _Repo implements RiwayatRepository {
-  _Repo({this.isi = _detail, this.galatBatal});
+  _Repo({this.isi = _detail, this.galatBatal, this.galatRefund});
 
   TransaksiDetail isi;
 
   /// Penolakan layanan untuk panggilan batal PERTAMA (token tetap terbakar di server).
   ApiException? galatBatal;
+
+  /// Penolakan layanan untuk panggilan refund PERTAMA (token tetap terbakar di server).
+  ApiException? galatRefund;
+
+  /// Bila diisi, jawaban refund ditahan sampai tes menyelesaikannya sendiri.
+  Completer<Result<Refund>>? tundaRefund;
+
+  /// Berapa kali detail ditarik — penyegaran sesudah lembar refund terlihat di sini.
+  int detailDiminta = 0;
 
   /// Token yang ikut pada tiap panggilan, urut — dipakai memastikan tak ada token ulang.
   final tokenBatal = <String?>[];
@@ -59,7 +68,10 @@ class _Repo implements RiwayatRepository {
   Future<Result<List<Transaksi>>> list() async => const Ok([]);
 
   @override
-  Future<Result<TransaksiDetail>> detail(String id) async => Ok(isi);
+  Future<Result<TransaksiDetail>> detail(String id) async {
+    detailDiminta += 1;
+    return Ok(isi);
+  }
 
   @override
   Future<Result<void>> batal(String id, {String? otorisasiToken}) async {
@@ -73,10 +85,17 @@ class _Repo implements RiwayatRepository {
   }
 
   @override
-  Future<Result<Refund>> refund(String id, PermintaanRefund p) async {
+  Future<Result<Refund>> refund(String id, PermintaanRefund p) {
     tokenRefund.add(p.otorisasiToken);
     permintaan = p;
-    return const Ok(Refund(id: 'R1', nomor: 'RFD-1', total: 20000));
+    final tahan = tundaRefund;
+    if (tahan != null) return tahan.future;
+    final e = galatRefund;
+    if (e != null) {
+      galatRefund = null;
+      return Future.value(Err<Refund>(e));
+    }
+    return Future.value(const Ok(Refund(id: 'R1', nomor: 'RFD-1', total: 20000)));
   }
 }
 
@@ -327,19 +346,20 @@ void main() {
     await t.pump(const Duration(seconds: 5));
   });
 
-  testWidgets('refund tanpa hak: label, persetujuan, lalu token ikut di badan refund', (t) async {
+  testWidgets('refund tanpa hak: token dicetak saat KIRIM, bukan saat lembar dibuka', (t) async {
     final repo = _Repo();
     final keamanan = _Keamanan();
     await _buka(t, _wadah(repo: repo, keamanan: keamanan));
 
     expect(find.text('Refund (perlu persetujuan)'), findsOneWidget);
     await _ketuk(t, find.text('Refund (perlu persetujuan)'));
-    expect(find.text('Minta persetujuan'), findsOneWidget);
-    await t.enterText(find.byKey(const ValueKey('ot-pin')), '2468');
-    await _ketuk(t, find.text('Setujui'));
 
-    expect(keamanan.aksiDiminta, ['transaksi.refund']);
-    expect(find.byKey(const ValueKey('rf-qty-I1')), findsOneWidget, reason: 'lembar refund terbuka');
+    // Token berumur 300 detik di server: dicetak di muka, ia bisa mati selagi
+    // kasir mengisi lembar dan permintaannya berakhir 403 "tidak berhak".
+    expect(find.byKey(const ValueKey('rf-qty-I1')), findsOneWidget, reason: 'lembar langsung terbuka');
+    expect(find.text('Minta persetujuan'), findsNothing);
+    expect(keamanan.aksiDiminta, isEmpty, reason: 'belum ada token yang bisa basi');
+
     await t.enterText(find.byKey(const ValueKey('rf-qty-I1')), '1');
     await t.enterText(find.byKey(const ValueKey('rf-alasan')), 'Tumpah');
     await t.pumpAndSettle();
@@ -348,8 +368,94 @@ void main() {
     await t.tap(find.text('Ya, catat'));
     await _pompa(t);
 
+    expect(find.text('Minta persetujuan'), findsOneWidget, reason: 'PIN diminta tepat sebelum dikirim');
+    await t.enterText(find.byKey(const ValueKey('ot-pin')), '2468');
+    await t.tap(find.text('Setujui'));
+    await _pompa(t);
+
+    expect(keamanan.aksiDiminta, ['transaksi.refund']);
     expect(repo.tokenRefund, ['tok-1']);
     expect(repo.permintaan!.otorisasiToken, 'tok-1');
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('refund ditolak layanan: percobaan kedua mencetak token BARU, bukan mengirim yang mati', (t) async {
+    final repo = _Repo(galatRefund: const ApiException(message: 'Jumlah refund melebihi sisa.', statusCode: 422));
+    final keamanan = _Keamanan();
+    await _buka(t, _wadah(repo: repo, keamanan: keamanan));
+
+    await _ketuk(t, find.text('Refund (perlu persetujuan)'));
+    await t.enterText(find.byKey(const ValueKey('rf-qty-I1')), '1');
+    await t.enterText(find.byKey(const ValueKey('rf-alasan')), 'Tumpah');
+    await t.pumpAndSettle();
+
+    Future<void> kirim(String pin) async {
+      await t.tap(find.text('Catat refund'));
+      await _pompa(t);
+      await t.tap(find.text('Ya, catat'));
+      await _pompa(t);
+      expect(find.text('Minta persetujuan'), findsOneWidget);
+      await t.enterText(find.byKey(const ValueKey('ot-pin')), pin);
+      await t.tap(find.text('Setujui'));
+      await _pompa(t);
+    }
+
+    await kirim('2468');
+    expect(find.text('Jumlah refund melebihi sisa.'), findsOneWidget);
+    await kirim('2468');
+
+    expect(repo.tokenRefund, ['tok-1', 'tok-2'], reason: 'token terbakar walau ditolak — yang kedua harus baru');
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('koneksi putus selagi lembar refund terbuka: konfirmasi merusak tak dibuka', (t) async {
+    final repo = _Repo();
+    final keamanan = _Keamanan();
+    final koneksi = _Koneksi();
+    await _buka(t, _wadah(repo: repo, keamanan: keamanan, akses: {'transaksi.refund'}, koneksi: koneksi));
+
+    await _ketuk(t, find.text('Refund'));
+    await t.enterText(find.byKey(const ValueKey('rf-qty-I1')), '1');
+    await t.enterText(find.byKey(const ValueKey('rf-alasan')), 'Tumpah');
+    await t.pumpAndSettle();
+
+    koneksi.setel(online: false);
+    await t.pumpAndSettle();
+    await t.tap(find.text('Catat refund'));
+    await _pompa(t);
+
+    expect(find.text('Catat refund?'), findsNothing, reason: 'jangan minta kasir menyetujui aksi merusak yang pasti gagal');
+    expect(repo.tokenRefund, isEmpty);
+    expect(
+      find.widgetWithText(SnackBar, 'Refund hanya bisa dilakukan saat terhubung ke internet.'),
+      findsOneWidget,
+    );
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('lembar ditutup selagi POST melayang: detail tetap disegarkan', (t) async {
+    final repo = _Repo();
+    repo.tundaRefund = Completer<Result<Refund>>();
+    await _buka(t, _wadah(repo: repo, akses: {'transaksi.refund'}));
+    final sebelum = repo.detailDiminta;
+
+    await _ketuk(t, find.text('Refund'));
+    await t.enterText(find.byKey(const ValueKey('rf-qty-I1')), '1');
+    await t.enterText(find.byKey(const ValueKey('rf-alasan')), 'Tumpah');
+    await t.pumpAndSettle();
+    await t.tap(find.text('Catat refund'));
+    await _pompa(t);
+    await t.tap(find.text('Ya, catat'));
+    await _pompa(t);
+    expect(repo.tokenRefund, [null], reason: 'POST sudah melayang');
+
+    // Kasir menutup lembar sebelum jawaban datang: refundnya MUNGKIN tercatat.
+    await t.tapAt(const Offset(5, 5));
+    await _pompa(t);
+    repo.tundaRefund!.complete(const Ok(Refund(id: 'R1', nomor: 'RFD-1', total: 20000)));
+    await _pompa(t);
+
+    expect(repo.detailDiminta, greaterThan(sebelum), reason: 'tanpa ini refund yang tercatat tak terlihat sampai disegarkan manual');
     await t.pump(const Duration(seconds: 5));
   });
 
@@ -379,6 +485,33 @@ void main() {
     expect(find.text('Disetujui'), findsOneWidget);
     expect(find.text('Manajer Toko'), findsOneWidget);
     expect(find.textContaining('Disetujui: Bu Owner'), findsOneWidget);
+  });
+
+  testWidgets('layar sempit: nama penyetuju panjang tidak meluap dari baris struk', (t) async {
+    final repo = _Repo(
+      isi: const TransaksiDetail(
+        id: 'T1',
+        nomor: 'POS-000053',
+        tanggal: '2026-09-21T09:00:00',
+        status: 'DIBATALKAN',
+        kasir: 'Kasir A',
+        tipePembayaran: 'TUNAI',
+        subtotal: 20000,
+        totalDiskon: 0,
+        totalPajak: 0,
+        grandTotal: 20000,
+        dibayar: 20000,
+        kembalian: 0,
+        disetujuiOleh: 'Ibu Siti Nurhaliza Rahmawati Kusumaningrum Manajer Toko Cabang Pusat',
+        items: [TrxItem(id: 'I1', nama: 'Teh', kuantitas: 1, harga: 20000, subtotal: 20000)],
+      ),
+    );
+    // Lebar telepon sempit (420 logis) — nama sepanjang ini harus dipotong,
+    // bukan meluap: RenderFlex overflow membuat tes widget gagal.
+    await _buka(t, _wadah(repo: repo));
+
+    expect(find.text('Disetujui'), findsOneWidget);
+    expect(t.takeException(), isNull, reason: 'RenderFlex overflow = baris nilai tanpa Expanded');
   });
 
   group('label & alasan (murni)', () {

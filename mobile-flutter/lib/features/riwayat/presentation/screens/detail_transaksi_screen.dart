@@ -224,34 +224,23 @@ class _TombolRefund extends StatelessWidget {
   }
 }
 
-/// Aksi ini hanya hidup online: pembatalan/refund tidak diantrekan, dan
-/// permintaan persetujuan (daftar pemberi + tukar PIN) juga butuh server.
-/// Diperiksa SEBELUM konfirmasi — jangan minta kasir menyetujui tindakan
-/// merusak yang pasti gagal — dan sekali lagi sesudahnya, karena koneksi bisa
-/// putus selagi dialog terbuka.
-bool _pastikanOnline(BuildContext context, WidgetRef ref, String alasan) {
-  if (ref.read(koneksiProvider).online) return true;
-  ScaffoldMessenger.of(context)
-    ..hideCurrentSnackBar()
-    ..showSnackBar(SnackBar(backgroundColor: AppColors.danger, content: Text(alasan)));
-  return false;
-}
-
 Future<void> _mulaiRefund(BuildContext context, WidgetRef ref, TransaksiDetail d) async {
   final punyaHak = ref.read(bisaProvider(aksiRefund));
-  if (!_pastikanOnline(context, ref, alasanOffline('Refund', punyaHak: punyaHak))) return;
+  if (!pastikanOnline(context, ref, alasanOffline('Refund', punyaHak: punyaHak))) return;
   final messenger = ScaffoldMessenger.of(context);
-  // Token persetujuan sekali pakai untuk SATU aksi & transaksi; lembar refund
-  // meminta yang baru sendiri bila token ini terbakar tanpa hasil.
-  String? token;
-  if (!punyaHak) {
-    token = await mintaOtorisasi(context, ref, aksi: aksiRefund, transaksiId: d.id);
-    if (token == null || !context.mounted) return;
-  }
-  final refund = await tampilkanLembarRefund(context, d, otorisasiToken: token);
-  if (refund == null || !context.mounted) return;
+  // Persetujuan TIDAK diminta di muka. Token hanya hidup 5 menit di server,
+  // sedangkan kasir bisa berlama-lama mengisi lembar: dicetak sekarang ia bisa
+  // mati sebelum terkirim, dan permintaannya dijawab 403 "tidak berhak" — PIN
+  // atasan terbuang untuk permintaan yang pasti gagal. Lembar refund
+  // memintanya sendiri tepat sebelum mengirim, sama seperti alur pembatalan.
+  final refund = await tampilkanLembarRefund(context, d);
+  if (!context.mounted) return;
+  // Selalu, walau lembarnya menjawab null: ia bisa ditutup selagi POST
+  // melayang, dan refund yang TERCATAT tak boleh tak terlihat sampai kasir
+  // menyegarkan sendiri.
   ref.invalidate(transaksiDetailProvider(d.id));
   ref.invalidate(riwayatListProvider);
+  if (refund == null) return;
   // Stok kembali & penjualan bersih berubah: layar lain ikut menyegarkan.
   ref.invalidate(activeSesiProvider);
   ref.invalidate(productsProvider);
@@ -307,7 +296,7 @@ Struk _strukRefund(WidgetRef ref, TransaksiDetail d, Refund r) {
 Future<void> _konfirmasiBatal(BuildContext context, WidgetRef ref, TransaksiDetail d) async {
   final punyaHak = ref.read(bisaProvider(aksiBatal));
   final alasanMati = alasanOffline('Pembatalan', punyaHak: punyaHak);
-  if (!_pastikanOnline(context, ref, alasanMati)) return;
+  if (!pastikanOnline(context, ref, alasanMati)) return;
   final ya = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
@@ -328,7 +317,7 @@ Future<void> _konfirmasiBatal(BuildContext context, WidgetRef ref, TransaksiDeta
     ),
   );
   if (ya != true || !context.mounted) return;
-  if (!_pastikanOnline(context, ref, alasanMati)) return;
+  if (!pastikanOnline(context, ref, alasanMati)) return;
   final messenger = ScaffoldMessenger.of(context);
   // Token sekali pakai: server MEMBAKARNYA walau pembatalan lalu ditolak
   // (409 sudah dibatalkan), jadi ia tak pernah dipakai dua kali — percobaan
@@ -456,10 +445,12 @@ class _Receipt extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(k, style: const TextStyle(color: Colors.grey)),
-          Text(v),
+          const SizedBox(width: 12),
+          // Nilai panjang (nama penyetuju/pelanggan) dipotong, bukan meluap:
+          // RenderFlex overflow membuat tes widget gagal.
+          Expanded(child: Text(v, textAlign: TextAlign.right, overflow: TextOverflow.ellipsis)),
         ],
       ),
     );

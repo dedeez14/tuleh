@@ -19,24 +19,20 @@ import '../providers/riwayat_providers.dart';
 /// Lembar refund per item (padanan lembar refund desktop). Mengembalikan
 /// dokumen refund bila tercatat, null bila dibatalkan.
 ///
-/// [otorisasiToken] = persetujuan atasan yang sudah didapat pemanggil untuk
-/// kasir tanpa hak refund (§2c); sekali pakai.
-Future<Refund?> tampilkanLembarRefund(
-  BuildContext context,
-  TransaksiDetail d, {
-  String? otorisasiToken,
-}) =>
+/// Persetujuan atasan (§2c) untuk kasir tanpa hak refund diminta DI SINI,
+/// tepat sebelum permintaan dikirim — bukan oleh pemanggil sebelum lembar
+/// dibuka — supaya token yang hanya hidup 5 menit tak keburu mati.
+Future<Refund?> tampilkanLembarRefund(BuildContext context, TransaksiDetail d) =>
     showModalBottomSheet<Refund>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (_) => _LembarRefund(d: d, otorisasiToken: otorisasiToken),
+      builder: (_) => _LembarRefund(d: d),
     );
 
 class _LembarRefund extends ConsumerStatefulWidget {
-  const _LembarRefund({required this.d, this.otorisasiToken});
+  const _LembarRefund({required this.d});
   final TransaksiDetail d;
-  final String? otorisasiToken;
 
   @override
   ConsumerState<_LembarRefund> createState() => _LembarRefundState();
@@ -54,10 +50,11 @@ class _LembarRefundState extends ConsumerState<_LembarRefund> {
   // Satu client_ref per lembar: pengulangan tombol setelah timeout mengembalikan refund yang sama.
   final _clientRef = 'rf-${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 30)}';
 
-  /// Token persetujuan yang BELUM terkirim. Dikosongkan begitu ikut sebuah
-  /// permintaan: server membakarnya walau refund lalu ditolak (422 melebihi
-  /// sisa), jadi percobaan berikutnya wajib meminta persetujuan lagi.
-  late String? _token = widget.otorisasiToken;
+  /// Token persetujuan yang BELUM terkirim. Selalu dicetak tepat sebelum
+  /// dikirim, lalu dikosongkan begitu ikut sebuah permintaan: server
+  /// membakarnya walau refund lalu ditolak (422 melebihi sisa), jadi percobaan
+  /// berikutnya wajib meminta persetujuan lagi.
+  String? _token;
 
   @override
   void dispose() {
@@ -97,6 +94,10 @@ class _LembarRefundState extends ConsumerState<_LembarRefund> {
   }
 
   Future<void> _kirim() async {
+    // Sama seperti kedua pintu masuk di layar detail: tautan diperiksa SEBELUM
+    // konfirmasi merusak, karena koneksi bisa putus selagi lembar ini terbuka.
+    final punyaHak = ref.read(bisaProvider(aksiRefund));
+    if (!pastikanOnline(context, ref, alasanOffline('Refund', punyaHak: punyaHak))) return;
     final baris = _validasi();
     setState(() {});
     if (baris == null) return;
@@ -121,7 +122,7 @@ class _LembarRefundState extends ConsumerState<_LembarRefund> {
     }
     // Tanpa hak refund sendiri, tiap percobaan butuh token yang masih hidup —
     // termasuk percobaan ulang sesudah penolakan atau token kedaluwarsa.
-    if (!ref.read(bisaProvider(aksiRefund)) && _token == null) {
+    if (!punyaHak && _token == null) {
       final token = await mintaOtorisasi(context, ref, aksi: aksiRefund, transaksiId: widget.d.id);
       if (!mounted) return;
       if (token == null) {

@@ -218,6 +218,21 @@ void main() {
     expect(ot.pemberiNama, 'Manajer');
   });
 
+  test('jawaban sukses tanpa token ditolak — jangan pernah mengirim otorisasi_token kosong', () async {
+    // Token hilang/kosong lalu dikirim apa adanya berakhir 403 "tidak berhak" di
+    // endpoint aksi — pesan yang menyesatkan dan PIN atasan terbuang percuma.
+    final hilang = _Server((_) => _json({'success': true, 'data': {'kedaluwarsa': '2026-09-21T10:05:00+07:00'}}));
+    await expectLater(
+      KeamananRemoteDataSource(_dio(hilang)).otorisasi(pemberiId: 'U1', pin: '2468', aksi: 'transaksi.refund', transaksiId: 'T1'),
+      throwsA(isA<ApiException>()),
+    );
+    final kosong = _Server((_) => _json({'success': true, 'data': {'token': '   '}}));
+    await expectLater(
+      KeamananRemoteDataSource(_dio(kosong)).otorisasi(pemberiId: 'U1', pin: '2468', aksi: 'transaksi.refund', transaksiId: 'T1'),
+      throwsA(isA<ApiException>()),
+    );
+  });
+
   test('PIN salah (422) & terkunci (429) diteruskan sebagai ApiException berpesan server', () async {
     final salah = _Server((_) => _json({'success': false, 'message': 'PIN salah. Sisa percobaan: 3.'}, 422));
     await expectLater(

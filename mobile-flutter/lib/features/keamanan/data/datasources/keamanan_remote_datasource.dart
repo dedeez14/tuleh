@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import '../../../../core/network/api_error_mapper.dart';
+import '../../../../core/network/api_exception.dart';
 import '../../domain/entities/otorisasi.dart';
 import '../../domain/galat_pin.dart';
 
@@ -58,8 +59,17 @@ class KeamananRemoteDataSource {
       'transaksi_id': transaksiId,
     })));
     final pemberi = d['pemberi'] is Map ? Map<String, dynamic>.from(d['pemberi'] as Map) : const <String, dynamic>{};
+    final token = (d['token'] ?? '').toString().trim();
+    // Amplop sukses tanpa token itu kegagalan, bukan token kosong: diteruskan,
+    // `otorisasi_token: ''` ikut ke endpoint aksi dan dijawab 403 "tidak
+    // berhak" — pesan menyesatkan dan PIN atasan terbuang percuma.
+    if (token.isEmpty) {
+      throw const ApiException(
+        message: 'Server tidak mengembalikan token persetujuan. Coba minta persetujuan lagi.',
+      );
+    }
     return Otorisasi(
-      token: (d['token'] ?? '').toString(),
+      token: token,
       kedaluwarsa: d['kedaluwarsa']?.toString(),
       pemberiNama: pemberi['nama']?.toString(),
     );
