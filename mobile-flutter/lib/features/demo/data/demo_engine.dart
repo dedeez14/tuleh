@@ -136,6 +136,10 @@ class DemoEngine {
         'total_qris': 0,
         'total_penjualan': 0,
         'jumlah_transaksi': 0,
+        // Uang muka pesanan diterima di sesi ini, tapi BUKAN transaksi —
+        // kotaknya sendiri supaya tidak terhitung dua kali saat pelunasan.
+        'penerimaan_dp': 0,
+        'penerimaan_dp_tunai': 0,
         'kas_akhir_sistem': 500000,
         'kas_akhir_fisik': null,
         'selisih': null,
@@ -252,6 +256,14 @@ class DemoEngine {
     return out;
   }
 
+  /// Kas yang seharusnya ada di laci: kas awal + tunai transaksi + uang muka
+  /// tunai yang diterima di sesi ini. Sesi lama (sebelum Fase 3) belum punya
+  /// kotak DP-nya, jadi kuncinya dibaca dengan nilai bawaan nol.
+  static num _kasAkhir(Map<String, dynamic> sesi) =>
+      (sesi['kas_awal'] as num? ?? 0) +
+      (sesi['total_tunai'] as num? ?? 0) +
+      (sesi['penerimaan_dp_tunai'] as num? ?? 0);
+
   void _kurangiDariSesi(Map<String, dynamic> sesi, String tipe, double grand) {
     final kunci = switch (tipe) {
       'TUNAI' => 'total_tunai',
@@ -261,7 +273,7 @@ class DemoEngine {
     sesi[kunci] = ((sesi[kunci] as num) - grand).clamp(0, double.infinity);
     sesi['total_penjualan'] = ((sesi['total_penjualan'] as num) - grand).clamp(0, double.infinity);
     sesi['jumlah_transaksi'] = ((sesi['jumlah_transaksi'] as num) - 1).clamp(0, double.infinity);
-    sesi['kas_akhir_sistem'] = (sesi['kas_awal'] as num) + (sesi['total_tunai'] as num);
+    sesi['kas_akhir_sistem'] = _kasAkhir(sesi);
   }
 
   void _tambahKeSesi(Map<String, dynamic> sesi, String tipe, double grand) {
@@ -273,7 +285,7 @@ class DemoEngine {
     sesi[kunci] = (sesi[kunci] as num) + grand;
     sesi['total_penjualan'] = (sesi['total_penjualan'] as num) + grand;
     sesi['jumlah_transaksi'] = (sesi['jumlah_transaksi'] as num) + 1;
-    sesi['kas_akhir_sistem'] = (sesi['kas_awal'] as num) + (sesi['total_tunai'] as num);
+    sesi['kas_akhir_sistem'] = _kasAkhir(sesi);
   }
 
   void _seedPengeluaran(String toko) {
@@ -1064,6 +1076,8 @@ class DemoEngine {
       'total_qris': 0,
       'total_penjualan': 0,
       'jumlah_transaksi': 0,
+      'penerimaan_dp': 0,
+      'penerimaan_dp_tunai': 0,
       'kas_akhir_sistem': (data['kas_awal'] as num?) ?? 0,
       'kas_akhir_fisik': null,
       'selisih': null,
@@ -1407,9 +1421,21 @@ class DemoEngine {
       'items': items,
     };
     _orders.add(order);
-    // Uang muka BUKAN transaksi: di server ia masuk kotak `penerimaan_dp` sesi
-    // penerimanya, yang belum dimiliki rekap sesi Mode Demo — sengaja tidak
-    // ditambahkan ke total penjualan supaya tidak terhitung dua kali.
+    // Uang muka BUKAN transaksi (ruling 8): ia masuk kotak `penerimaan_dp`
+    // sesi penerimanya — bukan ke kotak metode maupun total penjualan, supaya
+    // tidak terhitung dua kali saat pesanan dilunasi nanti. Yang tunai ikut
+    // menambah isi laci.
+    if (dp) {
+      final sesi = _sesiAktif(toko);
+      if (sesi != null) {
+        sesi['penerimaan_dp'] = (sesi['penerimaan_dp'] as num? ?? 0) + uangMuka;
+        if (metode.toUpperCase() == 'TUNAI') {
+          sesi['penerimaan_dp_tunai'] =
+              (sesi['penerimaan_dp_tunai'] as num? ?? 0) + uangMuka;
+        }
+        sesi['kas_akhir_sistem'] = _kasAkhir(sesi);
+      }
+    }
 
     return _ok({
       'order': order,
@@ -1456,13 +1482,18 @@ class DemoEngine {
     final perluDilunasi = o['bayar'] == 'BELUM' || o['bayar'] == 'DP';
     if (data['tipe_pembayaran'] == null || !perluDilunasi) return _ok(o);
 
+    // Pelunasan hanya terjadi di tahap TERMINAL (serah-terima). Transisi di
+    // tengah alur yang kebetulan membawa metode tak boleh menandai pesanan
+    // lunas — tak ada transaksi, tak ada uang masuk.
+    if (tujuan != tahap.last) return _ok(o);
+    if (_lewatBatasHarian()) return _err(422, pesanBatasTransaksi);
+
     final tipe = '${data['tipe_pembayaran']}';
     final total = (o['total'] as num?)?.toDouble() ?? 0;
     final uangMuka = (o['dibayar'] as num?)?.toDouble() ?? 0;
     o['bayar'] = 'LUNAS';
     o['dibayar'] = total;
     o['sisa'] = 0;
-    if (tujuan != tahap.last) return _ok(o);
 
     final now = DateTime.now();
     _nTrx += 1;

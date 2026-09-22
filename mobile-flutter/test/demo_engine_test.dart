@@ -485,6 +485,83 @@ void main() {
       expect(struk['grand_total'], produk['harga_jual']);
     });
 
+    test('uang muka TUNAI masuk kotak penerimaan_dp sesi & kas akhir (ruling 8)', () {
+      const toko = {'toko_id': 'TOKO-3'};
+      final produk = (dataOf(get('/produk', query: toko)) as List)
+          .firstWhere((p) => p['kode'] == 'SAT-001') as Map;
+      final harga = produk['harga_jual'] as num;
+
+      Map sesi() => dataOf(get('/sesi/aktif', query: toko)) as Map;
+      final awal = sesi();
+      final tunaiAwal = awal['total_tunai'] as num;
+      final kasAwal = awal['kas_awal'] as num;
+      // Sesi lama (dibuat sebelum Fase 3) pun harus punya kotaknya.
+      expect(awal['penerimaan_dp'], 0);
+      expect(awal['penerimaan_dp_tunai'], 0);
+
+      final r = post('/orders', query: toko, body: {
+        'bayar': 'DP',
+        'dp': {'jumlah': 10000, 'tipe_pembayaran': 'TUNAI'},
+        'items': [
+          {'id_produk': produk['id'], 'kuantitas': 1},
+        ],
+        'client_ref': 'dp-sesi-1',
+      });
+      expect(r.status, 201);
+      final order = (dataOf(r) as Map)['order'] as Map;
+
+      final sesudahDp = sesi();
+      expect(sesudahDp['penerimaan_dp'], 10000);
+      expect(sesudahDp['penerimaan_dp_tunai'], 10000);
+      expect(
+        sesudahDp['total_tunai'],
+        tunaiAwal,
+        reason: 'DP bukan transaksi — tak boleh menaikkan kotak metode',
+      );
+      expect(sesudahDp['kas_akhir_sistem'], kasAwal + tunaiAwal + 10000);
+
+      // Pelunasan: yang DITERIMA di sesi hanya sisanya, kas tak dihitung dua kali.
+      for (final t in const ['DIPROSES', 'PENCUCIAN', 'PENGERINGAN', 'LIPAT', 'SIAP_AMBIL']) {
+        post('/orders/${order['id']}/transition', query: toko, body: {'to': t});
+      }
+      post('/orders/${order['id']}/transition', query: toko, body: {
+        'to': 'SELESAI',
+        'tipe_pembayaran': 'TUNAI',
+      });
+      final akhir = sesi();
+      expect(akhir['total_tunai'], tunaiAwal + (harga - 10000));
+      expect(akhir['penerimaan_dp_tunai'], 10000);
+      expect(
+        akhir['kas_akhir_sistem'],
+        kasAwal + tunaiAwal + (harga - 10000) + 10000,
+        reason: 'kas laci = kas awal + tunai transaksi + DP tunai',
+      );
+    });
+
+    test('transisi yang belum sampai tahap terminal tidak melunasi pesanan', () {
+      const toko = {'toko_id': 'TOKO-3'};
+      final produk = (dataOf(get('/produk', query: toko)) as List)
+          .firstWhere((p) => p['kode'] == 'SAT-001') as Map;
+      final order = ((dataOf(post('/orders', query: toko, body: {
+        'bayar': 'NANTI',
+        'items': [
+          {'id_produk': produk['id'], 'kuantitas': 1},
+        ],
+        'client_ref': 'nanti-1',
+      })) as Map)['order']) as Map;
+
+      // Metode ikut terkirim tapi tahapnya masih di tengah: pesanan HARUS
+      // tetap BELUM (dulu ditandai LUNAS tanpa transaksi maupun uang masuk).
+      final d = dataOf(post('/orders/${order['id']}/transition', query: toko, body: {
+        'to': 'DIPROSES',
+        'tipe_pembayaran': 'TUNAI',
+      })) as Map;
+      expect(d['bayar'], 'BELUM');
+      expect(d['dibayar'], 0);
+      expect(d['sisa'], produk['harga_jual']);
+      expect(d['struk'], isNull);
+    });
+
     test('POST /orders menolak uang muka di luar batas & toko tanpa bayar-nanti', () {
       const toko = {'toko_id': 'TOKO-3'};
       final produk = (dataOf(get('/produk', query: toko)) as List)
