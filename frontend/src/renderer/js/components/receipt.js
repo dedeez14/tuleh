@@ -5,8 +5,7 @@ import { esc, fmtIDR, fmtDateTime, fmtNumber } from '../utils/format.js'
 import { api } from '../api.js'
 import { getState } from '../state.js'
 import { toast, icons } from './ui.js'
-import { labelPembayaranStruk } from '../lib/qris-flow.js'
-import { buildReceiptText as teksStruk, TANDA_DEMO } from '../lib/struk-teks.js'
+import { buildReceiptText as teksStruk, TANDA_DEMO, barisPembayaran } from '../lib/struk-teks.js'
 
 /** Bangun HTML struk dari objek Struk API (+ data perusahaan dari state). */
 export function buildReceiptHTML(struk) {
@@ -85,10 +84,7 @@ export function buildReceiptHTML(struk) {
       ${Number(struk.total_diskon) > 0 ? row('Diskon', `−${fmtIDR(struk.total_diskon)}`) : ''}
       ${Number(struk.total_pajak) > 0 ? row('Pajak', fmtIDR(struk.total_pajak)) : ''}
       ${row('TOTAL', fmtIDR(struk.grand_total), 'receipt__row--total')}
-      ${isPrabon
-        ? ''
-        : `${row(esc(labelPembayaranStruk(struk)), fmtIDR(struk.dibayar))}
-      ${row('Kembalian', fmtIDR(struk.kembalian))}`}
+      ${barisPembayaran(struk).map((r) => row(esc(r.label), `${r.kurang ? '−' : ''}${fmtIDR(r.nilai)}`)).join('\n      ')}
       ${blokRefund}`}
       <div class="receipt__sep"></div>
       ${struk.lacak_qr ? `

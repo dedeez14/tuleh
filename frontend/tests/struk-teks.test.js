@@ -93,3 +93,30 @@ test('struk transaksi dengan refund: blok Refund per dokumen + NILAI BERSIH; tan
   assert.ok(teks.includes('NILAI BERSIH'))
   assert.ok(teks.includes('31.500'))
 })
+
+test('nota bayar nanti: hanya Sisa — tanpa "BAYAR SAAT AMBIL Rp0 / Kembalian Rp0"', () => {
+  const t = M.buildReceiptText({ ...struk, status: 'BELUM LUNAS', tipe_pembayaran: 'BAYAR SAAT AMBIL', dibayar: 0, kembalian: 0, uang_muka: 0, sisa: 49500 })
+  assert.match(t, /Sisa\s+Rp\s?49\.500/)
+  assert.doesNotMatch(t, /Kembalian/)
+  assert.doesNotMatch(t, /BAYAR SAAT AMBIL/)
+})
+
+test('nota uang muka: "Uang muka (metode)" lalu Sisa', () => {
+  const t = M.buildReceiptText({ ...struk, status: 'UANG MUKA', tipe_pembayaran: 'TUNAI', dibayar: 10000, kembalian: 0, uang_muka: 10000, sisa: 39500 })
+  assert.match(t, /Uang muka \(TUNAI\)\s+Rp\s?10\.000/)
+  assert.match(t, /Sisa\s+Rp\s?39\.500/)
+  assert.doesNotMatch(t, /Kembalian/)
+  for (const baris of t.split('\n')) assert.ok(baris.length <= 32, `baris > 32 kolom: "${baris}"`)
+})
+
+test('struk pelunasan ber-DP: Uang muka dikurangkan, lalu yang dibayar saat serah', () => {
+  const t = M.buildReceiptText({ ...struk, status: 'SELESAI', tipe_pembayaran: 'QRIS', dibayar: 49500, kembalian: 0, uang_muka: 10000 })
+  assert.match(t, /Uang muka\s+-Rp\s?10\.000/)
+  assert.match(t, /QRIS\s+Rp\s?39\.500/)
+  assert.match(t, /Kembalian\s+Rp\s?0/)
+})
+
+test('barisPembayaran: pra-bon kosong; transaksi biasa = bayar + kembalian (tak berubah)', () => {
+  assert.deepEqual(M.barisPembayaran({ ...struk, status: 'BELUM DIBAYAR' }), [])
+  assert.deepEqual(M.barisPembayaran({ ...struk, status: 'SELESAI' }).map((r) => r.label), ['TUNAI', 'Kembalian'])
+})

@@ -11,6 +11,37 @@ import { labelKuantitas } from './satuan-terukur.js'
 export const TANDA_DEMO = 'MODE DEMO — BUKAN BUKTI PEMBAYARAN'
 
 /**
+ * Baris pembayaran struk/nota, satu sumber untuk teks & HTML: [{label, nilai, kurang?}].
+ * - pra-bon (BELUM DIBAYAR): tanpa baris bayar.
+ * - nota pesanan belum lunas (BELUM LUNAS / UANG MUKA, Fase 3): "Uang muka (metode)" bila ada, lalu "Sisa" —
+ *   bukan "Bayar Rp0 / Kembalian Rp0".
+ * - transaksi pelunasan ber-DP: "Uang muka" (dikurangkan), lalu yang dibayar saat serah, lalu kembalian.
+ */
+export function barisPembayaran (struk) {
+  const status = String(struk.status || '')
+  const uangMuka = Number(struk.uang_muka) || 0
+  if (status === 'BELUM DIBAYAR') return []
+  if (status === 'BELUM LUNAS' || status === 'UANG MUKA') {
+    const sisa = struk.sisa != null ? Number(struk.sisa) : Math.max(0, Number(struk.grand_total) - uangMuka)
+    const out = []
+    if (uangMuka > 0) out.push({ label: `Uang muka (${labelPembayaranStruk(struk)})`, nilai: uangMuka })
+    out.push({ label: 'Sisa', nilai: sisa })
+    return out
+  }
+  if (uangMuka > 0) {
+    return [
+      { label: 'Uang muka', nilai: uangMuka, kurang: true },
+      { label: labelPembayaranStruk(struk), nilai: Number(struk.dibayar) - uangMuka },
+      { label: 'Kembalian', nilai: Number(struk.kembalian) || 0 }
+    ]
+  }
+  return [
+    { label: labelPembayaranStruk(struk), nilai: Number(struk.dibayar) || 0 },
+    { label: 'Kembalian', nilai: Number(struk.kembalian) || 0 }
+  ]
+}
+
+/**
  * Objek struk untuk NOTA REFUND dari struk transaksi + satu dokumen refund
  * (respons POST /transaksi/{id}/refund atau elemen struk.refunds[]). Bentuknya
  * sama dengan struk transaksi (items/subtotal/grand_total) sehingga
@@ -105,10 +136,7 @@ export function buildReceiptText(struk, { kolom = 32, demo = false, company = nu
   if (Number(struk.total_diskon) > 0) dua('Diskon', `-${fmtIDR(struk.total_diskon)}`)
   if (Number(struk.total_pajak) > 0) dua('Pajak', fmtIDR(struk.total_pajak))
   dua('TOTAL', fmtIDR(struk.grand_total))
-  if (struk.status !== 'BELUM DIBAYAR') {
-    dua(labelPembayaranStruk(struk), fmtIDR(struk.dibayar))
-    dua('Kembalian', fmtIDR(struk.kembalian))
-  }
+  for (const r of barisPembayaran(struk)) dua(r.label, `${r.kurang ? '-' : ''}${fmtIDR(r.nilai)}`)
   // Refund yang sudah tercatat atas transaksi ini (server: total_refund, nilai_bersih, refunds[]).
   if (Number(struk.total_refund) > 0) {
     garis()
