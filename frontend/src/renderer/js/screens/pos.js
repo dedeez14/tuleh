@@ -1452,10 +1452,13 @@ function renderPos(container) {
       })
       refNota = refUntuk(refNota, sidikNota(nota), buatRefNota)
       nota.clientRef = refNota.ref
+      // Keranjang selalu diganti array baru saat berubah, jadi identitas ini menandai "keranjang yang dinotakan".
+      const cartKirim = cart
       const result = await api.order.simpanNota(nota)
-      if (result.ok) {
+      if (result.ok && cart === cartKirim) {
         // Nota sudah tercatat di server → keranjang WAJIB kosong, juga bila modal ditutup selagi menunggu;
-        // kalau tidak, keranjang yang sama bisa dijual/dinotakan dua kali.
+        // kalau tidak, keranjang yang sama bisa dijual/dinotakan dua kali. Bila kasir sudah mengisi
+        // keranjang BARU selagi menunggu, keranjang baru itu tidak disentuh.
         cart = []
         diskonTransaksi = 0
         pelanggan = null
