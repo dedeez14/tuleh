@@ -8,7 +8,7 @@ import { esc, fmtIDR, fmtNumber, fmtTime, debounce } from '../utils/format.js'
 import { toast, icons, emptyStateHTML, loadingHTML, showModal } from '../components/ui.js'
 import { ting } from '../utils/suara.js'
 import { stageLabel } from '../lib/stage-label.js'
-import { ringkasBayar, perluDilunasi } from '../lib/dp-form.js'
+import { ringkasBayar, perluDilunasi, tagihanPelunasan } from '../lib/dp-form.js'
 import { buildReceiptHTML, printReceipt, cetakOtomatisBilaDiatur } from '../components/receipt.js'
 
 const POLL_MS = 4000
@@ -84,7 +84,9 @@ export const OrdersScreen = {
         .map((i) => `<li><span class="num">${fmtNumber(i.kuantitas)}×</span> ${esc(i.nama)}</li>`)
         .join('')
       return `
-        <div class="ord-card${order.meja ? ' ord-card--meja' : ''}" data-id="${esc(order.id)}">
+        <div class="ord-card${order.meja ? ' ord-card--meja' : ''}" data-id="${esc(order.id)}"
+             data-bayar="${esc(order.bayar)}" data-total="${esc(order.total)}"
+             data-sisa="${esc(order.sisa)}" data-dibayar="${esc(order.dibayar)}">
           <div class="ord-card__top">
             ${order.meja
               ? `<span class="ord-card__meja">${esc(order.meja)}</span>`
@@ -181,14 +183,17 @@ export const OrdersScreen = {
         // QRIS Otomatis membuat tagihan senilai total di layar kasir — pelunasan papan memakai metode dasar.
         const metodeDasar = (getState().paymentMethods || []).filter((m) => m !== 'QRIS_AUTO')
         const metodeList = metodeDasar.length ? metodeDasar : ['TUNAI', 'TRANSFER', 'QRIS']
-        const order = rowsTerakhir.find((o) => o.id === card.dataset.id) || {}
-        // Pesanan ber-uang-muka hanya menagih sisanya; server lama tanpa `sisa` jatuh ke total.
-        const sisa = Number(order.sisa) || Number(order.total) || 0
-        const infoDp = order.bayar === 'DP' ? `<p class="field__hint">Uang muka ${fmtIDR(order.dibayar)} sudah diterima.</p>` : ''
+        // Baris papan terakhir; bila poll sudah menggantinya, pakai data yang dibawa kartu itu sendiri.
+        const d = card.dataset
+        const order = rowsTerakhir.find((o) => String(o.id) === d.id) ||
+          { id: d.id, bayar: d.bayar, total: d.total, sisa: d.sisa, dibayar: d.dibayar }
+        // Pesanan ber-uang-muka hanya menagih sisanya; server lama tanpa `sisa` jatuh ke total — tak pernah "Rp0".
+        const tagihan = tagihanPelunasan(order)
+        const infoDp = order.bayar === 'DP' ? `<p class="field__hint">Uang muka ${fmtIDR(Number(order.dibayar) || 0)} sudah diterima.</p>` : ''
         const body = document.createElement('div')
         body.innerHTML = `
           <p class="u-muted" style="margin-bottom:var(--sp-3)">
-            Tagihan <b class="num">${fmtIDR(sisa)}</b> — pilih metode pembayaran pelunasan;
+            ${tagihan != null ? `Tagihan <b class="num">${fmtIDR(tagihan)}</b>` : 'Tagihan sesuai nota'} — pilih metode pembayaran pelunasan;
             struk akan tercetak dan pesanan ditandai selesai/diserahkan.
           </p>
           ${infoDp}

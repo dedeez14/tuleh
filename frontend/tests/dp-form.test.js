@@ -56,3 +56,36 @@ test('perlu dilunasi: BELUM & DP saja (BON lewat bill)', () => {
   assert.equal(D.perluDilunasi({ bayar: 'BON' }), false)
   assert.equal(D.perluDilunasi(null), false)
 })
+
+test('harga nota = harga katalog, bukan harga promo kasir (server menghargai pesanan dari harga_jual)', () => {
+  assert.equal(D.hargaNota({ harga_jual: 10000, promo_aktif: true, harga_efektif: 8000 }), 10000)
+  assert.equal(D.hargaNota({ harga_jual: '7500' }), 7500)
+  assert.equal(D.hargaNota({}), 0)
+  assert.equal(D.hargaNota(null), 0)
+})
+
+test('blok uang muka per metode: QR statis / rekening; tunai & QRIS Otomatis tanpa blok', () => {
+  assert.equal(D.blokUangMuka('QRIS'), 'QRIS')
+  assert.equal(D.blokUangMuka('TRANSFER'), 'TRANSFER')
+  assert.equal(D.blokUangMuka('TUNAI'), null)
+  assert.equal(D.blokUangMuka('QRIS_AUTO'), null)
+  assert.equal(D.blokUangMuka(undefined), null)
+})
+
+test('pintasan metode melewati tombol tersembunyi (QRIS Otomatis saat uang muka)', () => {
+  const tombol = [{ m: 'TUNAI' }, { m: 'QRIS' }, { m: 'QRIS_AUTO', hidden: true }, { m: 'TRANSFER' }]
+  assert.equal(D.pilihTombolMetode(tombol, 2).m, 'TRANSFER', 'F7 = tombol terlihat ke-3')
+  assert.equal(D.pilihTombolMetode(tombol, 3), null, 'tak ada tombol terlihat ke-4')
+  assert.deepEqual(D.tombolMetodeTerlihat(tombol).map((b) => b.m), ['TUNAI', 'QRIS', 'TRANSFER'])
+  const kelas = (b) => b.cls === 'u-hidden'
+  assert.equal(D.pilihTombolMetode([{ m: 'A' }, { m: 'B', cls: 'u-hidden' }, { m: 'C' }], 1, kelas).m, 'C', 'predikat kustom (kelas DOM)')
+  assert.equal(D.pilihTombolMetode(null, 0), null)
+})
+
+test('tagihan pelunasan: sisa, jatuh ke total; tak pernah Rp0', () => {
+  assert.equal(D.tagihanPelunasan({ bayar: 'DP', sisa: 18000, total: 28000 }), 18000)
+  assert.equal(D.tagihanPelunasan({ bayar: 'BELUM', total: 28000 }), 28000, 'server lama tanpa sisa')
+  assert.equal(D.tagihanPelunasan({ total: '28000', sisa: '' }), 28000, 'data-* kartu berupa teks')
+  assert.equal(D.tagihanPelunasan({}), null)
+  assert.equal(D.tagihanPelunasan(null), null)
+})

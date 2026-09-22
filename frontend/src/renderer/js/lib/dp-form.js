@@ -42,3 +42,36 @@ export function ringkasBayar(order, fmt) {
 export function perluDilunasi(order) {
   return !!order && (order.bayar === 'BELUM' || order.bayar === 'DP')
 }
+
+/**
+ * Harga satuan untuk nota bayar-nanti / uang muka = harga katalog `harga_jual`. Server (dan Mode Demo)
+ * menghargai pesanan dari katalog; harga promo kasir (`hargaJual`) tidak ikut, jadi total & batas DP di layar
+ * dihitung dari angka yang sama dengan server.
+ */
+export function hargaNota(produk) {
+  const n = Number(produk && produk.harga_jual)
+  return Number.isFinite(n) ? n : 0
+}
+
+/** Blok bantu uang muka per metode: QR statis (QRIS) / daftar rekening (TRANSFER); tunai & QRIS Otomatis tanpa blok. */
+export function blokUangMuka(metode) {
+  return metode === 'QRIS' || metode === 'TRANSFER' ? metode : null
+}
+
+/** Tombol metode yang terlihat, urut tampil (pintasan F5–F7 & judulnya mengikuti daftar ini). */
+export function tombolMetodeTerlihat(list, tersembunyi = (b) => !!(b && b.hidden)) {
+  return (list || []).filter((b) => !tersembunyi(b))
+}
+
+/** Tombol metode ke-`idx` di antara yang terlihat — tombol tersembunyi (mis. QRIS Otomatis saat uang muka) dilewati. */
+export function pilihTombolMetode(list, idx, tersembunyi) {
+  return tombolMetodeTerlihat(list, tersembunyi)[idx] || null
+}
+
+/** Jumlah tagihan pelunasan: sisa, jatuh ke total (server lama tanpa `sisa`); null bila tak diketahui — jangan tampilkan Rp0. */
+export function tagihanPelunasan(order) {
+  const sisa = Number(order && order.sisa)
+  if (Number.isFinite(sisa) && sisa > 0) return sisa
+  const total = Number(order && order.total)
+  return Number.isFinite(total) && total > 0 ? total : null
+}
