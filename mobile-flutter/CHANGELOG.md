@@ -5,6 +5,14 @@ sebagai isi Release GitHub (workflow flutter-release.yml), dan empat baris
 pertamanya tampil di banner pembaruan dalam aplikasi. Tulis untuk kasir, bukan
 untuk programmer.
 
+## 2.32.0
+
+- **Batalkan & refund dengan persetujuan atasan.** Kasir yang tidak punya haknya kini bisa meminta pemilik atau manajer memasukkan PIN persetujuan langsung di perangkat, lalu pembatalan atau refund berjalan dan nama penyetujunya tercatat di struk. PIN tidak pernah disimpan di aplikasi.
+- **PIN persetujuan saya** di Pengaturan: pemilik/manajer memasang, mengganti, atau mencabut PIN-nya sendiri. Salah lima kali membuat PIN terkunci sementara, lengkap dengan hitung mundurnya.
+- **Satu sesi kasir = satu toko.** Kalau transaksi diarahkan ke toko lain, aplikasi memberi tahu toko sesi Anda dan menawarkan pindah ke sana, bukan sekadar pesan merah.
+- **Hak akses menyusul tanpa login ulang.** Saat aplikasi kembali dibuka atau server menolak karena hak berubah, menu dan tombol menyesuaikan sendiri.
+- Slot jadwal yang dibatalkan kini terlihat (bertanda "Dibatalkan"), menu Pengaturan tidak lagi hilang untuk kasir, dan metode pembayaran mengikuti daftar yang aktif di toko.
+
 ## 2.31.0
 
 - **Menu Jadwal untuk gym & klinik.** Kelas dan janji temu hari ini tampil lengkap dengan jam, kuota, dan pesertanya — geser hari untuk melihat jadwal besok atau kemarin.
