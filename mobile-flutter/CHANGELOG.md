@@ -5,6 +5,15 @@ sebagai isi Release GitHub (workflow flutter-release.yml), dan empat baris
 pertamanya tampil di banner pembaruan dalam aplikasi. Tulis untuk kasir, bukan
 untuk programmer.
 
+## 2.33.0
+
+- **Uang muka untuk pesanan bayar nanti.** Di laundry, bengkel, salon, dan usaha berpesanan lain, kasir bisa menerima DP saat pesanan dibuat: pilih Lunas, Bayar nanti, atau Uang muka di layar pembayaran. Nota mencetak uang muka dan sisanya, plus nomor antrian.
+- **Uang muka lewat QRIS atau transfer** menampilkan QR toko atau nomor rekening dengan nominal uang muka.
+- **Papan pesanan menampilkan sisa tagihan.** Kartu pesanan bertanda "DP Rp… · sisa Rp…", dan tombol Lunasi & Serahkan menagih sisanya saja, lalu struk akhir langsung bisa dicetak (ikut pengaturan cetak otomatis).
+- **Uang muka masuk rekap sesi kasir** yang menerimanya, dan pelunasan hanya menghitung sisa — tidak ada uang yang dihitung dua kali.
+- **Kirim ulang aman:** bila jaringan putus saat menyimpan nota, menyimpan ulang isi yang sama tidak membuat pesanan kedua; lembar keranjang tidak bisa ditutup selagi menyimpan.
+- Pesanan bayar nanti dan uang muka hanya bisa disimpan saat terhubung ke server.
+
 ## 2.32.0
 
 - **Batalkan & refund dengan persetujuan atasan.** Kasir yang tidak punya haknya kini bisa meminta pemilik atau manajer memasukkan PIN persetujuan langsung di perangkat, lalu pembatalan atau refund berjalan dan nama penyetujunya tercatat di struk. PIN tidak pernah disimpan di aplikasi.
