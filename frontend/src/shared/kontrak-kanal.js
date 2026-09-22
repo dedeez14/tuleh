@@ -176,6 +176,9 @@
   const GET = function (jalur, query) { return { metode: 'GET', jalur: jalur, query: query } }
   const POST = function (jalur, body, query) { return { metode: 'POST', jalur: jalur, body: body, query: query } }
 
+  // Cara bayar nota pesanan (Fase 3): LUNAS tetap lewat trx:checkout, bukan kanal ini.
+  const BAYAR_NOTA = ['NANTI', 'DP']
+
   // ---------- Daftar kanal ----------
 
   const KANAL = {
@@ -250,7 +253,7 @@
     'station:delete': { permukaan: 'station.remove', buat: function (p) { return { metode: 'DELETE', jalur: '/stations/' + id(p.id) } } },
 
     // Pesanan hidup (KDS / papan proses / nota bayar-nanti)
-    'order:list': { permukaan: 'order.list', buat: function (p) { return GET('/orders', { stage: str(p.stage, { max: 40 }) }) } },
+    'order:list': { permukaan: 'order.list', buat: function (p) { return GET('/orders', { stage: str(p.stage, { max: 40 }), bayar: str(p.bayar, { max: 40 }) }) } },
     'order:transition': { permukaan: 'order.transition', buat: function (p) { return POST('/orders/' + id(p.id) + '/transition', { to: str(p.to, { required: true, max: 40 }) }) } },
     'order:konfirmasiBayar': { permukaan: 'order.konfirmasiBayar', struk: true, buat: function (p) { return POST('/orders/' + id(p.id) + '/transition', { to: 'ANTRIAN', tipe_pembayaran: str(p.tipePembayaran, { max: 20 }) }) } },
     'order:simpanNota': {
@@ -258,12 +261,24 @@
       struk: true,
       buat: function (p) {
         if (!Array.isArray(p.items) || p.items.length === 0) throw new Error('Keranjang masih kosong.')
-        return POST('/orders', {
-          bayar: 'NANTI',
+        const bayar = String(p.bayar || 'NANTI').toUpperCase()
+        if (BAYAR_NOTA.indexOf(bayar) < 0) throw new Error('Cara bayar nota tidak dikenal.')
+        const body = {
+          bayar: bayar,
           items: p.items.map(function (i) { return { id_produk: str(i.idProduk, { required: true }), harga: num(i.harga, { required: true }), kuantitas: num(i.kuantitas, { required: true }) } }),
           id_pelanggan: str(p.idPelanggan) || null,
-          catatan: str(p.catatan, { max: 500 }) || null
-        })
+          catatan: str(p.catatan, { max: 500 }) || null,
+          // Uang muka memindahkan uang: kirim ulang dengan client_ref sama = pesanan yang sama (server pos.idempoten).
+          client_ref: str(p.clientRef, { max: 64 }),
+          waktu_klien: str(p.waktuKlien, { max: 40 })
+        }
+        if (bayar === 'DP') {
+          const dp = p.dp || {}
+          const jumlah = num(dp.jumlah, { required: true })
+          if (!(jumlah > 0)) throw new Error('Uang muka harus lebih dari Rp0.')
+          body.dp = { jumlah: jumlah, tipe_pembayaran: str(dp.tipePembayaran, { required: true, max: 20 }) }
+        }
+        return POST('/orders', body)
       }
     },
     'order:lunasi': { permukaan: 'order.lunasi', struk: true, buat: function (p) { return POST('/orders/' + id(p.id) + '/transition', { to: 'SELESAI', tipe_pembayaran: str(p.tipePembayaran, { max: 20 }) }) } },
