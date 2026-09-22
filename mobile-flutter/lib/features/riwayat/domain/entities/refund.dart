@@ -29,6 +29,7 @@ class Refund {
     this.metodeNama,
     this.alasan,
     this.oleh,
+    this.disetujuiOleh,
     this.subtotal = 0,
     this.totalPajak = 0,
     this.items = const [],
@@ -41,6 +42,10 @@ class Refund {
   final String? metodeNama;
   final String? alasan;
   final String? oleh;
+
+  /// Nama pemegang hak yang menyetujui lewat PIN (server `disetujui_oleh`);
+  /// null bila pelakunya memang berhak sendiri.
+  final String? disetujuiOleh;
   final double subtotal;
   final double totalPajak;
   final double total;
@@ -64,6 +69,7 @@ class PermintaanRefund {
     required this.clientRef,
     required this.waktuKlien,
     this.kembaliStok = true,
+    this.otorisasiToken,
   });
 
   final List<BarisRefund> baris;
@@ -73,6 +79,10 @@ class PermintaanRefund {
   final String clientRef;
   final DateTime waktuKlien;
 
+  /// Token persetujuan sekali pakai bila kasir tak punya hak refund sendiri
+  /// (§2c). Server MEMBAKARNYA walau refund lalu ditolak — jangan dipakai lagi.
+  final String? otorisasiToken;
+
   Map<String, dynamic> toJson() => {
     'items': [for (final b in baris) {'id': b.id, 'kuantitas': b.kuantitas}],
     'metode': metode,
@@ -80,5 +90,6 @@ class PermintaanRefund {
     'kembali_stok': kembaliStok,
     'client_ref': clientRef,
     'waktu_klien': waktuKlien.toIso8601String(),
+    if (otorisasiToken != null) 'otorisasi_token': otorisasiToken,
   };
 }

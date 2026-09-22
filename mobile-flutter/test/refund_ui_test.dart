@@ -1,6 +1,7 @@
-// Refund dari Detail Transaksi (2.30.0): tombol hanya bila server memberi hak
-// `transaksi.refund` & ada sisa; lembar per item mengirim kontrak refund; batal
-// kini ikut gerbang `transaksi.batal`.
+// Refund dari Detail Transaksi (2.30.0): tombol tampil bila ada sisa refund;
+// lembar per item mengirim kontrak refund. Sejak §2c tombolnya tidak lagi
+// disembunyikan dari kasir tanpa hak — labelnya yang berubah dan persetujuan
+// atasan yang diminta (alur lengkapnya di `otorisasi_ui_test.dart`).
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -34,7 +35,7 @@ class _RepoPalsu implements RiwayatRepository {
   @override
   Future<Result<TransaksiDetail>> detail(String id) async => const Ok(_detail);
   @override
-  Future<Result<void>> batal(String id) async => const Ok(null);
+  Future<Result<void>> batal(String id, {String? otorisasiToken}) async => const Ok(null);
   @override
   Future<Result<Refund>> refund(String id, PermintaanRefund p) async {
     idRefund = id;
@@ -73,10 +74,12 @@ void main() {
     expect(find.text('NILAI BERSIH'), findsOneWidget);
   });
 
-  testWidgets('tanpa hak dari server: tidak ada tombol Refund maupun Batalkan (gagal-tertutup)', (t) async {
+  testWidgets('tanpa hak dari server: tombolnya berlabel "(perlu persetujuan)"', (t) async {
     await _buka(t, _wadah(_RepoPalsu(), const {}));
     expect(find.text('Refund'), findsNothing);
     expect(find.text('Batalkan transaksi'), findsNothing);
+    expect(find.text('Refund (perlu persetujuan)'), findsOneWidget);
+    expect(find.text('Batalkan transaksi (perlu persetujuan)'), findsOneWidget);
   });
 
   testWidgets('lembar refund: hanya baris bersisa; isi qty & alasan → konfirmasi → kontrak terkirim, snackbar', (t) async {

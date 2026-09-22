@@ -10,6 +10,7 @@ import '../../../../core/utils/format.dart';
 import '../../../cetak/domain/entities/struk.dart';
 import '../../../cetak/presentation/aksi_struk.dart';
 import '../../../demo/demo_session.dart';
+import '../../../keamanan/presentation/widgets/dialog_otorisasi.dart';
 import '../../../laporan/presentation/providers/laporan_providers.dart';
 import '../../../pengaturan/presentation/providers/pengaturan_providers.dart';
 import '../../../products/presentation/providers/products_provider.dart';
@@ -37,11 +38,13 @@ class DetailTransaksiScreen extends ConsumerWidget {
     // online — struk lokal (belum sinkron) dibatalkan lewat layar Sinkronisasi.
     final lokal = id.startsWith(awalanIdLokal);
     final online = ref.watch(koneksiProvider.select((s) => s.online));
-    // Gerbang hak dari server (gagal-tertutup); server tetap memeriksa ulang (403).
-    final bolehBatal = ref.watch(bisaProvider('transaksi.batal'));
-    final bolehRefund = ref.watch(bisaProvider('transaksi.refund'));
-    final bisaBatal = bisaAksi && !lokal && bolehBatal;
-    final bisaRefund = bisaAksi && !lokal && bolehRefund && d.adaSisaRefund;
+    // Gerbang hak dari server; server tetap memeriksa ulang (403). Tanpa hak
+    // sendiri tombolnya TETAP tampil: kasir bisa meminta persetujuan atasan di
+    // perangkatnya (§2c), dan labelnya mengatakan itu sebelum ditekan.
+    final bolehBatal = ref.watch(bisaProvider(aksiBatal));
+    final bolehRefund = ref.watch(bisaProvider(aksiRefund));
+    final bisaBatal = bisaAksi && !lokal;
+    final bisaRefund = bisaAksi && !lokal && d.adaSisaRefund;
 
     final isi = detail.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -64,7 +67,12 @@ class DetailTransaksiScreen extends ConsumerWidget {
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.currency_exchange_rounded, color: AppColors.warn),
                 title: Text('Refund ${r.nomor} · −${fmtIDR(r.total)}', style: const TextStyle(fontWeight: FontWeight.w600)),
-                subtitle: Text([fmtTanggal(r.tanggal), r.metodeNama ?? r.metode ?? '', r.alasan ?? ''].where((s) => s.isNotEmpty).join(' · ')),
+                subtitle: Text([
+                  fmtTanggal(r.tanggal),
+                  r.metodeNama ?? r.metode ?? '',
+                  r.alasan ?? '',
+                  if ((r.disetujuiOleh ?? '').isNotEmpty) 'Disetujui: ${r.disetujuiOleh}',
+                ].where((s) => s.isNotEmpty).join(' · ')),
                 trailing: TextButton(
                   onPressed: () => cetakStrukDenganUmpanBalik(context, ref, _strukRefund(ref, d, r)),
                   child: const Text('Cetak nota'),
@@ -94,12 +102,19 @@ class DetailTransaksiScreen extends ConsumerWidget {
             ],
             if (bisaRefund) ...[
               const SizedBox(height: 10),
-              _TombolRefund(aktif: online, onTekan: () => _mulaiRefund(context, ref, d)),
+              _TombolRefund(
+                aktif: online,
+                label: labelAksi('Refund', punyaHak: bolehRefund),
+                alasanMati: alasanOffline('Refund', punyaHak: bolehRefund),
+                onTekan: () => _mulaiRefund(context, ref, d),
+              ),
             ],
             if (bisaBatal) ...[
               const SizedBox(height: 10),
               _TombolBatal(
                 aktif: online,
+                label: labelAksi('Batalkan transaksi', punyaHak: bolehBatal),
+                alasanMati: alasanOffline('Pembatalan', punyaHak: bolehBatal),
                 onTekan: () => _konfirmasiBatal(context, ref, d),
               ),
             ],
@@ -123,9 +138,16 @@ class DetailTransaksiScreen extends ConsumerWidget {
 /// Tombol "Batalkan transaksi" — merah garis tepi, nonaktif saat offline
 /// dengan keterangan sebabnya (pembatalan tidak diantrekan).
 class _TombolBatal extends StatelessWidget {
-  const _TombolBatal({required this.aktif, required this.onTekan});
+  const _TombolBatal({
+    required this.aktif,
+    required this.label,
+    required this.alasanMati,
+    required this.onTekan,
+  });
 
   final bool aktif;
+  final String label;
+  final String alasanMati;
   final VoidCallback onTekan;
 
   @override
@@ -140,13 +162,13 @@ class _TombolBatal extends StatelessWidget {
             side: BorderSide(color: AppColors.danger.withValues(alpha: aktif ? 0.6 : 0.25)),
           ),
           icon: const Icon(Icons.cancel_outlined, size: 19),
-          label: const Text('Batalkan transaksi'),
+          label: Text(label, textAlign: TextAlign.center),
         ),
         if (!aktif)
           Padding(
             padding: const EdgeInsets.only(top: 6),
             child: Text(
-              'Pembatalan hanya bisa dilakukan saat terhubung ke internet.',
+              alasanMati,
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 12,
@@ -162,9 +184,16 @@ class _TombolBatal extends StatelessWidget {
 /// Tombol "Refund" — garis tepi warna peringatan, nonaktif saat offline
 /// (refund online-saja; antrean offline menyusul di fase 4).
 class _TombolRefund extends StatelessWidget {
-  const _TombolRefund({required this.aktif, required this.onTekan});
+  const _TombolRefund({
+    required this.aktif,
+    required this.label,
+    required this.alasanMati,
+    required this.onTekan,
+  });
 
   final bool aktif;
+  final String label;
+  final String alasanMati;
   final VoidCallback onTekan;
 
   @override
@@ -179,13 +208,13 @@ class _TombolRefund extends StatelessWidget {
             side: BorderSide(color: AppColors.warn.withValues(alpha: aktif ? 0.6 : 0.25)),
           ),
           icon: const Icon(Icons.currency_exchange_rounded, size: 19),
-          label: const Text('Refund'),
+          label: Text(label, textAlign: TextAlign.center),
         ),
         if (!aktif)
           Padding(
             padding: const EdgeInsets.only(top: 6),
             child: Text(
-              'Refund hanya bisa dilakukan saat terhubung ke internet.',
+              alasanMati,
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
             ),
@@ -195,9 +224,31 @@ class _TombolRefund extends StatelessWidget {
   }
 }
 
+/// Aksi ini hanya hidup online: pembatalan/refund tidak diantrekan, dan
+/// permintaan persetujuan (daftar pemberi + tukar PIN) juga butuh server.
+/// Diperiksa SEBELUM konfirmasi — jangan minta kasir menyetujui tindakan
+/// merusak yang pasti gagal — dan sekali lagi sesudahnya, karena koneksi bisa
+/// putus selagi dialog terbuka.
+bool _pastikanOnline(BuildContext context, WidgetRef ref, String alasan) {
+  if (ref.read(koneksiProvider).online) return true;
+  ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(SnackBar(backgroundColor: AppColors.danger, content: Text(alasan)));
+  return false;
+}
+
 Future<void> _mulaiRefund(BuildContext context, WidgetRef ref, TransaksiDetail d) async {
+  final punyaHak = ref.read(bisaProvider(aksiRefund));
+  if (!_pastikanOnline(context, ref, alasanOffline('Refund', punyaHak: punyaHak))) return;
   final messenger = ScaffoldMessenger.of(context);
-  final refund = await tampilkanLembarRefund(context, d);
+  // Token persetujuan sekali pakai untuk SATU aksi & transaksi; lembar refund
+  // meminta yang baru sendiri bila token ini terbakar tanpa hasil.
+  String? token;
+  if (!punyaHak) {
+    token = await mintaOtorisasi(context, ref, aksi: aksiRefund, transaksiId: d.id);
+    if (token == null || !context.mounted) return;
+  }
+  final refund = await tampilkanLembarRefund(context, d, otorisasiToken: token);
   if (refund == null || !context.mounted) return;
   ref.invalidate(transaksiDetailProvider(d.id));
   ref.invalidate(riwayatListProvider);
@@ -254,6 +305,9 @@ Struk _strukRefund(WidgetRef ref, TransaksiDetail d, Refund r) {
 }
 
 Future<void> _konfirmasiBatal(BuildContext context, WidgetRef ref, TransaksiDetail d) async {
+  final punyaHak = ref.read(bisaProvider(aksiBatal));
+  final alasanMati = alasanOffline('Pembatalan', punyaHak: punyaHak);
+  if (!_pastikanOnline(context, ref, alasanMati)) return;
   final ya = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
@@ -274,8 +328,17 @@ Future<void> _konfirmasiBatal(BuildContext context, WidgetRef ref, TransaksiDeta
     ),
   );
   if (ya != true || !context.mounted) return;
+  if (!_pastikanOnline(context, ref, alasanMati)) return;
   final messenger = ScaffoldMessenger.of(context);
-  final hasil = await ref.read(riwayatRepositoryProvider).batal(d.id);
+  // Token sekali pakai: server MEMBAKARNYA walau pembatalan lalu ditolak
+  // (409 sudah dibatalkan), jadi ia tak pernah dipakai dua kali — percobaan
+  // berikutnya meminta persetujuan lagi.
+  String? token;
+  if (!punyaHak) {
+    token = await mintaOtorisasi(context, ref, aksi: aksiBatal, transaksiId: d.id);
+    if (token == null || !context.mounted) return;
+  }
+  final hasil = await ref.read(riwayatRepositoryProvider).batal(d.id, otorisasiToken: token);
   hasil.when(
     ok: (_) {
       ref.invalidate(transaksiDetailProvider(d.id));
@@ -366,6 +429,7 @@ class _Receipt extends StatelessWidget {
             _kv('Pelanggan', d.pelanggan),
             _kv('Pembayaran', d.tipePembayaran),
             _kv('Status', d.status),
+            _kv('Disetujui', d.disetujuiOleh),
             const _Dashed(),
             for (final it in d.items) _ItemRow(item: it),
             const _Dashed(),

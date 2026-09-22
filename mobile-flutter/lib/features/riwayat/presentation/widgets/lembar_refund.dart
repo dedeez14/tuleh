@@ -4,11 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/akses/akses.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../core/utils/satuan_terukur.dart';
 import '../../../kasir/domain/metode_pembayaran.dart';
+import '../../../keamanan/presentation/widgets/dialog_otorisasi.dart';
 import '../../../pengaturan/presentation/providers/pengaturan_providers.dart';
 import '../../domain/entities/refund.dart';
 import '../../domain/entities/transaksi_detail.dart';
@@ -16,17 +18,25 @@ import '../providers/riwayat_providers.dart';
 
 /// Lembar refund per item (padanan lembar refund desktop). Mengembalikan
 /// dokumen refund bila tercatat, null bila dibatalkan.
-Future<Refund?> tampilkanLembarRefund(BuildContext context, TransaksiDetail d) =>
+///
+/// [otorisasiToken] = persetujuan atasan yang sudah didapat pemanggil untuk
+/// kasir tanpa hak refund (§2c); sekali pakai.
+Future<Refund?> tampilkanLembarRefund(
+  BuildContext context,
+  TransaksiDetail d, {
+  String? otorisasiToken,
+}) =>
     showModalBottomSheet<Refund>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (_) => _LembarRefund(d: d),
+      builder: (_) => _LembarRefund(d: d, otorisasiToken: otorisasiToken),
     );
 
 class _LembarRefund extends ConsumerStatefulWidget {
-  const _LembarRefund({required this.d});
+  const _LembarRefund({required this.d, this.otorisasiToken});
   final TransaksiDetail d;
+  final String? otorisasiToken;
 
   @override
   ConsumerState<_LembarRefund> createState() => _LembarRefundState();
@@ -43,6 +53,11 @@ class _LembarRefundState extends ConsumerState<_LembarRefund> {
   String? _galat;
   // Satu client_ref per lembar: pengulangan tombol setelah timeout mengembalikan refund yang sama.
   final _clientRef = 'rf-${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 30)}';
+
+  /// Token persetujuan yang BELUM terkirim. Dikosongkan begitu ikut sebuah
+  /// permintaan: server membakarnya walau refund lalu ditolak (422 melebihi
+  /// sisa), jadi percobaan berikutnya wajib meminta persetujuan lagi.
+  late String? _token = widget.otorisasiToken;
 
   @override
   void dispose() {
@@ -104,6 +119,19 @@ class _LembarRefundState extends ConsumerState<_LembarRefund> {
       if (mounted) setState(() => _loading = false);
       return;
     }
+    // Tanpa hak refund sendiri, tiap percobaan butuh token yang masih hidup —
+    // termasuk percobaan ulang sesudah penolakan atau token kedaluwarsa.
+    if (!ref.read(bisaProvider(aksiRefund)) && _token == null) {
+      final token = await mintaOtorisasi(context, ref, aksi: aksiRefund, transaksiId: widget.d.id);
+      if (!mounted) return;
+      if (token == null) {
+        setState(() => _loading = false);
+        return;
+      }
+      _token = token;
+    }
+    final token = _token;
+    _token = null;
     final hasil = await ref.read(riwayatRepositoryProvider).refund(
           widget.d.id,
           PermintaanRefund(
@@ -113,6 +141,7 @@ class _LembarRefundState extends ConsumerState<_LembarRefund> {
             kembaliStok: _kembaliStok,
             clientRef: _clientRef,
             waktuKlien: DateTime.now(),
+            otorisasiToken: token,
           ),
         );
     if (!mounted) return;

@@ -54,6 +54,7 @@ class TransaksiDetail {
     this.totalRefund = 0,
     this.nilaiBersih,
     this.refunds = const [],
+    this.disetujuiOleh,
   });
 
   final String id;
@@ -75,6 +76,10 @@ class TransaksiDetail {
   final double totalRefund;
   final double? nilaiBersih;
   final List<Refund> refunds;
+
+  /// Nama pemegang hak yang menyetujui pembatalan lewat PIN (server
+  /// `disetujui_oleh`); null bila pembatalnya memang berhak sendiri.
+  final String? disetujuiOleh;
 
   /// Ada baris yang masih bisa direfund DAN punya id baris (server 2026-09-13+);
   /// dipakai tombol Refund maupun filter baris lembar refund.

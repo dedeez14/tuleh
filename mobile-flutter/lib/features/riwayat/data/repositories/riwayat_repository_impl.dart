@@ -21,9 +21,9 @@ class RiwayatRepositoryImpl implements RiwayatRepository {
   }
 
   @override
-  Future<Result<void>> batal(String id) async {
+  Future<Result<void>> batal(String id, {String? otorisasiToken}) async {
     try {
-      await remote.batal(id);
+      await remote.batal(id, otorisasiToken: otorisasiToken);
       return const Ok(null);
     } on ApiException catch (e) {
       return Err(e);

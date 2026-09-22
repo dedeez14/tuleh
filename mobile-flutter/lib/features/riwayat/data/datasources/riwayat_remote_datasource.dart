@@ -43,6 +43,7 @@ class RiwayatRemoteDataSource {
       kembalian: _double(d['kembalian']),
       totalRefund: _double(d['total_refund']),
       nilaiBersih: d['nilai_bersih'] == null ? null : _double(d['nilai_bersih']),
+      disetujuiOleh: d['disetujui_oleh']?.toString(),
       refunds: [
         for (final e in rawRefunds)
           if (e is Map) _refund(Map<String, dynamic>.from(e)),
@@ -56,8 +57,11 @@ class RiwayatRemoteDataSource {
 
   /// POST /transaksi/{id}/batal → batalkan transaksi (stok kembali ke gudang,
   /// jurnal di-reverse di server). Hanya online — tidak diantrekan.
-  Future<void> batal(String id) async {
-    await _send(() => _dio.post<dynamic>('/transaksi/${Uri.encodeComponent(id)}/batal'));
+  Future<void> batal(String id, {String? otorisasiToken}) async {
+    await _send(() => _dio.post<dynamic>(
+          '/transaksi/${Uri.encodeComponent(id)}/batal',
+          data: {'otorisasi_token': ?otorisasiToken},
+        ));
   }
 
   /// POST /transaksi/{id}/refund → dokumen refund (201). Online saja (tidak diantrekan).
@@ -123,6 +127,7 @@ class RiwayatRemoteDataSource {
       metodeNama: m['metode_nama']?.toString(),
       alasan: m['alasan']?.toString(),
       oleh: m['oleh']?.toString(),
+      disetujuiOleh: m['disetujui_oleh']?.toString(),
       subtotal: _double(m['subtotal']),
       totalPajak: _double(m['total_pajak']),
       total: _double(m['total']),
