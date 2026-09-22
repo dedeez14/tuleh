@@ -12,6 +12,7 @@
 //    tanpa kartu (papan pesanan) tidak pernah ikut terusir;
 //  - jawaban gagal/offline tidak pernah menghapus hak, manifest, atau sesi.
 
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
@@ -76,6 +77,14 @@ class _Server implements HttpClientAdapter {
   List<String> akses;
   List<String> menus;
 
+  /// Menu manifest per toko (toko yang tak terdaftar memakai [menus]).
+  final menusToko = <String, List<String>>{};
+
+  /// Menahan jawaban manifest toko tertentu sampai completer-nya selesai —
+  /// untuk menguji apa yang terjadi bila keadaan berubah selagi permintaan
+  /// masih di jalan.
+  final tahanManifest = <String, Completer<void>>{};
+
   /// Jumlah panggilan /auth/me — inti pengujian jeda.
   int panggilan = 0;
   int manifestDiminta = 0;
@@ -127,19 +136,23 @@ class _Server implements HttpClientAdapter {
     }
     if (o.path.endsWith('/manifest')) {
       manifestDiminta++;
+      // /tokos/{id}/manifest
+      final idToko = o.path.split('/')[2];
+      await tahanManifest[idToko]?.future;
       if (manifestGagal) {
         return _json({'success': false, 'message': 'Server sibuk.'}, 503);
       }
+      final daftar = menusToko[idToko] ?? menus;
       return _json({
         'success': true,
         'data': {
           'vertical_code': 'ritel',
           'menus': [
-            for (var i = 0; i < menus.length; i++)
+            for (var i = 0; i < daftar.length; i++)
               {
-                'id': menus[i],
-                'label': menus[i],
-                'route_key': menus[i],
+                'id': daftar[i],
+                'label': daftar[i],
+                'route_key': daftar[i],
                 'order': i,
               },
           ],
@@ -339,6 +352,60 @@ void main() {
       server.menus = ['produk'];
       expect(await c.read(activeManifestProvider.notifier).segarkan(), isTrue);
       expect(c.read(activeManifestProvider).valueOrNull?.menus.map((m) => m.routeKey), ['produk']);
+    });
+
+    test('toko berganti selagi segarkan berjalan: manifest toko lama tak menimpa yang baru', () async {
+      final server = _Server()
+        ..menusToko['T1'] = ['jadwal']
+        ..menusToko['T2'] = ['produk'];
+      final c = wadahPolos(server);
+      await c.read(authControllerProvider.future);
+      await c.read(activeTokoIdProvider.future);
+      c.listen(activeManifestProvider, (_, _) {});
+      expect(
+        (await c.read(activeManifestProvider.future)).menus.map((m) => m.routeKey),
+        ['jadwal'],
+      );
+
+      // Manifest T1 ditahan di jalan, lalu pengguna pindah toko — persis
+      // tombol "Pindah ke …" pada 409 atau pemilih toko di Beranda.
+      final tahan = Completer<void>();
+      server.tahanManifest['T1'] = tahan;
+      final segar = c.read(activeManifestProvider.notifier).segarkan();
+      await c.read(activeTokoIdProvider.notifier).select('T2');
+      expect(
+        (await c.read(activeManifestProvider.future)).menus.map((m) => m.routeKey),
+        ['produk'],
+      );
+
+      tahan.complete();
+      expect(await segar, isFalse, reason: 'jawaban toko lama diabaikan');
+      expect(
+        c.read(activeManifestProvider).valueOrNull?.menus.map((m) => m.routeKey),
+        ['produk'],
+        reason: 'menu toko lama tak boleh dipakai menilai pintu toko baru',
+      );
+    });
+
+    test('segarkan yang melayang saat notifier dibuang: false, tanpa galat liar', () async {
+      final server = _Server(menus: ['jadwal']);
+      final c = wadahPolos(server);
+      await c.read(authControllerProvider.future);
+      await c.read(activeTokoIdProvider.future);
+      c.listen(activeManifestProvider, (_, _) {});
+      await c.read(activeManifestProvider.future);
+
+      final tahan = Completer<void>();
+      server.tahanManifest['T1'] = tahan;
+      final notifier = c.read(activeManifestProvider.notifier);
+      final segar = notifier.segarkan();
+
+      c.dispose();
+      tahan.complete();
+      // Tanpa penjaga "sudah dibuang", `state =` di sini melempar StateError di
+      // dalam future yang tidak di-await (`IdentitasGate._segarkan`).
+      expect(await segar, isFalse);
+      expect(await notifier.segarkan(), isFalse, reason: 'panggilan sesudahnya juga aman');
     });
 
     test('rutePunyaPintu & layarTujuan: hanya yang kehilangan pintu yang pulang', () {

@@ -48,8 +48,12 @@ String _rapi(String? nilai) => (nilai ?? '').trim().toLowerCase();
 /// Id TIDAK dipakai membandingkan (ciphertext non-deterministik, lihat
 /// [TokoSesi.id]): urutannya `kode` (stabil) lalu `nama`. Bila kedua sisi
 /// sudah berkode tetapi tak ada yang cocok, nama BUKAN bukti yang cukup —
-/// dua toko bisa senama atau satu toko berganti nama — jadi hasilnya null dan
-/// pemanggil memakai id dari amplop 409 itu sendiri, yang tetap sah di server.
+/// dua toko bisa senama atau satu toko berganti nama — jadi hasilnya null.
+/// Pemanggil TIDAK boleh jatuh ke id amplop 409 sebagai gantinya (aecad35):
+/// id itu sah dipakai memanggil server, tetapi toko yang diwakilinya tak bisa
+/// dicocokkan dengan daftar toko pengguna, sehingga tawaran "Pindah ke …"
+/// mengaku memindahkan ke toko yang tak pernah diverifikasi. Tanpa kecocokan,
+/// yang benar adalah tidak menawarkan perpindahan sama sekali.
 /// Padanan `pilihTokoSesi()` di `lib/keranjang-toko.js` (desktop).
 Toko? pilihTokoSesi(List<Toko> daftar, TokoSesi sesi) {
   final kode = _rapi(sesi.kode);

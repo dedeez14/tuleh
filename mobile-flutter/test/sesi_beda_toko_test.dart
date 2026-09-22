@@ -259,6 +259,27 @@ void main() {
       await t.pump(const Duration(seconds: 5));
     });
 
+    testWidgets('SESI_BEDA_TOKO tanpa meta.sesi_toko: tak menawarkan "Buka sesi"', (t) async {
+      // Server lama (atau amplop tanpa id toko sesi) → tak ada yang bisa
+      // dicocokkan. "Buka sesi" bukan jalan keluarnya: sesi kasir memang sudah
+      // terbuka, hanya di toko lain, jadi server menolaknya dengan alasan yang
+      // sama persis.
+      final dipilih = await bayarDitolak(
+        t,
+        daftar: const [pusat],
+        galat: const ApiException(
+          message: pesanServer,
+          statusCode: 409,
+          errors: {'kode': ['SESI_BEDA_TOKO']},
+        ),
+      );
+      expect(find.text(pesanServer), findsOneWidget);
+      expect(find.widgetWithText(SnackBarAction, 'Buka sesi'), findsNothing);
+      expect(find.textContaining('Pindah ke'), findsNothing);
+      expect(dipilih, isEmpty);
+      await t.pump(const Duration(seconds: 5));
+    });
+
     testWidgets('409 tanpa kode (belum ada sesi) tetap menawarkan "Buka sesi"', (t) async {
       final dipilih = await bayarDitolak(
         t,

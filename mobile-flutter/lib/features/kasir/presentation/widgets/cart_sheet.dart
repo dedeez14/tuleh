@@ -171,7 +171,8 @@ class _CartSheetState extends ConsumerState<CartSheet> {
       // LAIN (§2a). Keduanya menampilkan KALIMAT server apa adanya — kode
       // mesinnya (errors.kode) hanya dibaca program untuk memilih tombol.
       if (e.statusCode == 409) {
-        final sesi = kodeGalat(e) == 'SESI_BEDA_TOKO' ? tokoSesi(e) : null;
+        final kode = kodeGalat(e);
+        final sesi = kode == 'SESI_BEDA_TOKO' ? tokoSesi(e) : null;
         final cocok = sesi == null
             ? null
             : pilihTokoSesi(
@@ -184,14 +185,18 @@ class _CartSheetState extends ConsumerState<CartSheet> {
             gagal: true,
             aksi: ('Pindah ke ${cocok.nama}', () => _pindahToko(cocok.id, cocok.nama)),
           );
-        } else if (sesi != null) {
-          // Toko sesi TIDAK ada di daftar `/tokos` pengguna ini. Tombol pindah
-          // tidak ditawarkan: id pada amplop 409 adalah ciphertext yang tak
-          // dikenal baris `/tokos` mana pun, dan memilihnya hanya klaim kosong
-          // — Beranda (cabang yang hidup berdampingan dengan kasir) menyetel
-          // ulang toko aktif ke toko pertama dalam satu frame, lalu checkout
-          // berikutnya 409 lagi. Kalimat server sudah memuat jalan keluarnya
-          // ("pilih toko itu atau tutup sesi dulu"), jadi itu yang ditampilkan.
+        } else if (kode == 'SESI_BEDA_TOKO') {
+          // Toko sesi tidak bisa dicocokkan dengan daftar `/tokos` pengguna
+          // ini — entah amplopnya tanpa `meta.sesi_toko` (server lama), entah
+          // tokonya memang tak ada di daftar. Tombol pindah tidak ditawarkan:
+          // id pada amplop 409 adalah ciphertext yang tak dikenal baris
+          // `/tokos` mana pun, dan memilihnya hanya klaim kosong — Beranda
+          // (cabang yang hidup berdampingan dengan kasir) menyetel ulang toko
+          // aktif ke toko pertama dalam satu frame, lalu checkout berikutnya
+          // 409 lagi. "Buka sesi" pun BUKAN jalan keluarnya: sesi kasir sudah
+          // terbuka, hanya di toko lain, jadi server menolaknya dengan alasan
+          // yang sama. Kalimat server sudah memuat jalan keluarnya ("pilih
+          // toko itu atau tutup sesi dulu"), jadi itu yang ditampilkan.
           _pesan(e.message, gagal: true);
         } else {
           _pesan(e.message, gagal: true, aksi: ('Buka sesi', _bukaSesi));

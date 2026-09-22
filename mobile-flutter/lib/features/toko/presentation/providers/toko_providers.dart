@@ -43,8 +43,19 @@ final activeTokoIdProvider =
 /// hanya untuk bidang usaha bertahap). Kosong bila toko belum dipilih atau
 /// server belum menyediakan endpoint manifest.
 class ManifestNotifier extends AsyncNotifier<TokoManifest> {
+  /// Notifier ini sudah dibuang (mis. `ref.invalidate(activeManifestProvider)`
+  /// dari tombol "Coba lagi" papan pesanan). Sesudah itu `ref` dan `state`
+  /// TIDAK boleh disentuh: [segarkan] yang sedang melayang akan melempar
+  /// `StateError` di dalam future yang tidak di-await, dan galatnya tak
+  /// tertangkap siapa pun. Disetel ulang di setiap `build()` karena penyegaran
+  /// biasa (toko aktif berganti) memanggil pembuang milik build sebelumnya
+  /// pada instance yang sama.
+  bool _mati = false;
+
   @override
   Future<TokoManifest> build() async {
+    _mati = false;
+    ref.onDispose(() => _mati = true);
     final id = ref.watch(activeTokoIdProvider).valueOrNull;
     if (id == null || id.isEmpty) return const TokoManifest();
     final r = await ref.watch(tokoRepositoryProvider).manifest(id);
@@ -63,11 +74,19 @@ class ManifestNotifier extends AsyncNotifier<TokoManifest> {
   /// bukan hasil pencocokan id antar-jawaban: `encrypt_id` memakai IV acak
   /// sehingga toko yang sama punya id berbeda di tiap jawaban.
   ///
-  /// Mengembalikan true bila manifest baru berhasil dipasang.
+  /// Mengembalikan true bila manifest baru berhasil dipasang — false juga
+  /// bila toko aktif keburu berganti atau notifier-nya sudah dibuang.
   Future<bool> segarkan() async {
+    if (_mati) return false;
     final id = ref.read(activeTokoIdProvider).valueOrNull;
     if (id == null || id.isEmpty) return false;
     final r = await ref.read(tokoRepositoryProvider).manifest(id);
+    // Toko aktif bisa BERGANTI selama perjalanan (tap "Pindah ke …" pada 409,
+    // pemilih toko di Beranda). Manifest toko lama yang datang belakangan tak
+    // boleh menimpa toko yang baru — gerbang identitas lalu menilai pintu
+    // layar memakai menu toko yang salah.
+    if (_mati) return false;
+    if (ref.read(activeTokoIdProvider).valueOrNull != id) return false;
     return r.when(
       ok: (v) {
         state = AsyncData(v);
