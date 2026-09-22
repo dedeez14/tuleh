@@ -112,9 +112,16 @@ class _PinPersetujuanScreenState extends ConsumerState<PinPersetujuanScreen> {
     }
   }
 
+  /// PIN lama WAJIB saat mengganti (server menjawab 422 tanpa itu). Ditolak
+  /// lokal supaya jawabannya seketika dan tidak menghabiskan jatah percobaan
+  /// PIN di server — sama seperti jalur hapus.
   Future<void> _simpan({required bool ada}) {
     final pin = _pinBaru.text.trim();
     final lama = _pinLama.text.trim();
+    if (ada && lama.isEmpty) {
+      setState(() => _galat = 'Isi PIN lama untuk mengganti PIN.');
+      return Future<void>.value();
+    }
     final ds = ref.read(keamananDataSourceProvider);
     return _kirim(
       () => ds.simpanPin(pin: pin, pinLama: ada ? lama : null),

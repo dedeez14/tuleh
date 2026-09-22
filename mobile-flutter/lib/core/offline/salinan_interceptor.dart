@@ -32,7 +32,10 @@ class SalinanInterceptor extends Interceptor {
   SalinanInterceptor({
     required this.store,
     required this.koneksi,
-    this.jangan = const ['/app/versi', '/demo/'],
+    // `/keamanan/`: status PIN & daftar pemberi persetujuan milik pengguna yang
+    // sedang masuk dan hanya berguna online — salinan basi membingungkan
+    // (lihat statusPinProvider) dan tak pernah bisa dipakai menyetujui apa pun.
+    this.jangan = const ['/app/versi', '/demo/', '/keamanan/'],
   });
 
   final SalinanStore store;

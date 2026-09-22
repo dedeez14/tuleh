@@ -7,8 +7,12 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tuleh_pos/core/akses/akses.dart';
 import 'package:tuleh_pos/core/network/api_exception.dart';
+import 'package:tuleh_pos/core/storage/secure_storage.dart';
+import 'package:tuleh_pos/core/theme/app_theme.dart';
 import 'package:tuleh_pos/core/offline/koneksi.dart';
 import 'package:tuleh_pos/core/offline/salinan_interceptor.dart';
 import 'package:tuleh_pos/core/offline/salinan_store.dart';
@@ -16,7 +20,13 @@ import 'package:tuleh_pos/features/keamanan/data/datasources/keamanan_remote_dat
 import 'package:tuleh_pos/features/keamanan/domain/entities/otorisasi.dart';
 import 'package:tuleh_pos/features/keamanan/domain/galat_pin.dart';
 import 'package:tuleh_pos/features/keamanan/presentation/providers/keamanan_providers.dart';
+import 'package:tuleh_pos/features/auth/domain/entities/user.dart';
+import 'package:tuleh_pos/features/demo/data/masa_coba_service.dart';
+import 'package:tuleh_pos/features/auth/presentation/controllers/auth_controller.dart';
 import 'package:tuleh_pos/features/keamanan/presentation/screens/pin_persetujuan_screen.dart';
+import 'package:tuleh_pos/features/pengaturan/presentation/screens/pengaturan_screen.dart';
+
+import 'helpers/masa_coba_palsu.dart';
 
 class _Server implements HttpClientAdapter {
   _Server(this.jawab);
@@ -61,8 +71,14 @@ class _DsPalsu extends KeamananRemoteDataSource {
   String? pinTerkirim;
   String? pinLamaTerkirim;
 
+  /// Berapa kali server ditanyai — status basi milik akun lain terdeteksi di sini.
+  int statusDiminta = 0;
+
   @override
-  Future<StatusPin> statusPin() async => status;
+  Future<StatusPin> statusPin() async {
+    statusDiminta += 1;
+    return status;
+  }
 
   @override
   Future<void> simpanPin({required String pin, String? pinLama}) async {
@@ -82,6 +98,38 @@ class _DsPalsu extends KeamananRemoteDataSource {
     if (lempar != null) throw lempar!;
     status = StatusPin(bolehSetel: status.bolehSetel);
   }
+}
+
+/// Pengguna yang bisa diganti di tengah tes (perangkat POS dipakai bergantian).
+class _AuthPalsu extends AuthController {
+  _AuthPalsu(this._user);
+
+  User? _user;
+
+  @override
+  Future<User?> build() async => _user;
+
+  void ganti(User u) {
+    _user = u;
+    state = AsyncData(u);
+  }
+}
+
+class _Storage extends SecureStorage {
+  _Storage() : super(const FlutterSecureStorage());
+  final Map<String, String> m = {};
+  @override
+  Future<String?> readToken() async => m['token'];
+  @override
+  Future<void> writeToken(String? v) async => v == null || v.isEmpty ? m.remove('token') : m['token'] = v;
+  @override
+  Future<String?> readActiveTokoId() async => m['toko'];
+  @override
+  Future<void> writeActiveTokoId(String? v) async => v == null || v.isEmpty ? m.remove('toko') : m['toko'] = v;
+  @override
+  Future<String?> bacaNilai(String k) async => m[k];
+  @override
+  Future<void> tulisNilai(String k, String? v) async => v == null ? m.remove(k) : m[k] = v;
 }
 
 /// Penanda koneksi tiruan — mencatat apakah interceptor menyalakan pita offline.
@@ -244,6 +292,85 @@ void main() {
     });
   });
 
+  group('status PIN milik pengguna yang sedang masuk', () {
+    test('ganti akun / ganti hak → status dimuat ulang, bukan nilai pengguna sebelumnya', () async {
+      final ds = _DsPalsu(status: const StatusPin(ada: true, bolehSetel: false));
+      final auth = _AuthPalsu(const User(id: 'U1', name: 'Kasir', akses: ['kasir.transaksi']));
+      final c = ProviderContainer(overrides: [
+        keamananDataSourceProvider.overrideWithValue(ds),
+        authControllerProvider.overrideWith(() => auth),
+      ]);
+      addTearDown(c.dispose);
+      // Identitas selesai dimuat dulu: selama auth masih AsyncLoading, kuncinya
+      // memang berbeda (dan status ditarik ulang begitu penggunanya diketahui).
+      await c.read(authControllerProvider.future);
+      c.listen(statusPinProvider, (_, _) {});
+
+      expect((await c.read(statusPinProvider.future)).bolehSetel, isFalse);
+      expect(ds.statusDiminta, 1);
+
+      // Akun lain masuk di perangkat yang sama: status lama TIDAK boleh melekat —
+      // boleh_setel basi menutup formulir bagi orang yang justru berhak.
+      ds.status = const StatusPin(bolehSetel: true);
+      auth.ganti(const User(id: 'U2', name: 'Manajer', akses: ['transaksi.batal', 'keamanan.pin']));
+      expect((await c.read(statusPinProvider.future)).bolehSetel, isTrue);
+      expect(ds.statusDiminta, 2);
+
+      // Hak dicabut pemilik pada akun yang sama.
+      ds.status = const StatusPin(bolehSetel: false);
+      auth.ganti(const User(id: 'U2', name: 'Manajer', akses: ['kasir.transaksi']));
+      expect((await c.read(statusPinProvider.future)).bolehSetel, isFalse);
+      expect(ds.statusDiminta, 3);
+    });
+
+    test('GET /keamanan/ tidak pernah disalin (status basi = kebingungan yang sama)', () async {
+      final store = SalinanMemori();
+      final dio = _dio(_Server((_) => _json({'success': true, 'data': {'ada': true, 'boleh_setel': true}})))
+        ..interceptors.add(SalinanInterceptor(store: store, koneksi: _Penanda()));
+      await dio.get<dynamic>('/keamanan/pin-saya');
+      await dio.get<dynamic>('/keamanan/pemberi-otorisasi');
+      expect(store.jumlah, 0);
+    });
+  });
+
+  group('entri Pengaturan → PIN persetujuan saya', () {
+    Future<void> bukaPengaturan(WidgetTester t, {required Set<String> akses, required StatusPin status}) async {
+      t.view.physicalSize = const Size(420, 1600);
+      t.view.devicePixelRatio = 1.0;
+      addTearDown(t.view.reset);
+      final c = ProviderContainer(overrides: [
+        secureStorageProvider.overrideWithValue(_Storage()),
+        masaCobaServiceProvider.overrideWithValue(MasaCobaPalsu()),
+        keamananDataSourceProvider.overrideWithValue(_DsPalsu(status: status)),
+        aksesProvider.overrideWithValue(akses),
+        ...overrideOffline(),
+      ]);
+      addTearDown(c.dispose);
+      await t.runAsync(() => c.read(authControllerProvider.notifier).startDemo());
+      await t.pumpWidget(UncontrolledProviderScope(
+        container: c,
+        child: MaterialApp(theme: AppTheme.light(), home: const PengaturanScreen()),
+      ));
+      await t.pump(const Duration(milliseconds: 100));
+    }
+
+    testWidgets('tanpa hak keamanan.pin: entri disembunyikan (gagal-tertutup)', (t) async {
+      await bukaPengaturan(t, akses: const {'kasir.transaksi'}, status: const StatusPin(bolehSetel: true));
+      expect(find.byKey(const Key('entri-pin-persetujuan')), findsNothing);
+    });
+
+    testWidgets('punya hak tapi boleh_setel false: entri tetap tampil dengan sebabnya', (t) async {
+      await bukaPengaturan(t, akses: const {'keamanan.pin'}, status: const StatusPin(bolehSetel: false));
+      expect(find.byKey(const Key('entri-pin-persetujuan')), findsOneWidget);
+      expect(find.text('Belum berlaku untuk akun Anda'), findsOneWidget);
+    });
+
+    testWidgets('boleh_setel true & PIN sudah ada: subjudul menyebut PIN aktif', (t) async {
+      await bukaPengaturan(t, akses: const {'keamanan.pin'}, status: const StatusPin(ada: true, bolehSetel: true));
+      expect(find.textContaining('PIN aktif'), findsOneWidget);
+    });
+  });
+
   group('layar PIN persetujuan saya', () {
     testWidgets('belum ada PIN: satu isian, tanpa "PIN lama", tanpa tombol hapus', (t) async {
       await _buka(t, _DsPalsu());
@@ -284,6 +411,16 @@ void main() {
       expect(ds.pinTerkirim, '13579');
       expect(ds.pinLamaTerkirim, '2468');
       await t.pump(const Duration(seconds: 5));
+    });
+
+    testWidgets('ganti tanpa isi PIN lama: galat lokal, server tidak dipanggil', (t) async {
+      final ds = _DsPalsu(status: const StatusPin(ada: true, bolehSetel: true));
+      await _buka(t, ds);
+      await t.enterText(find.byKey(const Key('pin-baru')), '13579');
+      await t.tap(find.text('Ganti PIN'));
+      await t.pumpAndSettle();
+      expect(find.text('Isi PIN lama untuk mengganti PIN.'), findsOneWidget);
+      expect(ds.dipanggil, isEmpty, reason: 'jatah percobaan PIN di server tak dihabiskan');
     });
 
     testWidgets('hapus tanpa isi PIN lama: galat lokal, server tidak dipanggil', (t) async {
