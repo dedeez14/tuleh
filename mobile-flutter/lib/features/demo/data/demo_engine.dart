@@ -1475,18 +1475,21 @@ class DemoEngine {
       return _err(409, 'Transisi tidak valid. Berikutnya harus $next.');
     }
     final tujuan = to == 'SELESAI' ? tahap.last : next;
-    o['stage'] = tujuan;
 
     // Pelunasan: hanya nota bayar-nanti / uang muka yang bisa dilunasi di sini
-    // (bon meja dilunasi lewat /bills/{id}/settle).
+    // (bon meja dilunasi lewat /bills/{id}/settle), dan hanya di tahap
+    // TERMINAL (serah-terima). Transisi di tengah alur yang kebetulan membawa
+    // metode tak boleh menandai pesanan lunas — tak ada transaksi, tak ada
+    // uang masuk.
     final perluDilunasi = o['bayar'] == 'BELUM' || o['bayar'] == 'DP';
-    if (data['tipe_pembayaran'] == null || !perluDilunasi) return _ok(o);
-
-    // Pelunasan hanya terjadi di tahap TERMINAL (serah-terima). Transisi di
-    // tengah alur yang kebetulan membawa metode tak boleh menandai pesanan
-    // lunas — tak ada transaksi, tak ada uang masuk.
-    if (tujuan != tahap.last) return _ok(o);
-    if (_lewatBatasHarian()) return _err(422, pesanBatasTransaksi);
+    final melunasi = data['tipe_pembayaran'] != null &&
+        perluDilunasi &&
+        tujuan == tahap.last;
+    // Batas harian diperiksa SEBELUM tahap berubah: 422 = pesanan utuh di
+    // tahapnya (server pun menggulung balik seluruh transisi).
+    if (melunasi && _lewatBatasHarian()) return _err(422, pesanBatasTransaksi);
+    o['stage'] = tujuan;
+    if (!melunasi) return _ok(o);
 
     final tipe = '${data['tipe_pembayaran']}';
     final total = (o['total'] as num?)?.toDouble() ?? 0;

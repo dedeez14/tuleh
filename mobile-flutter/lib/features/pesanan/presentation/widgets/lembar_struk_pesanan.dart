@@ -31,6 +31,19 @@ class LembarStrukPesanan extends ConsumerStatefulWidget {
 class _LembarStrukPesananState extends ConsumerState<LembarStrukPesanan> {
   bool _mencetak = false;
 
+  @override
+  void initState() {
+    super.initState();
+    // Saklar "Cetak struk otomatis" yang sama dengan lembar hasil transaksi
+    // (paritas desktop: nota & struk pelunasan ikut tercetak sendiri).
+    WidgetsBinding.instance.addPostFrameCallback((_) => _cetakOtomatisBilaDiatur());
+  }
+
+  Future<void> _cetakOtomatisBilaDiatur() async {
+    if (!await cetakOtomatisDiatur(ref) || !mounted) return;
+    await _cetak();
+  }
+
   Future<void> _cetak() async {
     setState(() => _mencetak = true);
     try {

@@ -562,6 +562,32 @@ void main() {
       expect(d['struk'], isNull);
     });
 
+    test('pelunasan ditolak batas harian → pesanan tetap di tahapnya', () {
+      // Habiskan batas Mode Demo lewat checkout biasa di minimarket.
+      final mini = (dataOf(get('/produk', query: {'toko_id': 'TOKO-1'})) as List).first as Map;
+      for (var i = 0; i < DemoEngine.batasTransaksiPerHari; i++) {
+        post('/transaksi/checkout', query: {'toko_id': 'TOKO-1'}, body: {
+          'items': [
+            {'id_produk': mini['id'], 'kuantitas': 1, 'harga': mini['harga_jual']},
+          ],
+          'tipe_pembayaran': 'QRIS',
+          'dibayar': mini['harga_jual'],
+        });
+      }
+      const toko = {'toko_id': 'TOKO-6'};
+      final o = (dataOf(get('/orders', query: toko)) as List)
+          .firstWhere((x) => x['stage'] == 'DILAYANI' && x['bayar'] == 'BELUM');
+      final r = post('/orders/${o['id']}/transition', query: toko, body: {
+        'to': 'SELESAI',
+        'tipe_pembayaran': 'TUNAI',
+      });
+      expect(r.status, 422);
+      final masih = (dataOf(get('/orders', query: toko)) as List)
+          .firstWhere((x) => x['id'] == o['id']);
+      expect(masih['stage'], 'DILAYANI', reason: '422 tidak boleh memindah tahap');
+      expect(masih['bayar'], 'BELUM');
+    });
+
     test('POST /orders menolak uang muka di luar batas & toko tanpa bayar-nanti', () {
       const toko = {'toko_id': 'TOKO-3'};
       final produk = (dataOf(get('/produk', query: toko)) as List)

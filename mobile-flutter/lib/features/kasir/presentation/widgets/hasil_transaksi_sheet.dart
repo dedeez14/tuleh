@@ -7,7 +7,6 @@ import '../../../../core/utils/format.dart';
 import '../../../cetak/data/struk_teks.dart';
 import '../../../cetak/domain/entities/struk.dart';
 import '../../../cetak/presentation/aksi_struk.dart';
-import '../../../cetak/presentation/providers/printer_providers.dart';
 
 /// Lembar hasil transaksi — kembalian besar, ringkasan, dan cetak struk.
 ///
@@ -44,20 +43,9 @@ class _HasilTransaksiSheetState extends ConsumerState<HasilTransaksiSheet> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _cetakOtomatisBilaDiatur());
   }
 
-  /// Tunggu preferensi selesai dibaca dulu — pada transaksi pertama setiap
-  /// sesi aplikasi providernya masih memuat, dan cuplikan seketika akan
-  /// mengembalikan null (dulu: struk pertama diam-diam tidak tercetak).
+  /// Preferensi ditunggu selesai dibaca dulu (lihat [cetakOtomatisDiatur]).
   Future<void> _cetakOtomatisBilaDiatur() async {
-    var pref = ref.read(printerTerpilihProvider).valueOrNull;
-    if (pref == null) {
-      // Masih dimuat (transaksi pertama sesi ini) — tunggu sampai selesai.
-      try {
-        pref = await ref.read(printerTerpilihProvider.future);
-      } catch (_) {
-        return; // penyimpanan bermasalah — kasir masih bisa menekan Cetak
-      }
-    }
-    if (!mounted || pref == null || !pref.cetakOtomatis) return;
+    if (!await cetakOtomatisDiatur(ref) || !mounted) return;
     await _cetak();
   }
 

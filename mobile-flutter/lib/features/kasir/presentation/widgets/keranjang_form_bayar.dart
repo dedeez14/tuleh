@@ -158,6 +158,26 @@ class FormBayar extends StatelessWidget {
                   : 'Dari total ${fmtIDR(total)}',
             ),
           ),
+          // Uang muka non-tunai: pelanggan tetap butuh QR statis / rekening
+          // toko — sebesar UANG MUKA yang diketik, bukan total pesanan.
+          if (terpilih != 'TUNAI') ...[
+            const SizedBox(height: 18),
+            if (terpilih == 'QRIS')
+              PanduanQris(
+                total: parseRupiah(uangMukaCtrl?.text ?? ''),
+                pembayaran: pembayaran,
+                keterangan:
+                    'Uang muka — tunjukkan QR ke pelanggan, pindai sebesar '
+                    'nominal di atas, cek dananya masuk, lalu tekan Simpan nota.',
+              )
+            else
+              PanduanTransfer(
+                pembayaran: pembayaran,
+                keterangan:
+                    'Uang muka — pelanggan transfer sebesar nominal di atas ke '
+                    'salah satu rekening. Setelah dana masuk, tekan Simpan nota.',
+              ),
+          ],
         ] else if (tunai) ...[
           Text(
             'Uang diterima',
@@ -277,11 +297,6 @@ class PilihanMetode extends StatelessWidget {
   }
 }
 
-/// Metode QRIS: tunjukkan gambar QRIS statis toko (diunggah pemilik di desktop,
-/// Pengaturan → Pembayaran) beserta total, sama seperti layar bayar desktop.
-
-/// Metode TRANSFER: daftar rekening toko dengan tombol salin.
-
 class CatatanKecil extends StatelessWidget {
   const CatatanKecil({
     super.key,
@@ -324,10 +339,27 @@ class CatatanKecil extends StatelessWidget {
   }
 }
 
+/// Metode QRIS: tunjukkan gambar QRIS statis toko (diunggah pemilik di desktop,
+/// Pengaturan → Pembayaran) beserta nominal yang harus dipindai, sama seperti
+/// layar bayar desktop.
 class PanduanQris extends StatelessWidget {
-  const PanduanQris({super.key, required this.total, required this.pembayaran});
+  const PanduanQris({
+    super.key,
+    required this.total,
+    required this.pembayaran,
+    this.keterangan = _keteranganBawaan,
+  });
+
+  /// Nominal yang dipindai pelanggan — total bayar Lunas, atau uang muka.
   final double total;
   final AsyncValue<PengaturanPembayaran> pembayaran;
+
+  /// Petunjuk di bawah QR (bawaan: bayar Lunas).
+  final String keterangan;
+
+  static const _keteranganBawaan =
+      'Tunjukkan QR ke pelanggan. Setelah pelanggan membayar dan Anda '
+      'cek dananya masuk, tekan Bayar.';
 
   @override
   Widget build(BuildContext context) {
@@ -376,20 +408,27 @@ class PanduanQris extends StatelessWidget {
           style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 8),
-        const CatatanKecil(
-          ikon: Icons.qr_code_scanner_rounded,
-          teks:
-              'Tunjukkan QR ke pelanggan. Setelah pelanggan membayar dan Anda '
-              'cek dananya masuk, tekan Bayar.',
-        ),
+        CatatanKecil(ikon: Icons.qr_code_scanner_rounded, teks: keterangan),
       ],
     );
   }
 }
 
+/// Metode TRANSFER: daftar rekening toko dengan tombol salin.
 class PanduanTransfer extends StatelessWidget {
-  const PanduanTransfer({super.key, required this.pembayaran});
+  const PanduanTransfer({
+    super.key,
+    required this.pembayaran,
+    this.keterangan = _keteranganBawaan,
+  });
   final AsyncValue<PengaturanPembayaran> pembayaran;
+
+  /// Petunjuk di bawah daftar rekening (bawaan: bayar Lunas).
+  final String keterangan;
+
+  static const _keteranganBawaan =
+      'Pelanggan transfer ke salah satu rekening. Setelah dana masuk, '
+      'tekan Bayar.';
 
   @override
   Widget build(BuildContext context) {
@@ -447,12 +486,7 @@ class PanduanTransfer extends StatelessWidget {
           ),
           const SizedBox(height: 8),
         ],
-        const CatatanKecil(
-          ikon: Icons.verified_outlined,
-          teks:
-              'Pelanggan transfer ke salah satu rekening. Setelah dana masuk, '
-              'tekan Bayar.',
-        ),
+        CatatanKecil(ikon: Icons.verified_outlined, teks: keterangan),
       ],
     );
   }

@@ -164,12 +164,15 @@ class _PapanPesananScreenState extends ConsumerState<PapanPesananScreen> {
   Future<String?> _pilihPembayaran(Pesanan o, AksiKartu aksi) async {
     final manifest = ref.read(activeManifestProvider).valueOrNull;
     // Master `pos_metode_pembayaran` lebih dulu (toko boleh mematikan TUNAI);
-    // manifest lalu daftar cadangan hanya dipakai bila server belum menjawab.
-    final modes =
-        ref.read(metodePembayaranProvider).valueOrNull ??
-        (manifest?.paymentModes.isNotEmpty == true
-            ? manifest!.paymentModes
-            : metodePembayaranBawaan);
+    // manifest lalu daftar cadangan dipakai bila server belum menjawab ATAU
+    // menjawab `[]` — lembar tanpa satu pun metode = pesanan tak bisa dilunasi
+    // (padanan normalisasi lembar keranjang).
+    final dariServer = ref.read(metodePembayaranProvider).valueOrNull;
+    final modes = dariServer != null && dariServer.isNotEmpty
+        ? dariServer
+        : (manifest?.paymentModes.isNotEmpty == true
+              ? manifest!.paymentModes
+              : metodePembayaranBawaan);
     // Pesanan DP menagih SISANYA, bukan total — uang mukanya sudah diterima.
     final tagihan = o.perluDilunasi ? o.sisa : o.total;
 
@@ -477,41 +480,40 @@ class _Kartu extends StatelessWidget {
               ),
             ),
           const SizedBox(height: 10),
-          Row(
+          // Wrap, bukan Row: di ponsel 360 dp pil DP berbagi baris dengan
+          // total dan dulu terpotong "…" tepat di angka sisa. Kini pil pindah
+          // ke baris sendiri bila tak muat, dan teksnya boleh turun baris —
+          // sisa tagihan tak pernah disembunyikan.
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Flexible(
-                child: Text(
-                  fmtIDR(pesanan.total),
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
+              Text(
+                fmtIDR(pesanan.total),
+                style: const TextStyle(fontWeight: FontWeight.w700),
               ),
-              if (ringkas.isNotEmpty) ...[
-                const SizedBox(width: 8),
-                // DP bukan keadaan bermasalah (uangnya sudah masuk sebagian),
-                // jadi warnanya peringatan — bukan merah "belum bayar".
-                Flexible(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: warnaPil.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      ringkas,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: warnaPil,
-                      ),
+              // DP bukan keadaan bermasalah (uangnya sudah masuk sebagian),
+              // jadi warnanya peringatan — bukan merah "belum bayar".
+              if (ringkas.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: warnaPil.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    ringkas,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: warnaPil,
                     ),
                   ),
                 ),
-              ],
             ],
           ),
           // Tombol aksi selebar kartu di baris sendiri: sasaran sentuh besar

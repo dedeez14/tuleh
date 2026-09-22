@@ -12,6 +12,7 @@ import 'package:tuleh_pos/features/cetak/data/printer_service.dart';
 import 'package:tuleh_pos/features/cetak/domain/entities/struk.dart';
 import 'package:tuleh_pos/features/cetak/presentation/providers/printer_providers.dart';
 import 'package:tuleh_pos/features/kasir/presentation/widgets/hasil_transaksi_sheet.dart';
+import 'package:tuleh_pos/features/pesanan/presentation/widgets/lembar_struk_pesanan.dart';
 
 class _Storage extends SecureStorage {
   _Storage([Map<String, String>? awal]) : super(const FlutterSecureStorage()) {
@@ -169,6 +170,32 @@ void main() {
       await t.tap(tombol.first);
       await _pompa(t);
       expect(palsu.dicetak.single.nomor, 'TRX/0051');
+    });
+
+    // Paritas desktop: nota bayar-nanti / uang muka dan struk pelunasan dari
+    // papan pesanan ikut saklar "Cetak struk otomatis" yang sama.
+    Widget appNota(ProviderContainer c) => UncontrolledProviderScope(
+      container: c,
+      child: MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: LembarStrukPesanan(struk: _struk, judul: 'Nota tersimpan'),
+        ),
+      ),
+    );
+
+    testWidgets('lembar nota pesanan: otomatis nyala → nota tercetak sendiri', (t) async {
+      final (c, palsu) = await wadah(otomatis: true);
+      await t.pumpWidget(appNota(c));
+      await _pompa(t);
+      expect(palsu.dicetak.single.nomor, 'TRX/0051');
+    });
+
+    testWidgets('lembar nota pesanan: otomatis mati → menunggu tombol Cetak', (t) async {
+      final (c, palsu) = await wadah(otomatis: false);
+      await t.pumpWidget(appNota(c));
+      await _pompa(t);
+      expect(palsu.dicetak, isEmpty);
     });
 
     testWidgets('otomatis nyala tanpa printer: tidak ada cetak & tanpa dialog', (t) async {

@@ -14,6 +14,7 @@ import '../../../cetak/domain/struk_server.dart';
 import '../../../demo/demo_session.dart';
 import '../../../keamanan/presentation/widgets/dialog_otorisasi.dart';
 import '../../../pesanan/domain/entities/hasil_pesanan.dart';
+import '../../../pesanan/domain/logic/ref_nota.dart';
 import '../../../pesanan/presentation/providers/pesanan_providers.dart';
 import '../../../pesanan/presentation/widgets/lembar_struk_pesanan.dart';
 import 'hasil_transaksi_sheet.dart';
@@ -35,11 +36,6 @@ import '../../../products/presentation/providers/products_provider.dart';
 import '../providers/checkout_providers.dart';
 import '../screens/kasir_screen.dart' show bukaSesiDenganUmpanBalik;
 
-/// Lembar keranjang — daftar item, metode bayar, uang diterima, lalu bayar.
-///
-/// Dibuat dua langkah agar layar tidak padat: langkah "Keranjang" untuk
-/// memeriksa dan mengoreksi item, langkah "Pembayaran" untuk memilih metode
-/// dan menghitung kembalian. Tombol utama selalu di bawah, dalam jangkauan ibu jari.
 /// Pesan galat uang muka; null = sah. Batas sama dengan server: uang muka
 /// harus di antara Rp0 dan total pesanan (bayar penuh = pilih Lunas).
 String? validasiUangMuka(double uangMuka, double total) {
@@ -50,6 +46,19 @@ String? validasiUangMuka(double uangMuka, double total) {
   return null;
 }
 
+/// `client_ref` nota terakhir yang dikirim beserta sidik muatannya ([RefNota]).
+///
+/// Disimpan DI LUAR state lembar: lembar ponsel boleh ditutup lalu dibuka lagi
+/// setelah kiriman gagal jaringan, dan kirim ulang muatan yang sama harus tetap
+/// memakai ref yang sama (server bisa saja sudah mencatat kiriman pertama).
+/// Dibuang (null) setelah kiriman keranjang APA PUN sukses — nota maupun Lunas.
+final refNotaProvider = StateProvider<RefNota?>((ref) => null);
+
+/// Lembar keranjang — daftar item, metode bayar, uang diterima, lalu bayar.
+///
+/// Dibuat dua langkah agar layar tidak padat: langkah "Keranjang" untuk
+/// memeriksa dan mengoreksi item, langkah "Pembayaran" untuk memilih metode
+/// dan menghitung kembalian. Tombol utama selalu di bawah, dalam jangkauan ibu jari.
 class CartSheet extends ConsumerStatefulWidget {
   const CartSheet({super.key, this.tertanam = false});
 
@@ -73,11 +82,6 @@ class _CartSheetState extends ConsumerState<CartSheet> {
   final _uangMukaCtrl = TextEditingController();
   ModeBayar _mode = ModeBayar.lunas;
   bool _loading = false;
-
-  /// Satu `client_ref` per nota yang sedang dikonfirmasi: kirim ulang setelah
-  /// gagal jaringan menghasilkan pesanan yang SAMA (server `pos.idempoten`),
-  /// bukan pesanan kembar. Dikosongkan sesudah nota tersimpan.
-  String? _clientRefNota;
 
   @override
   void dispose() {
@@ -122,6 +126,13 @@ class _CartSheetState extends ConsumerState<CartSheet> {
       return;
     }
 
+    // Ditangkap SEBELUM await: lembar ponsel bisa terlanjur tertutup (seret)
+    // saat permintaan di jalan, dan `ref` melempar StateError setelah widget
+    // dibuang — keranjang lalu tertinggal penuh dan dibayar dua kali.
+    final wadah = ProviderScope.containerOf(context, listen: false);
+    final navigator = Navigator.of(context, rootNavigator: true);
+    final demo = ref.read(demoSessionProvider).active;
+
     setState(() => _loading = true);
     try {
       // Struk disusun dari keranjang SEBELUM dikosongkan, agar bisa dicetak
@@ -152,12 +163,12 @@ class _CartSheetState extends ConsumerState<CartSheet> {
         catatanKaki: usaha?.strukFooter,
         barcode: nomor.isEmpty ? null : nomor,
         logoUrl: (usaha?.strukTampilLogo ?? false) ? usaha?.logo : null,
-        demo: ref.read(demoSessionProvider).active,
+        demo: demo,
         pelanggan: meta.pelanggan?.nama,
         diskon: potongan > 0 ? potongan : null,
       );
 
-      final res = await ref
+      final res = await wadah
           .read(checkoutRepositoryProvider)
           .bayar(
             items: items,
@@ -171,64 +182,78 @@ class _CartSheetState extends ConsumerState<CartSheet> {
           );
       final struk = buatStruk(res.nomor, res.kembalian);
 
-      ref.read(cartControllerProvider.notifier).clear();
-      ref.invalidate(activeSesiProvider); // rekap kas ikut segar
+      wadah.read(cartControllerProvider.notifier).clear();
+      // Ref nota yang tertinggal (nota gagal sebelum kasir memilih Lunas) tak
+      // berlaku lagi untuk pelanggan berikutnya.
+      wadah.read(refNotaProvider.notifier).state = null;
+      wadah.invalidate(activeSesiProvider); // rekap kas ikut segar
       if (res.tertunda) {
-        ref.read(antreanVersiProvider.notifier).state++;
-        ref.invalidate(productsProvider); // stok tampil ikut delta tertunda
+        wadah.read(antreanVersiProvider.notifier).state++;
+        wadah.invalidate(productsProvider); // stok tampil ikut delta tertunda
       }
-      if (!mounted) return;
-      if (widget.tertanam) {
-        setState(() {
-          _langkah = _Langkah.keranjang;
-          _uangCtrl.clear();
-        });
-      } else {
-        Navigator.of(context).pop();
+      if (mounted) {
+        if (widget.tertanam) {
+          setState(() {
+            _langkah = _Langkah.keranjang;
+            _uangCtrl.clear();
+          });
+        } else {
+          Navigator.of(context).pop();
+        }
       }
       HapticFeedback.mediumImpact();
-      await _tampilkanHasil(struk, res.kembalian, tertunda: res.tertunda);
+      await _tampilkanHasil(
+        mounted ? context : navigator.context,
+        struk,
+        res.kembalian,
+        tertunda: res.tertunda,
+      );
     } on ApiException catch (e) {
       if (!mounted) return;
-      // Dua bentuk 409: sesi kasir belum dibuka, atau sesi terbuka DI TOKO
-      // LAIN (§2a). Keduanya menampilkan KALIMAT server apa adanya — kode
-      // mesinnya (errors.kode) hanya dibaca program untuk memilih tombol.
-      if (e.statusCode == 409) {
-        final kode = kodeGalat(e);
-        final sesi = kode == 'SESI_BEDA_TOKO' ? tokoSesi(e) : null;
-        final cocok = sesi == null
-            ? null
-            : pilihTokoSesi(
-                ref.read(tokoListProvider).valueOrNull ?? const [],
-                sesi,
-              );
-        if (cocok != null) {
-          _pesan(
-            e.message,
-            gagal: true,
-            aksi: ('Pindah ke ${cocok.nama}', () => _pindahToko(cocok.id, cocok.nama)),
-          );
-        } else if (kode == 'SESI_BEDA_TOKO') {
-          // Toko sesi tidak bisa dicocokkan dengan daftar `/tokos` pengguna
-          // ini — entah amplopnya tanpa `meta.sesi_toko` (server lama), entah
-          // tokonya memang tak ada di daftar. Tombol pindah tidak ditawarkan:
-          // id pada amplop 409 adalah ciphertext yang tak dikenal baris
-          // `/tokos` mana pun, dan memilihnya hanya klaim kosong — Beranda
-          // (cabang yang hidup berdampingan dengan kasir) menyetel ulang toko
-          // aktif ke toko pertama dalam satu frame, lalu checkout berikutnya
-          // 409 lagi. "Buka sesi" pun BUKAN jalan keluarnya: sesi kasir sudah
-          // terbuka, hanya di toko lain, jadi server menolaknya dengan alasan
-          // yang sama. Kalimat server sudah memuat jalan keluarnya ("pilih
-          // toko itu atau tutup sesi dulu"), jadi itu yang ditampilkan.
-          _pesan(e.message, gagal: true);
-        } else {
-          _pesan(e.message, gagal: true, aksi: ('Buka sesi', _bukaSesi));
-        }
-      } else {
-        _pesan(e.firstError() ?? e.message, gagal: true);
-      }
+      _tanganiGalatKirim(e);
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// Galat kiriman keranjang — bayar Lunas maupun nota pesanan.
+  void _tanganiGalatKirim(ApiException e) {
+    // Dua bentuk 409: sesi kasir belum dibuka, atau sesi terbuka DI TOKO
+    // LAIN (§2a). Keduanya menampilkan KALIMAT server apa adanya — kode
+    // mesinnya (errors.kode) hanya dibaca program untuk memilih tombol.
+    if (e.statusCode == 409) {
+      final kode = kodeGalat(e);
+      final sesi = kode == 'SESI_BEDA_TOKO' ? tokoSesi(e) : null;
+      final cocok = sesi == null
+          ? null
+          : pilihTokoSesi(
+              ref.read(tokoListProvider).valueOrNull ?? const [],
+              sesi,
+            );
+      if (cocok != null) {
+        _pesan(
+          e.message,
+          gagal: true,
+          aksi: ('Pindah ke ${cocok.nama}', () => _pindahToko(cocok.id, cocok.nama)),
+        );
+      } else if (kode == 'SESI_BEDA_TOKO') {
+        // Toko sesi tidak bisa dicocokkan dengan daftar `/tokos` pengguna
+        // ini — entah amplopnya tanpa `meta.sesi_toko` (server lama), entah
+        // tokonya memang tak ada di daftar. Tombol pindah tidak ditawarkan:
+        // id pada amplop 409 adalah ciphertext yang tak dikenal baris
+        // `/tokos` mana pun, dan memilihnya hanya klaim kosong — Beranda
+        // (cabang yang hidup berdampingan dengan kasir) menyetel ulang toko
+        // aktif ke toko pertama dalam satu frame, lalu checkout berikutnya
+        // 409 lagi. "Buka sesi" pun BUKAN jalan keluarnya: sesi kasir sudah
+        // terbuka, hanya di toko lain, jadi server menolaknya dengan alasan
+        // yang sama. Kalimat server sudah memuat jalan keluarnya ("pilih
+        // toko itu atau tutup sesi dulu"), jadi itu yang ditampilkan.
+        _pesan(e.message, gagal: true);
+      } else {
+        _pesan(e.message, gagal: true, aksi: ('Buka sesi', _bukaSesi));
+      }
+    } else {
+      _pesan(e.firstError() ?? e.message, gagal: true);
     }
   }
 
@@ -264,31 +289,59 @@ class _CartSheetState extends ConsumerState<CartSheet> {
     // tak boleh pernah sampai ke server.
     if (dp && validasiUangMuka(uangMuka, total) != null) return;
 
+    final bayar = dp ? 'DP' : 'NANTI';
+    final itemsNota = [
+      for (final e in items)
+        ItemNota(
+          idProduk: e.product.id,
+          kuantitas: e.qty,
+          harga: e.product.harga,
+        ),
+    ];
+    final jumlahUangMuka = dp ? uangMuka : null;
+    final metodeUangMuka = dp ? _metodeTerpilih : null;
+
+    // Ditangkap SEBELUM await (lihat _bayar): nota yang sukses di server
+    // harus mengosongkan keranjang walau lembarnya sudah tertutup — kalau
+    // tidak, membuka lembar lagi membuat pesanan + uang muka KEDUA.
+    final wadah = ProviderScope.containerOf(context, listen: false);
+    final navigator = Navigator.of(context, rootNavigator: true);
+    final usaha = ref.read(profilUsahaProvider).valueOrNull;
+    final demo = ref.read(demoSessionProvider).active;
+
+    // Satu `client_ref` per MUATAN: kirim ulang muatan yang sama setelah
+    // gagal jaringan = pesanan yang SAMA; muatan berubah = ref baru, karena
+    // server memutar ulang jawaban per ref tanpa membaca isinya.
+    final rn = refNota(
+      wadah.read(refNotaProvider),
+      sidikNota(
+        bayar: bayar,
+        items: itemsNota,
+        idPelanggan: meta.pelanggan?.id,
+        catatan: meta.catatan,
+        uangMuka: jumlahUangMuka,
+        metodeUangMuka: metodeUangMuka,
+      ),
+      wadah.read(checkoutRepositoryProvider).buatClientRef,
+    );
+    wadah.read(refNotaProvider.notifier).state = rn;
+
     setState(() => _loading = true);
     try {
-      final hasil = await ref
+      final hasil = await wadah
           .read(pesananAksiProvider)
           .buatNota(
-            bayar: dp ? 'DP' : 'NANTI',
-            items: [
-              for (final e in items)
-                ItemNota(
-                  idProduk: e.product.id,
-                  kuantitas: e.qty,
-                  harga: e.product.harga,
-                ),
-            ],
+            bayar: bayar,
+            items: itemsNota,
             idPelanggan: meta.pelanggan?.id,
             catatan: meta.catatan,
-            uangMuka: dp ? uangMuka : null,
-            metodeUangMuka: dp ? _metodeTerpilih : null,
-            clientRef: _clientRefNota ??= ref
-                .read(checkoutRepositoryProvider)
-                .buatClientRef(),
+            uangMuka: jumlahUangMuka,
+            metodeUangMuka: metodeUangMuka,
+            clientRef: rn.ref,
           );
-      if (!mounted) return;
-      _clientRefNota = null;
-      final usaha = ref.read(profilUsahaProvider).valueOrNull;
+      wadah.read(refNotaProvider.notifier).state = null;
+      wadah.read(cartControllerProvider.notifier).clear();
+      wadah.invalidate(activeSesiProvider); // uang muka ikut rekap kas
       final struk = strukDariServer(
         hasil.nota,
         namaToko: usaha?.nama ?? 'Tuléh POS',
@@ -296,18 +349,27 @@ class _CartSheetState extends ConsumerState<CartSheet> {
         telepon: usaha?.telepon,
         catatanKaki: usaha?.strukFooter,
         logoUrl: (usaha?.strukTampilLogo ?? false) ? usaha?.logo : null,
-        demo: ref.read(demoSessionProvider).active,
+        demo: demo,
       );
-      ref.read(cartControllerProvider.notifier).clear();
-      ref.invalidate(activeSesiProvider); // uang muka ikut rekap kas
-      _uangMukaCtrl.clear();
-      setState(() {
-        _mode = ModeBayar.lunas;
-        _langkah = _Langkah.keranjang;
-      });
+      if (mounted) {
+        _uangMukaCtrl.clear();
+        if (widget.tertanam) {
+          setState(() {
+            _mode = ModeBayar.lunas;
+            _langkah = _Langkah.keranjang;
+            _loading = false;
+          });
+        } else {
+          // Ponsel: lembar keranjang ditutup seperti sesudah bayar Lunas,
+          // agar tak ada lembar kosong tertinggal di balik lembar nota.
+          Navigator.of(context).pop();
+        }
+      }
       HapticFeedback.mediumImpact();
+      final konteks = mounted ? context : navigator.context;
+      if (!konteks.mounted) return;
       await tampilkanLembar<void>(
-        context,
+        konteks,
         builder: (_) => LembarStrukPesanan(
           struk: struk,
           judul: dp ? 'Nota & uang muka tersimpan' : 'Nota tersimpan',
@@ -315,7 +377,7 @@ class _CartSheetState extends ConsumerState<CartSheet> {
       );
     } on ApiException catch (e) {
       if (!mounted) return;
-      _pesan(e.firstError() ?? e.message, gagal: true);
+      _tanganiGalatKirim(e);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -340,14 +402,18 @@ class _CartSheetState extends ConsumerState<CartSheet> {
   /// Lembar hasil transaksi: kembalian besar (yang paling dicari kasir) plus
   /// tombol cetak struk. Dipisah dari snackbar agar tidak hilang sendiri saat
   /// kasir sedang menghitung uang.
+  ///
+  /// [konteks] = lembar ini bila masih terpasang, selain itu navigator akar
+  /// (lembar terlanjur tertutup saat permintaan di jalan).
   Future<void> _tampilkanHasil(
+    BuildContext konteks,
     Struk struk,
     double kembalian, {
     bool tertunda = false,
   }) async {
-    if (!mounted) return;
+    if (!konteks.mounted) return;
     await tampilkanLembar<void>(
-      context,
+      konteks,
       builder: (_) => HasilTransaksiSheet(
         struk: struk,
         kembalian: kembalian,
@@ -494,17 +560,24 @@ class _CartSheetState extends ConsumerState<CartSheet> {
       ],
     );
 
-    if (widget.tertanam) {
-      return Padding(padding: const EdgeInsets.only(top: 10), child: isi);
-    }
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-        ),
-        child: FractionallySizedBox(heightFactor: 0.9, child: isi),
-      ),
+    // Selama bayar / nota dikirim, lembar tak boleh ditutup lewat tombol
+    // kembali atau ketuk latar: jawabannya harus sampai ke keranjang ini.
+    // Seret-tutup memanggil Navigator.pop langsung (melewati PopScope, dan
+    // `enableDrag` lembar tetap sejak dibuka) — itu ditangani _bayar dan
+    // _simpanNota yang menangkap penyedia sebelum await.
+    return PopScope(
+      canPop: !_loading,
+      child: widget.tertanam
+          ? Padding(padding: const EdgeInsets.only(top: 10), child: isi)
+          : SafeArea(
+              top: false,
+              child: Padding(
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.of(context).viewInsets.bottom,
+                ),
+                child: FractionallySizedBox(heightFactor: 0.9, child: isi),
+              ),
+            ),
     );
   }
 }

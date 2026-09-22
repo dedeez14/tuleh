@@ -71,6 +71,26 @@ Future<bool> cetakStrukDenganUmpanBalik(
   return false;
 }
 
+/// true bila Pengaturan → Printer Struk → "Cetak struk otomatis" nyala DAN
+/// printer sudah dipilih. Dipakai lembar hasil transaksi, lembar nota pesanan,
+/// dan struk pelunasan agar ketiganya tunduk pada saklar yang sama.
+///
+/// Preferensi DITUNGGU, bukan dicuplik: pada struk pertama tiap sesi aplikasi
+/// providernya masih memuat dan cuplikan seketika mengembalikan null (dulu:
+/// struk pertama diam-diam tidak tercetak). Penyimpanan bermasalah → false;
+/// kasir masih bisa menekan Cetak.
+Future<bool> cetakOtomatisDiatur(WidgetRef ref) async {
+  var pref = ref.read(printerTerpilihProvider).valueOrNull;
+  if (pref == null) {
+    try {
+      pref = await ref.read(printerTerpilihProvider.future);
+    } catch (_) {
+      return false;
+    }
+  }
+  return pref?.cetakOtomatis ?? false;
+}
+
 /// Bagikan [struk] sebagai teks lewat lembar bagikan Android.
 Future<void> bagikanStruk(BuildContext context, Struk struk) async {
   final messenger = ScaffoldMessenger.of(context);
