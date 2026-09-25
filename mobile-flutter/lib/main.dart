@@ -44,7 +44,9 @@ Future<void> main() async {
       // walau aplikasi ditutup, begitu jaringan tersedia. Versi dicatat agar
       // isolate latar mengirim X-Tuleh-Version yang sama.
       unawaited(storage.writeVersiApp(version).catchError((_) {}));
-      await SinkronLatar.siapkan();
+      // Id perangkat sinkron (device_id batch v2) dipastikan tersimpan lebih
+      // dulu di dalam siapkan(), sebelum tugas latar didaftarkan.
+      await SinkronLatar.siapkan(storage: storage);
 
       runApp(
         ProviderScope(

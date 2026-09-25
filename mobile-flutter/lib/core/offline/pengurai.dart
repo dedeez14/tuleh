@@ -10,11 +10,14 @@ import '../diagnostik/log_cincin.dart';
 import '../network/api_client.dart';
 import '../network/api_error_mapper.dart';
 import '../network/api_exception.dart';
+import '../storage/secure_storage.dart';
 import 'antrean.dart';
 import 'koneksi.dart';
 import 'operasi_batch.dart';
 import 'pemulih_tinjau.dart';
+import 'perangkat_sinkron.dart';
 import 'rujukan_lokal.dart';
+import 'salinan_interceptor.dart' show SalinanInterceptor;
 import 'sinkron_latar.dart' show KunciPengurai;
 
 /// Penyiap badan per jenis pesan, dijalankan tepat sebelum kirim (fase 3):
@@ -63,6 +66,10 @@ typedef _BarisSegmen = ({PesanAntrean p, Map<String, dynamic> op});
 ///   STOK_MASUK/OPNAME/SESI_BUKA/BILL_BUKA toko T yang lebih tua (akun sama)
 ///   yang masih antre — tanpa penalti dan tanpa timer sendiri.
 /// - Baris milik akun lain (lihat [PesanAntrean.pemilik]) dilewati.
+/// - Hasil POST (per baris maupun batch) hanya dicatat pada baris yang MASIH
+///   `MENGIRIM`: isolate lain (sinkron latar ↔ aplikasi) yang sudah
+///   mencatatnya TERKIRIM tidak diturunkan. Kunci bersama berdetak sebelum
+///   tiap POST.
 ///
 /// Mode BATCH v2 (Fase 4; aktif bila `GET /config` `sync_batch.versi ≥ 2`,
 /// [konfigBatch] & [idPerangkat] disuntik): baris berjenis [jenisBatch]
@@ -244,18 +251,26 @@ class PenguraiAntrean {
   /// `Retry-After` jawaban batch (paritas desktop `jedaRetryAfter`): detik boleh
   /// desimal (`5.5`) atau tanggal HTTP; ≤ 0 / tak sah → null; dijepit ke jeda
   /// mundur terpanjang (10 menit) agar header keliru tak membekukan antrean.
+  /// Tanggal HTTP yang sudah lewat / tepat sekarang → null (pemanggil memakai
+  /// jeda cadangannya, mis. [jedaBatchBerjalan] 5 dtk — paritas desktop: detik
+  /// 0 bukan angka positif).
   static Duration? jedaRetryAfter(Headers headers, {DateTime? sekarang}) {
     final raw = headers.value('retry-after')?.trim();
     if (raw == null || raw.isEmpty) return null;
     final detik = double.tryParse(raw);
+    final maks = jedaMundur.last;
     final Duration? jeda;
     if (detik != null) {
-      jeda = detik.isFinite && detik > 0 ? Duration(microseconds: (detik * 1000000).round()) : null;
+      // Dijepit SEBELUM dikali ke mikrodetik: nilai absurd (`1e308`) tidak
+      // meluap jadi Infinity (`round()` melempar) atau melampaui batas int.
+      jeda = detik.isFinite && detik > 0
+          ? Duration(microseconds: (min(detik, maks.inSeconds) * 1000000).round())
+          : null;
     } else {
       jeda = ApiErrorMapper.retryAfter(headers, sekarang: sekarang);
     }
-    if (jeda == null) return null;
-    return jeda > jedaMundur.last ? jedaMundur.last : jeda;
+    if (jeda == null || jeda <= Duration.zero) return null;
+    return jeda > maks ? maks : jeda;
   }
 
   /// Baris yang boleh dikirim dengan token saat ini.
@@ -346,7 +361,8 @@ class PenguraiAntrean {
   /// Awal setiap putaran: induk bisa berubah di luar pengurai (pemulih
   /// "mungkin sudah sampai" menulis store langsung — TERKIRIM bila cocok,
   /// MENUNGGU bila belum tercatat). Anak `[INDUK_TINJAU]` yang induknya kini
-  /// tidak TINJAU kembali MENUNGGU (penahan menanganinya); anak `[PRASYARAT]`
+  /// MENUNGGU atau TERKIRIM kembali MENUNGGU (penahan menanganinya; induk
+  /// MENGIRIM belum diputuskan → anak tetap TINJAU); anak `[PRASYARAT]`
   /// dari induk TERKIRIM lepas dari jeda & galatnya (paritas desktop
   /// `_pulihkanTurunan`). true bila ada yang berubah.
   Future<bool> _pulihkanTurunanPutaran(List<PesanAntrean> semua) async {
@@ -357,7 +373,8 @@ class PenguraiAntrean {
       final induk = ref == null ? null : status[ref];
       if (induk == null) continue;
       final kode = kodeGalat(q.galatTerakhir);
-      if (q.status == StatusAntrean.tinjau && kode == 'INDUK_TINJAU' && induk != StatusAntrean.tinjau) {
+      final indukPulih = induk == StatusAntrean.menunggu || induk == StatusAntrean.terkirim;
+      if (q.status == StatusAntrean.tinjau && kode == 'INDUK_TINJAU' && indukPulih) {
         await store.perbarui(
           q.clientRef,
           status: StatusAntrean.menunggu,
@@ -476,9 +493,6 @@ class PenguraiAntrean {
       ukuran = 0;
       final r = await _kirimSegmen(isi, deviceId, aturan);
       terkirim += r.terkirim;
-      // Detak kunci bersama: putaran berisi beberapa segmen × 60 dtk tidak
-      // boleh membuat isolate latar menganggap kunci basi (3 menit).
-      await kunci?.kunci();
       return r.akhir;
     }
 
@@ -682,19 +696,27 @@ class PenguraiAntrean {
   bool _batchTimeout = false;
 
   /// null = tidak ada jawaban HTTP (jaringan putus / timeout — lihat
-  /// [_batchTimeout]). `toko_id: null` menekan toko AKTIF yang disisipkan
-  /// pencegat Dio aplikasi (`api_client.dart` hanya menambah bila kuncinya
-  /// belum ada): toko tiap op ada di `payload.toko_id` (kritik B-17, paritas
-  /// desktop `query: {toko_id: undefined}`); server membaca `?toko_id` kosong
-  /// sebagai "tidak dikirim".
+  /// [_batchTimeout]). Tanda `extra`:
+  /// - [ekstraTanpaTokoAktif]: pencegat Dio aplikasi (`api_client.dart`) tidak
+  ///   menyisipkan `?toko_id` toko AKTIF — permintaan batch sama sekali tanpa
+  ///   `?toko_id`; toko tiap op ada di `payload.toko_id` (kritik B-17, paritas
+  ///   desktop `query: {toko_id: undefined}`);
+  /// - [SalinanInterceptor.tandaAntreanBatch]: timeout setelah terkirim & 5xx
+  ///   (termasuk 503 `BATCH_TIDAK_TERSEDIA`) tidak menandai offline — dinilai
+  ///   di [_olahJawabanBatch].
   Future<Response<dynamic>?> _postBatch(Map<String, dynamic> badan) async {
     _batchTimeout = false;
+    // Detak kunci bersama SEBELUM tiap POST: putaran berisi beberapa segmen ×
+    // 60 dtk tidak boleh membuat isolate lain menganggap kunci basi (3 menit).
+    await kunci?.kunci();
     try {
       return await dio.post<dynamic>(
         jalurSyncBatch,
         data: badan,
-        queryParameters: const {'toko_id': null},
-        options: Options(receiveTimeout: batasTungguBatch),
+        options: Options(
+          receiveTimeout: batasTungguBatch,
+          extra: const {SalinanInterceptor.tandaAntreanBatch: true, ekstraTanpaTokoAktif: true},
+        ),
       );
     } on DioException catch (e) {
       final jawaban = e.response;
@@ -714,12 +736,29 @@ class PenguraiAntrean {
     return k is List && k.isNotEmpty ? '${k.first}' : null;
   }
 
-  /// Jawaban satu POST batch → status semua baris segmen.
+  /// Baris yang MASIH `MENGIRIM` setelah POST (versi terbaru dari store).
+  /// Selama POST berjalan isolate lain (sinkron latar ↔ aplikasi) bisa sudah
+  /// mencatat baris itu TERKIRIM, atau pengguna membatalkan / mengirim ulang:
+  /// hasil kiriman ini tidak boleh menurunkannya. null = lewati.
+  Future<PesanAntrean?> _masihMengirim(PesanAntrean p) async {
+    final q = await store.cari(p.clientRef);
+    if (q != null && q.status == StatusAntrean.mengirim) return q;
+    LogCincin.global.catat('Antrean ${p.jenis} ${p.clientRef}: sudah diputuskan di luar kiriman ini — hasilnya diabaikan', tingkat: 'W');
+    return null;
+  }
+
+  /// Jawaban satu POST batch → status semua baris segmen yang masih
+  /// `MENGIRIM` (lihat [_masihMengirim]).
   Future<({int terkirim, _Hasil akhir})> _olahJawabanBatch(
-    List<_BarisSegmen> isi,
+    List<_BarisSegmen> dikirim,
     Response<dynamic>? res,
     Future<BatasAntrean> Function() aturan,
   ) async {
+    final isi = <_BarisSegmen>[];
+    for (final x in dikirim) {
+      final q = await _masihMengirim(x.p);
+      if (q != null) isi.add((p: q, op: x.op));
+    }
     final baris = [for (final x in isi) x.p];
     if (res == null && _batchTimeout) {
       // Batas tunggu habis setelah data terkirim (kontrak §13.5, paritas desktop
@@ -775,8 +814,10 @@ class PenguraiAntrean {
     }
     if (code == 429 && kode == 'BATCH_BERJALAN') {
       // Batch lain akun ini sedang diproses: tidak ada POST batch dari perangkat
-      // ini selama `Retry-After` (bawaan 5 dtk, dijepit ≤ 10 menit).
-      final nanti = _sekarang().add(jedaRetryAfter(res.headers) ?? jedaBatchBerjalan);
+      // ini selama `Retry-After` (bawaan 5 dtk, dijepit ≤ 10 menit; tanggal HTTP
+      // yang sudah lewat → bawaan).
+      final mulai = _sekarang();
+      final nanti = mulai.add(jedaRetryAfter(res.headers, sekarang: mulai) ?? jedaBatchBerjalan);
       _jedaBatchSampai = nanti;
       for (final p in baris) {
         await store.perbarui(
@@ -799,17 +840,21 @@ class PenguraiAntrean {
       return (terkirim: 0, akhir: _Hasil.berhenti);
     }
     if (code == 413 || kode == 'BATCH_TERLALU_BESAR') {
-      if (baris.length == 1) {
-        await _tinjau(
-          baris.single,
-          galatBerkode(
-            'BATCH_TERLALU_BESAR',
-            'Data ini terlalu besar untuk dikirim ke server. Batalkan lalu catat ulang '
-                'dalam beberapa transaksi, atau hubungi dukungan.',
-          ),
-        );
+      // Ukuran yang ditolak = segmen yang DIKIRIM (termasuk baris yang kini
+      // sudah diputuskan isolate lain).
+      if (dikirim.length == 1) {
+        for (final p in baris) {
+          await _tinjau(
+            p,
+            galatBerkode(
+              'BATCH_TERLALU_BESAR',
+              'Data ini terlalu besar untuk dikirim ke server. Batalkan lalu catat ulang '
+                  'dalam beberapa transaksi, atau hubungi dukungan.',
+            ),
+          );
+        }
       } else {
-        _batasOpAdaptif = max(1, baris.length ~/ 2);
+        _batasOpAdaptif = max(1, dikirim.length ~/ 2);
         for (final p in baris) {
           await _kembalikanMenunggu(p);
         }
@@ -1032,14 +1077,17 @@ class PenguraiAntrean {
     }
 
     await store.perbarui(p.clientRef, status: StatusAntrean.mengirim);
-    Response<dynamic> res;
+    Response<dynamic>? jawabanPost;
+    var timeout = false;
     var postDimulai = false;
     try {
       final siapkan = penyiap[p.jenis];
       if (siapkan != null) body = await siapkan(body);
       postDimulai = true;
+      // Detak kunci bersama SEBELUM tiap POST (lihat [_postBatch]).
+      await kunci?.kunci();
       // Atas nama toko saat pesan dibuat (pencegat app melewati bila sudah ada).
-      res = await dio.post<dynamic>(
+      jawabanPost = await dio.post<dynamic>(
         path,
         data: body,
         queryParameters: p.tokoId == null ? null : {'toko_id': p.tokoId},
@@ -1050,19 +1098,37 @@ class PenguraiAntrean {
       // diulang. Jadi timeout "mungkin sudah sampai" cukup dikirim ulang.
       final jawaban = e.response;
       if (e.type == DioExceptionType.badResponse && jawaban != null) {
-        res = jawaban; // Dio ber-validateStatus ketat: klasifikasikan dari status
-      } else if (postDimulai &&
-          (e.type == DioExceptionType.receiveTimeout || e.type == DioExceptionType.sendTimeout)) {
+        jawabanPost = jawaban; // Dio ber-validateStatus ketat: klasifikasikan dari status
+      } else {
+        timeout = postDimulai &&
+            (e.type == DioExceptionType.receiveTimeout || e.type == DioExceptionType.sendTimeout);
+      }
+    }
+
+    // Hanya baris yang MASIH `MENGIRIM` yang dinilai (lihat [_masihMengirim]).
+    final segar = await _masihMengirim(p);
+    if (segar == null) {
+      setelahBerubah?.call();
+      if (jawabanPost == null && !timeout) {
+        // Server tetap tak terjangkau bagi baris berikutnya: putaran berhenti.
+        koneksi?.tandaiOffline();
+        return _Hasil.berhenti;
+      }
+      final kodeJawab = jawabanPost?.statusCode ?? 0;
+      return kodeJawab == 401 || kodeJawab == 402 || kodeJawab == 426 ? _Hasil.henti : _Hasil.lanjut;
+    }
+    if (jawabanPost == null) {
+      if (timeout) {
         // Batas tunggu habis SETELAH POST terkirim (P-3c, paritas desktop
         // TIMEOUT): mundur per baris tanpa menandai offline, lanjut ke baris
         // lain; umur lewat batas `/config` → TINJAU "mungkin sudah sampai".
-        final tinjau = await _timeoutSetelahKirim(p, await aturan());
+        final tinjau = await _timeoutSetelahKirim(segar, await aturan());
         setelahBerubah?.call();
         return tinjau ? _Hasil.lanjut : _Hasil.gangguanServer;
-      } else {
-        return _gagalJaringan(p);
       }
+      return _gagalJaringan(segar);
     }
+    final res = jawabanPost;
 
     final code = res.statusCode ?? 0;
     final jawabanBody = res.data is Map ? Map<String, dynamic>.from(res.data as Map) : const <String, dynamic>{};
@@ -1083,9 +1149,9 @@ class PenguraiAntrean {
       return _Hasil.terkirim;
     }
     if (code > 0 && statusGangguan(code)) {
-      return _gangguanServer(p, jawabanBody, code, ApiErrorMapper.retryAfter(res.headers), await aturan());
+      return _gangguanServer(segar, jawabanBody, code, ApiErrorMapper.retryAfter(res.headers), await aturan());
     }
-    if (code == 0) return _gagalJaringan(p);
+    if (code == 0) return _gagalJaringan(segar);
     if (code == 401 || code == 402 || code == 426) {
       await store.perbarui(p.clientRef, status: StatusAntrean.menunggu, galatTerakhir: _pesanHenti(code, jawabanBody));
       LogCincin.global.catat('Antrean ${p.jenis} ${p.clientRef}: berhenti HTTP $code');
@@ -1306,6 +1372,7 @@ Future<BatasAntrean?> ambilBatasAntrean(Dio dio) async {
 
 final penguraiProvider = Provider<PenguraiAntrean>((ref) {
   final dio = ref.watch(dioProvider);
+  final storage = ref.watch(secureStorageProvider);
   final p = PenguraiAntrean(
     store: ref.watch(antreanStoreProvider),
     dio: dio,
@@ -1315,6 +1382,10 @@ final penguraiProvider = Provider<PenguraiAntrean>((ref) {
     kunci: Platform.isAndroid ? KunciPengurai() : null,
     pemilik: () => ref.read(akunAktifProvider),
     batas: () => ambilBatasAntrean(dio),
+    // Mode batch v2 (Fase 4): `/config` `sync_batch` (salinan baca melayani
+    // start dingin tanpa jaringan) + id perangkat dari secure storage.
+    konfigBatch: () => ambilKonfigSyncBatch(dio),
+    idPerangkat: () => idPerangkatSinkron(storage),
   );
   ref.onDispose(p.hentikan);
   return p;

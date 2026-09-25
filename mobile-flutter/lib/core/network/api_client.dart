@@ -50,6 +50,12 @@ final langgananTerkunciProvider = StateProvider<LanggananTerkunci?>((ref) => nul
 /// Jalur yang 401-nya berarti "kredensial salah", bukan "sesi berakhir".
 const _jalurTanpaSesi = ['/auth/login'];
 
+/// Kunci `RequestOptions.extra`: true = pencegat TIDAK menyisipkan `?toko_id`
+/// toko aktif sama sekali (bukan `?toko_id` kosong). Dipakai
+/// `POST /sync/v2/batch`: toko tiap operasi ada di `payload.toko_id`-nya
+/// (kritik B-17, paritas desktop `query: {toko_id: undefined}`).
+const ekstraTanpaTokoAktif = 'tanpa_toko_aktif';
+
 /// Dio terkonfigurasi: base URL MOVERA, interceptor header versi/platform +
 /// token + toko aktif, deteksi 426/401/402. validateStatus longgar → envelope
 /// dinormalisasi di lapisan data (bukan lempar DioException untuk 4xx/5xx);
@@ -78,11 +84,13 @@ final dioProvider = Provider<Dio>((ref) {
         final token = await storage.readToken();
         if (token != null && token.isNotEmpty) {
           options.headers['Authorization'] = 'Bearer $token';
-          final tokoId = await storage.readActiveTokoId();
-          if (tokoId != null &&
-              tokoId.isNotEmpty &&
-              !options.queryParameters.containsKey('toko_id')) {
-            options.queryParameters['toko_id'] = tokoId;
+          if (options.extra[ekstraTanpaTokoAktif] != true) {
+            final tokoId = await storage.readActiveTokoId();
+            if (tokoId != null &&
+                tokoId.isNotEmpty &&
+                !options.queryParameters.containsKey('toko_id')) {
+              options.queryParameters['toko_id'] = tokoId;
+            }
           }
         }
         handler.next(options);

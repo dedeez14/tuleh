@@ -468,6 +468,32 @@ void main() {
     expect((await b.cari('anak'))!.status, StatusAntrean.terkirim);
   });
 
+  test('awal putaran (paritas desktop): anak INDUK_TINJAU pulih HANYA bila induk MENUNGGU/TERKIRIM — induk MENGIRIM belum diputuskan', () async {
+    // Induk MENGIRIM (tertinggal dari putaran yang terputus) → anak tetap TINJAU.
+    final a = AntreanMemori();
+    await _induk(a);
+    await _anakRefund(a);
+    await a.perbarui('induk', status: StatusAntrean.mengirim);
+    await a.perbarui('anak', status: StatusAntrean.tinjau, galatTerakhir: galatBerkode('INDUK_TINJAU', PenguraiAntrean.pesanIndukTinjau));
+    final s = _Server((o) => DioExceptionType.connectionError);
+    await _pengurai(a, s).jalankan();
+    expect([for (final o in s.kiriman) o.path], ['/transaksi/checkout'], reason: 'induk MENGIRIM tetap dikirim ulang');
+    final anak = (await a.cari('anak'))!;
+    expect(anak.status, StatusAntrean.tinjau);
+    expect(kodeGalat(anak.galatTerakhir), 'INDUK_TINJAU');
+
+    // Induk TERKIRIM → anak pulih dan langsung terkirim atas id server induk.
+    final b = AntreanMemori();
+    await _induk(b);
+    await _anakRefund(b);
+    await b.selesai('induk', hasil: {'id': 'SRV1', 'items': [{'id': 'I-a'}, {'id': 'I-b'}]});
+    await b.perbarui('anak', status: StatusAntrean.tinjau, galatTerakhir: galatBerkode('INDUK_TINJAU', PenguraiAntrean.pesanIndukTinjau));
+    final s2 = _Server((o) => (201, {'success': true, 'data': {'id': 'RF1'}}));
+    await _pengurai(b, s2).jalankan();
+    expect([for (final o in s2.kiriman) o.path], ['/transaksi/SRV1/refund']);
+    expect((await b.cari('anak'))!.status, StatusAntrean.terkirim);
+  });
+
   test('anak PRASYARAT yang dibebaskan: jeda & galat basi dibersihkan', () async {
     final a = AntreanMemori();
     await _induk(a);

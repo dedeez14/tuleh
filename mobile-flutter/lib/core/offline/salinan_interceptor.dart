@@ -24,6 +24,12 @@ import 'salinan_store.dart';
 /// - Jawaban lain (2xx, 4xx) = server terjangkau → online. 429 berkode domain
 ///   (`errors.kode`, mis. kuncian PIN) termasuk di sini: itu penolakan yang
 ///   disengaja server, bukan gangguan.
+/// - Permintaan batch antrean ([tandaAntreanBatch] = true di `extra`, yaitu
+///   `POST /sync/v2/batch` dari pengurai): batas tunggu habis SETELAH terkirim
+///   (receive/send timeout), 503 `BATCH_TIDAK_TERSEDIA`, dan 5xx/408 lain TIDAK
+///   menandai offline — pengurai sendiri yang menilainya (mundur per baris /
+///   kembali per baris, paritas desktop TIMEOUT); galat koneksi dan 429 tanpa
+///   kode (batas laju) tetap menandai offline.
 /// - Saat sudah diketahui offline, GET dijawab dari salinan SEGERA tanpa
 ///   menunggu timeout; permintaan tulis tetap dicoba ke jaringan (fase 2:
 ///   antrean).
@@ -47,6 +53,17 @@ class SalinanInterceptor extends Interceptor {
   final List<String> jangan;
 
   static const headerSalinan = 'x-tuleh-salinan';
+
+  /// Kunci `RequestOptions.extra` penanda `POST /sync/v2/batch` pengurai
+  /// antrean (lihat aturan batch di atas).
+  static const tandaAntreanBatch = 'antrean_batch';
+
+  static bool _batchAntrean(RequestOptions o) => o.extra[tandaAntreanBatch] == true;
+
+  /// Batas tunggu habis setelah permintaan terkirim (server mungkin sudah
+  /// memprosesnya) — beda dengan gagal tersambung.
+  static bool _timeoutSetelahKirim(DioException e) =>
+      e.type == DioExceptionType.receiveTimeout || e.type == DioExceptionType.sendTimeout;
 
   bool _bolehSalin(RequestOptions o) {
     if (o.method.toUpperCase() != 'GET') return false;
@@ -141,7 +158,9 @@ class SalinanInterceptor extends Interceptor {
           return;
         }
       }
-      koneksi?.tandaiOffline();
+      // Batch antrean: 5xx/408 (termasuk 503 BATCH_TIDAK_TERSEDIA) dinilai
+      // pengurai, bukan tanda server tak terjangkau; 429 tanpa kode tetap offline.
+      if (!_batchAntrean(o) || code == 429) koneksi?.tandaiOffline();
       handler.next(response);
       return;
     }
@@ -173,7 +192,11 @@ class SalinanInterceptor extends Interceptor {
         }
       }
       // Gagal jaringan apa pun (termasuk tulis) = offline; pita status tampil.
-      koneksi?.tandaiOffline();
+      // Kecuali batch antrean yang batas tunggunya habis SETELAH terkirim:
+      // server lambat, bukan tak terjangkau (pengurai memundurkan barisnya).
+      if (!(_batchAntrean(err.requestOptions) && _timeoutSetelahKirim(err))) {
+        koneksi?.tandaiOffline();
+      }
     }
     handler.next(err);
   }

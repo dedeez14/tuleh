@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:math';
 
+import '../diagnostik/log_cincin.dart';
 import '../storage/secure_storage.dart';
 
 /// Kunci nilai bebas secure storage untuk id perangkat sinkron. Disimpan
@@ -46,6 +48,22 @@ Future<String> _muatAtauBuat(SecureStorage storage, Random acak) async {
   } catch (_) {
     _janji[storage] = null;
     rethrow;
+  }
+}
+
+/// Startup isolate utama, SEBELUM tugas WorkManager didaftarkan
+/// (`SinkronLatar.siapkan`): muat atau buat id perangkat sinkron sekali agar
+/// isolate latar membaca id yang sudah tersimpan, bukan membuat id kedua
+/// bersamaan. Gagal / lewat [batas] tidak menghambat startup — dicatat ke log
+/// diagnostik; id dicoba lagi saat pertama dipakai (pengurai / nomor lokal).
+Future<void> pastikanIdPerangkatSinkron(
+  SecureStorage storage, {
+  Duration batas = const Duration(seconds: 3),
+}) async {
+  try {
+    await idPerangkatSinkron(storage).timeout(batas);
+  } catch (e) {
+    LogCincin.global.catat('Id perangkat sinkron belum tersimpan saat startup (${e.runtimeType})', tingkat: 'W');
   }
 }
 

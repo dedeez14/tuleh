@@ -10,7 +10,9 @@ import 'package:workmanager/workmanager.dart';
 import '../constants/app_config.dart';
 import '../storage/secure_storage.dart';
 import 'antrean.dart';
+import 'operasi_batch.dart';
 import 'pengurai.dart';
+import 'perangkat_sinkron.dart';
 import 'salinan_db.dart';
 
 /// Sinkronisasi latar belakang (WorkManager): antrean kirim tetap diproses
@@ -24,8 +26,15 @@ class SinkronLatar {
 
   static bool _siap = false;
 
-  /// Dipanggil sekali dari main(): daftarkan dispatcher + tugas berkala.
-  static Future<void> siapkan() async {
+  /// Dipanggil sekali dari main(): pastikan id perangkat sinkron tersimpan
+  /// ([storage] = penyimpanan isolate utama), lalu daftarkan dispatcher +
+  /// tugas berkala.
+  static Future<void> siapkan({SecureStorage? storage}) async {
+    // Id perangkat dibuat di isolate utama SEBELUM tugas WorkManager mana pun
+    // didaftarkan: tanpa ini isolate latar yang jalan lebih dulu bisa membuat
+    // id sendiri bersamaan dengan aplikasi → dua device_id untuk satu antrean
+    // (device_seq = `outbox.urut` bertabrakan). Gagal tidak menghambat startup.
+    if (storage != null) await pastikanIdPerangkatSinkron(storage);
     if (!Platform.isAndroid) return;
     try {
       await Workmanager().initialize(sinkronLatarDispatcher);
@@ -100,7 +109,9 @@ Map<String, String> headerSinkronLatar({required String token, String? versi}) =
 /// Header sama dengan klien latar depan (`X-Tuleh-Version`, `X-Tuleh-Platform`)
 /// agar penegakan versi minimum (426) & jalur rilis server juga berlaku di
 /// sini; dan hanya antrean milik akun token ([pemilik] = akun terakhir yang
-/// masuk) yang dikirim.
+/// masuk) yang dikirim. Mode batch v2 (Fase 4) diputuskan di sini juga dari
+/// `GET /config`, dengan id perangkat dari secure storage yang sama
+/// ([storage] = penyimpanan tiruan di test).
 Future<bool> jalankanSinkronLatar({
   SalinanDb? db,
   Dio? dio,
@@ -109,15 +120,16 @@ Future<bool> jalankanSinkronLatar({
   String? versi,
   String? pemilik,
   bool pemilikDiketahui = false,
+  SecureStorage? storage,
 }) async {
-  final storage = SecureStorage(const FlutterSecureStorage());
-  token ??= await storage.readToken();
+  final penyimpanan = storage ?? SecureStorage(const FlutterSecureStorage());
+  token ??= await penyimpanan.readToken();
   if (token == null || token.isEmpty) return true;
   if (token == 'demo-token') return true; // Mode Demo tak pernah punya antrean server
-  versi ??= await versiAplikasiLatar(storage);
+  versi ??= await versiAplikasiLatar(penyimpanan);
   if (!pemilikDiketahui) {
     try {
-      pemilik = await storage.readAkunTerakhir();
+      pemilik = await penyimpanan.readAkunTerakhir();
     } catch (_) {
       pemilik = null;
     }
@@ -146,8 +158,14 @@ Future<bool> jalankanSinkronLatar({
       dio: http,
       koneksi: null,
       penyiap: {'SESI_BUKA': (b) => isiGudangId(http, b)},
+      // Kunci yang sama: pengurai berdetak sebelum tiap POST sehingga putaran
+      // panjang (beberapa segmen × 60 dtk) tidak dianggap basi oleh tugas
+      // WorkManager lain.
+      kunci: k,
       pemilik: () => akun,
       batas: () => ambilBatasAntrean(http),
+      konfigBatch: () => ambilKonfigSyncBatch(http),
+      idPerangkat: () => idPerangkatSinkron(penyimpanan),
     );
     await k.kunci();
     try {

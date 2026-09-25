@@ -8,11 +8,13 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tuleh_pos/core/network/api_client.dart' show ekstraTanpaTokoAktif;
 import 'package:tuleh_pos/core/offline/antrean.dart';
 import 'package:tuleh_pos/core/offline/koneksi.dart';
 import 'package:tuleh_pos/core/offline/operasi_batch.dart';
 import 'package:tuleh_pos/core/offline/pemulih_tinjau.dart';
 import 'package:tuleh_pos/core/offline/pengurai.dart';
+import 'package:tuleh_pos/core/offline/salinan_interceptor.dart';
 import 'package:tuleh_pos/core/offline/sinkron_latar.dart';
 
 class _Penanda implements PenandaKoneksi {
@@ -502,20 +504,16 @@ void main() {
     }
   });
 
-  test('batch tidak membawa ?toko_id cadangan: pencegat app melewatinya, toko tiap op di payload (paritas desktop)', () async {
+  test('batch sama sekali tanpa ?toko_id (bukan ?toko_id kosong): tanda untuk pencegat app & SalinanInterceptor, toko tiap op di payload (paritas desktop)', () async {
     final a = AntreanMemori();
     await _baris(a, 'c1');
     final s = _Server();
-    final p = _pengurai(a, s);
-    // Tiruan pencegat api_client.dart: menambah toko AKTIF hanya bila kunci toko_id belum ada.
-    p.dio.interceptors.add(InterceptorsWrapper(onRequest: (o, h) {
-      if (!o.queryParameters.containsKey('toko_id')) o.queryParameters['toko_id'] = 'T-AKTIF';
-      h.next(o);
-    }));
-    await p.jalankan();
+    await _pengurai(a, s).jalankan();
     final o = s.diminta.firstWhere((x) => x.path == jalurSyncBatch);
-    expect(o.queryParameters['toko_id'], isNull);
-    expect(o.uri.toString(), isNot(contains('T-AKTIF')));
+    expect(o.uri.query, isEmpty, reason: '${o.uri}');
+    // Rantai dioProvider asli (toko aktif tidak disisipkan): offline_batch_wiring_test.
+    expect(o.extra[ekstraTanpaTokoAktif], isTrue);
+    expect(o.extra[SalinanInterceptor.tandaAntreanBatch], isTrue);
     expect((_ops(o).single['payload'] as Map)['toko_id'], 'T1');
   });
 
@@ -602,7 +600,7 @@ void main() {
     }
     final kunci = _KunciHitung();
     await _pengurai(a, _Server(), kunci: kunci).jalankan();
-    expect(kunci.kunciDipanggil, 3, reason: 'awal putaran + setelah dua segmen');
+    expect(kunci.kunciDipanggil, 3, reason: 'awal putaran + sebelum POST tiap segmen (dua segmen)');
   });
 
   test('pemilik: hanya baris akun token yang masuk segmen', () async {
@@ -674,6 +672,29 @@ void main() {
       expect(PenguraiAntrean.jedaRetryAfter(h(salah)), isNull, reason: salah);
     }
     expect(PenguraiAntrean.jedaRetryAfter(Headers()), isNull);
+    // Nilai absurd dijepit ke 600 dtk SEBELUM dikali ke mikrodetik (tanpa luapan / lemparan).
+    for (final absurd in ['1e308', '1e18', '1e12', '600.0000001']) {
+      expect(PenguraiAntrean.jedaRetryAfter(h(absurd)), const Duration(minutes: 10), reason: absurd);
+    }
+    // Tanggal HTTP tepat sekarang / sudah lewat → null (pemanggil memakai jeda cadangan).
+    expect(PenguraiAntrean.jedaRetryAfter(h(HttpDate.format(kini)), sekarang: kini), isNull);
+    expect(PenguraiAntrean.jedaRetryAfter(h(HttpDate.format(kini.subtract(const Duration(minutes: 1)))), sekarang: kini), isNull);
+  });
+
+  test('429 BATCH_BERJALAN dengan Retry-After tanggal HTTP yang ≤ sekarang → jeda cadangan 5 dtk (paritas desktop), dihitung dari jam pengurai', () async {
+    // Jam pengurai sengaja di masa depan terhadap jam dinding: tanggal harus
+    // dibandingkan dengan jam pengurai, bukan DateTime.now().
+    final kini = DateTime.utc(2030, 1, 2, 3, 4, 5);
+    for (final tanggal in [kini, kini.subtract(const Duration(seconds: 30))]) {
+      final a = AntreanMemori();
+      await _baris(a, 'c1');
+      final s = _Server((o) => o.path == jalurSyncBatch
+          ? (429, {'success': false, 'message': 'Masih diproses', 'errors': {'kode': ['BATCH_BERJALAN']}}, {'retry-after': [HttpDate.format(tanggal)]})
+          : _terimaSemua(o));
+      await _pengurai(a, s, sekarang: () => kini).jalankan();
+      final c1 = (await a.cari('c1'))!;
+      expect(c1.cobaLagiSetelah, kini.add(PenguraiAntrean.jedaBatchBerjalan), reason: '$tanggal');
+    }
   });
 
   test('per baris: timeout setelah POST terkirim → mundur baris itu saja tanpa menandai offline, lanjut ke baris lain; lewat umur → TINJAU "setelah data dikirim"', () async {
