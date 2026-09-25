@@ -50,8 +50,17 @@ class _Server implements HttpClientAdapter {
     diminta.add(o);
     final r = jawab(o);
     if (r is DioExceptionType) throw DioException(requestOptions: o, type: r);
-    final (int code, Object body) = r as (int, Object);
-    return ResponseBody.fromString(jsonEncode(body), code, headers: {Headers.contentTypeHeader: [Headers.jsonContentType]});
+    // (status, badan) atau (status, badan, header tambahan) — mis. Retry-After.
+    final (int code, Object body, Map<String, List<String>> kepala) = switch (r) {
+      (final int c, final Object b, final Map<String, List<String>> h) => (c, b, h),
+      (final int c, final Object b) => (c, b, const <String, List<String>>{}),
+      _ => throw StateError('Jawaban tiruan tidak dikenal: $r'),
+    };
+    return ResponseBody.fromString(
+      jsonEncode(body),
+      code,
+      headers: {Headers.contentTypeHeader: [Headers.jsonContentType], ...kepala},
+    );
   }
 
   @override
@@ -398,19 +407,97 @@ void main() {
     expect(baris.single.status, StatusAntrean.terkirim);
   });
 
-  test('429 BATCH_BERJALAN → tunda 3 dtk tanpa menaikkan percobaan; baris sesudahnya tidak dikirim putaran ini', () async {
+  test('429 BATCH_BERJALAN → tunggu Retry-After (bawaan 5 dtk) tanpa menaikkan percobaan; baris sesudahnya tidak dikirim putaran ini', () async {
+    // Kontrak §13.5 / K-7: server mengirim `Retry-After: 5`; tanpa header = 5 dtk (paritas desktop).
+    expect(PenguraiAntrean.jedaBatchBerjalan, const Duration(seconds: 5));
+    for (final (kepala, jeda) in <(Map<String, List<String>>, Duration)>[
+      (const {}, PenguraiAntrean.jedaBatchBerjalan),
+      (const {'retry-after': ['12']}, const Duration(seconds: 12)),
+    ]) {
+      final a = AntreanMemori();
+      await _baris(a, 'c1');
+      await _baris(a, 'x1', jenis: 'PENGELUARAN');
+      final s = _Server((o) => o.path == jalurSyncBatch
+          ? (429, {'success': false, 'message': 'Masih diproses', 'errors': {'kode': ['BATCH_BERJALAN']}}, kepala)
+          : _terimaSemua(o));
+      await _pengurai(a, s).jalankan();
+      expect(s.log, ['batch:c1'], reason: '$kepala');
+      final c1 = (await a.cari('c1'))!;
+      expect(c1.status, StatusAntrean.menunggu);
+      expect(c1.cobaLagiSetelah, _kini.add(jeda), reason: '$kepala');
+      expect(c1.percobaan, 0);
+      expect(kodeGalat(c1.galatTerakhir), 'BATCH_BERJALAN');
+      expect((await a.cari('x1'))!.status, StatusAntrean.menunggu);
+    }
+  });
+
+  test('timeout batch menghormati batas umur /config: baris yang terlalu lama → TINJAU, baris muda tetap mundur', () async {
     final a = AntreanMemori();
-    await _baris(a, 'c1');
-    await _baris(a, 'x1', jenis: 'PENGELUARAN');
-    final s = _Server((o) => o.path == jalurSyncBatch ? (429, {'success': false, 'message': 'Masih diproses', 'errors': {'kode': ['BATCH_BERJALAN']}}) : _terimaSemua(o));
-    await _pengurai(a, s).jalankan();
-    expect(s.log, ['batch:c1']);
-    final c1 = (await a.cari('c1'))!;
-    expect(c1.status, StatusAntrean.menunggu);
-    expect(c1.cobaLagiSetelah, _kini.add(PenguraiAntrean.jedaTunda));
-    expect(c1.percobaan, 0);
-    expect(kodeGalat(c1.galatTerakhir), 'BATCH_BERJALAN');
-    expect((await a.cari('x1'))!.status, StatusAntrean.menunggu);
+    await _baris(a, 'tua'); // dibuat 09:00
+    await a.antrekan(PesanAntrean(
+      urut: 0, clientRef: 'muda', jenis: 'CHECKOUT', path: '/transaksi/checkout',
+      body: const {'client_ref': 'muda'}, dibuat: DateTime(2026, 9, 24, 11, 30), tokoId: 'T1',
+    ));
+    final kini = DateTime(2026, 9, 24, 12);
+    final penanda = _Penanda();
+    final s = _Server((o) => o.path == jalurSyncBatch ? DioExceptionType.receiveTimeout : _terimaSemua(o));
+    await _pengurai(a, s, penanda: penanda, sekarang: () => kini, batas: () async => const BatasAntrean(maksUmurJam: 2)).jalankan();
+    expect(s.log, ['batch:tua,muda']);
+    final tua = (await a.cari('tua'))!;
+    expect(tua.status, StatusAntrean.tinjau);
+    expect(tua.percobaan, 1);
+    expect(tua.galatServer, 0, reason: 'timeout bukan galat server');
+    expect(tua.galatTerakhir, contains('tidak menjawab tepat waktu'));
+    expect(tua.galatTerakhir, contains('lebih dari 2 jam'));
+    expect(tua.cobaLagiSetelah, isNull);
+    final muda = (await a.cari('muda'))!;
+    expect(muda.status, StatusAntrean.menunggu);
+    expect(muda.percobaan, 1);
+    expect(muda.cobaLagiSetelah, kini.add(PenguraiAntrean.mundur(1)));
+    expect(penanda.offline, isFalse);
+  });
+
+  test('umur_detik dihitung per operasi saat benar-benar dikirim, bukan dari awal putaran', () async {
+    final a = AntreanMemori();
+    await _baris(a, 'c1'); // dibuat 09:00
+    await _baris(a, 'c2');
+    var kini = _kini; // 10:00
+    final s = _Server();
+    s.jawab = (o) {
+      if (o.path != jalurSyncBatch) return _terimaSemua(o);
+      kini = kini.add(const Duration(seconds: 30)); // server lambat menjawab
+      return s.batch.length == 1
+          ? (409, {'success': false, 'message': 'Bentrok', 'errors': {'kode': ['BATCH_REF_BENTROK']}})
+          : _terimaSemua(o);
+    };
+    await _pengurai(a, s, konfig: const KonfigSyncBatch(versi: 2, maksOperasi: 1), sekarang: () => kini).jalankan();
+    expect(
+      [for (final b in s.batch) for (final op in b['operations'] as List) [(op as Map)['idempotency_key'], op['umur_detik']]],
+      [['c1', 3600], ['c1', 3630], ['c2', 3660]],
+    );
+  });
+
+  test('jalur non-item (413 dibelah, timeout, jaringan) tidak meninggalkan kode lama di galat (paritas desktop kode:null)', () async {
+    for (final jawab in <Object>[
+      (413, {'success': false, 'message': 'Terlalu besar', 'errors': {'kode': ['BATCH_TERLALU_BESAR']}}),
+      DioExceptionType.receiveTimeout,
+      DioExceptionType.connectionError,
+    ]) {
+      final a = AntreanMemori();
+      await _baris(a, 'c1');
+      await _baris(a, 'c2');
+      for (final r in ['c1', 'c2']) {
+        await a.perbarui(r, galatTerakhir: galatBerkode('DITUNDA', 'Ditunda server (batas waktu kiriman); dikirim lagi sebentar.'));
+      }
+      final s = _Server((o) => o.path == jalurSyncBatch ? jawab : _terimaSemua(o));
+      await _pengurai(a, s).jalankan();
+      for (final r in ['c1', 'c2']) {
+        final p = (await a.cari(r))!;
+        expect(p.status, StatusAntrean.menunggu, reason: '$jawab');
+        expect(p.galatTerakhir, isNotNull, reason: '$jawab');
+        expect(kodeGalat(p.galatTerakhir), isNull, reason: '$jawab: kode lama dibersihkan');
+      }
+    }
   });
 
   test('batch tidak membawa ?toko_id cadangan: pencegat app melewatinya, toko tiap op di payload (paritas desktop)', () async {
