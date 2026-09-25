@@ -57,6 +57,7 @@ function waktuKlien(waktu = new Date()) {
  * server memilih sesi dari waktu ini. Jalur per baris lama tetap memakai waktuKlien() tanpa zona.
  */
 function waktuKlienZona(waktu = new Date()) {
+  if (waktu === null) return null // new Date(null) = 1970 — waktu kosong bukan "awal zaman"
   const d = waktu instanceof Date ? waktu : new Date(waktu)
   if (Number.isNaN(d.getTime())) return null
   const menit = -d.getTimezoneOffset()
@@ -307,12 +308,14 @@ class Antrean {
    */
   batalkan(clientRef) {
     const buang = new Set([clientRef])
+    // Induk yang sudah TERKIRIM punya nomor server — turunannya tetap bisa diselesaikan, jadi tidak ikut dibuang.
+    const terkirim = new Set(this.pesan.filter((p) => p.status === STATUS.TERKIRIM).map((p) => p.clientRef))
     let bertambah = true
     while (bertambah) {
       bertambah = false
       for (const p of this.pesan) {
         const induk = refIndukLokal(p.path)
-        if (induk && buang.has(induk) && !buang.has(p.clientRef)) { buang.add(p.clientRef); bertambah = true }
+        if (induk && buang.has(induk) && !terkirim.has(induk) && !buang.has(p.clientRef)) { buang.add(p.clientRef); bertambah = true }
       }
     }
     const sebelum = this.pesan.length
@@ -332,12 +335,12 @@ class Antrean {
     let menunggu = 0; let tinjau = 0; let milikLain = 0
     for (const p of this.pesan) {
       if (!cocok(p) || !statusAktif(p)) continue
-      if (pemilik !== undefined && p.pemilik !== pemilik) { milikLain++; continue }
+      if (pemilik != null && p.pemilik !== pemilik) { milikLain++; continue }
       if (p.status === STATUS.TINJAU) tinjau++
       else menunggu++
     }
     const r = { menunggu, tinjau, total: menunggu + tinjau }
-    if (pemilik !== undefined) r.milikLain = milikLain
+    if (pemilik != null) r.milikLain = milikLain
     return r
   }
 
@@ -362,7 +365,7 @@ class Antrean {
     return Object.values(this.transaksi)
       .filter((t) => tokoId == null || t.tokoId == null || t.tokoId === tokoId)
       .filter((t) => {
-        if (pemilik === undefined) return true
+        if (pemilik == null) return true
         const p = this.cari(t.clientRef)
         return !!p && p.pemilik === pemilik
       })
@@ -375,7 +378,7 @@ class Antrean {
   selisihTerkini(sejak, pemilik = undefined) {
     return this.pesan.filter((p) => p.status === STATUS.TERKIRIM &&
       (Number(p.terkirimPada) || 0) >= sejak &&
-      (pemilik === undefined || p.pemilik === pemilik) &&
+      (pemilik == null || p.pemilik === pemilik) &&
       p.hasil && Array.isArray(p.hasil.peringatan) && p.hasil.peringatan.includes('SELISIH_STOK')).length
   }
 

@@ -217,3 +217,27 @@ test('label jenis Fase 4', () => {
   assert.equal(labelJenis('ORDER_TRANSISI'), 'Pesanan')
   assert.equal(labelJenis('ASING'), 'ASING')
 })
+
+// Temuan review Task 15 (kontroler): pemilik null = semua baris, waktu null = null, induk TERKIRIM tak memutus turunan.
+test('pemilik null diperlakukan sama dengan tanpa pemilik (semua baris), bukan kunci bernama null', () => {
+  const a = memori()
+  a.antrekan({ clientRef: 'm1', jenis: 'CHECKOUT', tokoId: 'T', path: '/transaksi/checkout', body: {}, pemilik: 'a@x.test' })
+  a.antrekan({ clientRef: 'm2', jenis: 'CHECKOUT', tokoId: 'T', path: '/transaksi/checkout', body: {} })
+  const r = a.ringkas('T', null)
+  assert.equal(r.menunggu, 2)
+  assert.equal(r.milikLain, undefined)
+  assert.equal(a.transaksiTertunda('T', null).length, a.transaksiTertunda('T').length)
+})
+
+test('waktuKlienZona(null) mengembalikan null, bukan tanggal 1970', () => {
+  assert.equal(waktuKlienZona(null), null)
+})
+
+test('batalkan induk yang sudah TERKIRIM tidak menghapus turunan lokal yang masih sah', () => {
+  const a = memori()
+  a.antrekan({ clientRef: 'induk', jenis: 'CHECKOUT', tokoId: 'T', path: '/transaksi/checkout', body: {} })
+  a.antrekan({ clientRef: 'anak', jenis: 'REFUND', tokoId: 'T', path: '/transaksi/lokal:induk/refund', body: {} })
+  a.selesai('induk', {})
+  a.batalkan('induk')
+  assert.ok(a.pesan.some((p) => p.clientRef === 'anak'), 'turunan dari induk terkirim tetap ada')
+})
