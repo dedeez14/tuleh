@@ -87,3 +87,24 @@ test('pesan melebihi sisa memakai label satuan (0,5 kg), bukan angka telanjang',
     /melebihi sisa \(2\)/
   )
 })
+
+test('transaksi lokal: baris dirujuk lewat indeks, baris per nominal tidak bisa direfund; bisaDirefund butuh izin eksplisit', () => {
+  const lokal = {
+    id: 'lokal:abc', nomor: 'L-3B9D-260924-0001', status: 'BELUM SINKRON', belum_sinkron: true,
+    items: [
+      { id_produk: 'P1', nama: 'Kopi', satuan: 'cup', kuantitas: 2, subtotal: 36000 },
+      { id_produk: 'P2', nama: 'Beras', satuan: 'kg', kuantitas: 0.5, subtotal: 6000, per_nominal: true },
+      { id_produk: 'P3', nama: 'Gula', satuan: 'kg', kuantitas: 1.5, subtotal: 21000 }
+    ]
+  }
+  const b = F.barisRefund(lokal)
+  assert.deepEqual(b.map((x) => [x.id, x.baris, x.sisa]), [['baris-0', 0, 2], ['baris-2', 2, 1.5]])
+  assert.equal(b[0].nilaiPerUnit, 18000)
+  assert.equal(F.bisaDirefund(lokal), false, 'tanpa izin eksplisit tetap tidak (pemanggil lama)')
+  assert.equal(F.bisaDirefund(lokal, { lokal: true }), true)
+  assert.equal(F.bisaDirefund({ ...lokal, items: [lokal.items[1]] }, { lokal: true }), false, 'hanya baris nominal')
+  assert.equal(F.bisaDirefund({ ...lokal, status: 'DIBATALKAN' }, { lokal: true }), false)
+  const p = F.susunPermintaanRefund(lokal, { qty: { 'baris-0': 1, 'baris-2': 0.5 }, metode: 'TUNAI', alasan: 'Rusak' })
+  assert.deepEqual(p, { id: 'lokal:abc', baris: [{ baris: 0, kuantitas: 1 }, { baris: 2, kuantitas: 0.5 }], metode: 'TUNAI', alasan: 'Rusak', kembaliStok: true })
+  assert.throws(() => F.susunPermintaanRefund(lokal, { qty: { 'baris-0': 3 }, metode: 'TUNAI', alasan: 'Rusak' }), /melebihi sisa/)
+})

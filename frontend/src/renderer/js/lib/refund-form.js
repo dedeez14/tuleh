@@ -3,9 +3,33 @@
 // Murni (tanpa DOM/state) agar bisa diuji; nilai PASTI (diskon transaksi & pajak) dihitung server.
 
 import { apakahTerukur, langkahSatuan, bulatkanKuantitas, labelKuantitas } from './satuan-terukur.js'
+import { adalahLokal } from './aksi-offline.js'
 
-/** Baris struk yang masih punya sisa refund, dengan langkah input sesuai satuannya. */
+/**
+ * Baris struk yang masih punya sisa refund, dengan langkah input sesuai satuannya.
+ * Struk LOKAL (belum tersinkron): baris dirujuk lewat indeksnya di checkout (`baris`); baris per nominal (Rp)
+ * dilewati karena kuantitas pastinya baru dihitung server.
+ */
 export function barisRefund(struk) {
+  if (adalahLokal(struk)) {
+    return (struk?.items || [])
+      .map((it, i) => ({ it, i }))
+      .filter(({ it }) => !it.per_nominal && Number(it.kuantitas) > 0)
+      .map(({ it, i }) => {
+        const terjual = Number(it.kuantitas) || 0
+        return {
+          id: `baris-${i}`,
+          baris: i,
+          nama: it.nama,
+          satuan: it.satuan || '',
+          sisa: terjual,
+          terjual,
+          terukur: apakahTerukur(it.satuan),
+          langkah: apakahTerukur(it.satuan) ? langkahSatuan(it.satuan) : 1,
+          nilaiPerUnit: terjual > 0 ? (Number(it.subtotal) || 0) / terjual : 0
+        }
+      })
+  }
   return (struk?.items || [])
     .filter((it) => Number(it.qty_bisa_refund) > 0)
     .map((it) => {
@@ -27,10 +51,16 @@ export function barisRefund(struk) {
 /** Status transaksi yang uangnya sudah diterima — hanya ini yang bisa dikembalikan. */
 const STATUS_BISA_REFUND = ['SELESAI', 'LUNAS']
 
-/** Transaksi masih bisa direfund: sudah dibayar & tersinkron, dan ada sisa baris. */
-export function bisaDirefund(struk) {
-  if (!struk || !STATUS_BISA_REFUND.includes(String(struk.status || '').toUpperCase())) return false
-  if (struk.belum_sinkron || String(struk.id || '').startsWith('lokal:')) return false
+/**
+ * Transaksi masih bisa direfund: sudah dibayar & tersinkron, dan ada sisa baris. Transaksi lokal hanya bila
+ * pemanggil mengizinkannya (desktop berantrean, Fase 4) dan ada baris non-nominal.
+ */
+export function bisaDirefund(struk, { lokal: izinkanLokal = false } = {}) {
+  if (!struk) return false
+  if (adalahLokal(struk)) {
+    return izinkanLokal && String(struk.status || '').toUpperCase() !== 'DIBATALKAN' && barisRefund(struk).length > 0
+  }
+  if (!STATUS_BISA_REFUND.includes(String(struk.status || '').toUpperCase())) return false
   return barisRefund(struk).length > 0
 }
 
@@ -61,7 +91,7 @@ export function susunPermintaanRefund(struk, { qty = {}, metode, alasan, kembali
       if (!Number.isInteger(n)) throw new Error(`Jumlah refund ${b.nama} harus bilangan bulat.`)
     }
     if (n > b.sisa + 1e-9) throw new Error(`Jumlah refund ${b.nama} melebihi sisa (${labelKuantitas(b.sisa, b.satuan)}).`)
-    baris.push({ id: b.id, kuantitas: n })
+    baris.push(b.baris !== undefined ? { baris: b.baris, kuantitas: n } : { id: b.id, kuantitas: n })
   }
   if (baris.length === 0) throw new Error('Pilih minimal satu item yang direfund.')
   const alasanBersih = String(alasan || '').trim()

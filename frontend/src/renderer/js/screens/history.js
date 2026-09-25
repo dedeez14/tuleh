@@ -16,6 +16,9 @@ import { getState } from '../state.js'
 import { bisa } from '../akses.js'
 import { mintaOtorisasi } from '../components/dialog-otorisasi.js'
 import { labelAksi, perluPersetujuan } from '../lib/otorisasi.js'
+import { statusOffline } from '../components/sinkronisasi.js'
+import { kemampuanPlatform } from '../lib/kemampuan.js'
+import { adalahLokal, tampilkanBatal, putusanAksi } from '../lib/aksi-offline.js'
 
 const DEFAULT_RANGE_DAYS = 6
 
@@ -47,6 +50,8 @@ export const HistoryScreen = {
     let loadedRows = []
     let closeDetailModal = null
     const pantauSemua = bisa('transaksi.riwayat_semua')
+    // Offline menurut ping renderer ATAU penanda koneksi proses utama (yang lebih cepat tahu).
+    const offlineSekarang = () => getState().online === false || statusOffline().online === false
 
     container.innerHTML = `
       <div class="screen-page">
@@ -262,6 +267,8 @@ export const HistoryScreen = {
         onClose: () => { closeDetailModal = null }
       })
       closeDetailModal = close
+      // Kemampuan platform (desktop berantrean / Android tanpa antrean) — diisi sebelum struk digambar.
+      let kemampuan = { antreanOffline: false }
 
       function renderStruk(struk) {
         body.innerHTML = `<div class="hst-detail__receipt">${buildReceiptHTML(struk)}</div>`
@@ -301,52 +308,49 @@ export const HistoryScreen = {
 
         if (isVoided(struk.status)) return
         footer.appendChild(tombolBagikanStruk(struk))
-        if (struk.belum_sinkron || String(struk.id || '').startsWith('lokal:')) return // batalkan/refund lewat Pengaturan → Sinkronisasi
-        // Tanpa hak sendiri, tombol TETAP tampil: kasir meminta PIN atasannya di dialog
-        // (labelnya mengatakan itu sebelum ditekan). Server tetap yang memutuskan.
-        if (bisaDirefund(struk)) {
+        const lokal = adalahLokal(struk)
+        const antreanOffline = !!kemampuan.antreanOffline
+        // Transaksi lokal hanya bisa dibatalkan/direfund lewat antrean desktop, oleh pengguna yang punya hak
+        // sendiri (persetujuan PIN butuh id server). Transaksi tersinkron: tombol TETAP tampil tanpa hak —
+        // kasir meminta PIN atasannya di dialog (labelnya mengatakan itu). Server tetap yang memutuskan.
+        if (lokal && !antreanOffline) return
+        if (bisaDirefund(struk, { lokal: true }) && (!lokal || bisa('transaksi.refund'))) {
           const btnRefund = document.createElement('button')
           btnRefund.className = 'btn btn--outline'
-          btnRefund.textContent = labelAksi('transaksi.refund', bisa('transaksi.refund'))
+          btnRefund.textContent = lokal ? 'Refund' : labelAksi('transaksi.refund', bisa('transaksi.refund'))
           btnRefund.title = 'Kembalikan dana sebagian/penuh — dicatat sebagai dokumen refund bernomor'
           btnRefund.addEventListener('click', () => {
-            // Diperiksa DI SINI, bukan saat modal dibuat: kasir bisa kehilangan
-            // koneksi setelah detail terbuka, dan refund tidak diantrekan.
-            if (getState().online === false) {
-              toast('Refund hanya bisa dilakukan saat terhubung ke server.', 'error')
-              return
-            }
-            bukaLembarRefund(struk)
+            // Diperiksa DI SINI, bukan saat modal dibuat: koneksi bisa putus setelah detail terbuka.
+            const p = putusanAksi({ aksi: 'transaksi.refund', online: !offlineSekarang(), antreanOffline, punyaHak: bisa('transaksi.refund'), lokal })
+            if (!p.boleh) { toast(p.pesan, 'error'); return }
+            bukaLembarRefund(struk, { antre: p.antre })
           })
           footer.appendChild(btnRefund)
         }
-        const labelBatal = labelAksi('transaksi.batal', bisa('transaksi.batal'))
+        // Pelunasan pesanan (dengan atau tanpa uang muka) tak bisa dibatalkan — server menolak; uang kembali lewat Refund.
+        if (!tampilkanBatal(struk) || (lokal && !bisa('transaksi.batal'))) return
+        const labelBatal = lokal ? 'Batalkan' : labelAksi('transaksi.batal', bisa('transaksi.batal'))
         const btnCancel = document.createElement('button')
         btnCancel.className = 'btn btn--danger-outline'
         btnCancel.textContent = labelBatal
         btnCancel.addEventListener('click', async () => {
-          // Pembatalan tidak diantrekan, dan permintaan persetujuan (daftar pemberi + tukar PIN)
-          // hanya hidup online — jangan minta kasir mengonfirmasi tindakan yang pasti gagal.
-          if (getState().online === false) {
-            toast(perluPersetujuan('transaksi.batal', { punyaHak: bisa('transaksi.batal') })
-              ? 'Persetujuan atasan hanya bisa diminta saat terhubung ke server.'
-              : 'Pembatalan hanya bisa dilakukan saat terhubung ke server.', 'error')
-            return
-          }
+          const p = putusanAksi({ aksi: 'transaksi.batal', online: !offlineSekarang(), antreanOffline, punyaHak: bisa('transaksi.batal'), lokal })
+          if (!p.boleh) { toast(p.pesan, 'error'); return }
           const yes = await confirmDialog({
             title: 'Batalkan transaksi ini?',
-            message: `Transaksi ${struk.nomor} akan dibatalkan — stok barang dikembalikan ke gudang dan jurnal penjualannya di-reverse. Tindakan ini tidak dapat diurungkan.`,
+            message: p.antre
+              ? `Transaksi ${struk.nomor} dibatalkan begitu tersambung ke server — stok dikembalikan dan jurnal penjualannya di-reverse saat itu. Tindakan ini tidak dapat diurungkan.`
+              : `Transaksi ${struk.nomor} akan dibatalkan — stok barang dikembalikan ke gudang dan jurnal penjualannya di-reverse. Tindakan ini tidak dapat diurungkan.`,
             confirmText: 'Ya, batalkan',
             cancelText: 'Kembali',
             danger: true
           })
           if (!yes) return
 
-          // Token persetujuan sekali pakai (5 menit, satu aksi & satu transaksi). Server
-          // membakarnya walau layanan lalu menolak — pesannya tampil apa adanya dan kasir
-          // meminta persetujuan lagi.
+          // Token persetujuan sekali pakai (5 menit, satu aksi & satu transaksi) — hanya jalur online. Server
+          // membakarnya walau layanan lalu menolak — pesannya tampil apa adanya dan kasir meminta lagi.
           let token
-          if (perluPersetujuan('transaksi.batal', { punyaHak: bisa('transaksi.batal') })) {
+          if (!p.antre && perluPersetujuan('transaksi.batal', { punyaHak: bisa('transaksi.batal') })) {
             token = await mintaOtorisasi({ aksi: 'transaksi.batal', transaksiId: struk.id })
             if (!token) return // dibatalkan / PIN salah — pesannya sudah tampil di dialog
           }
@@ -355,6 +359,13 @@ export const HistoryScreen = {
           btnCancel.textContent = 'Membatalkan…'
           const result = await api.trx.batal({ id: struk.id, otorisasiToken: token })
 
+          if (result.ok && result.tertunda) {
+            // Diantrekan (offline / gangguan): tombol tetap mati agar tidak diantrekan dua kali.
+            toast(`Pembatalan ${struk.nomor} disimpan — dikirim otomatis saat tersambung.`, 'success')
+            btnCancel.textContent = 'Menunggu dikirim'
+            if (alive) loadData()
+            return
+          }
           if (result.ok) {
             // Server bisa saja sukses tanpa mengembalikan struk — jangan anggap
             // gagal (tombol aktif lagi = risiko pembatalan ganda). Fallback:
@@ -372,7 +383,8 @@ export const HistoryScreen = {
         footer.appendChild(btnCancel)
       }
 
-      function bukaLembarRefund(struk) {
+      function bukaLembarRefund(struk, { antre = false } = {}) {
+        const lokal = adalahLokal(struk)
         const baris = barisRefund(struk)
         const aktif = Array.isArray(getState().paymentMethods) && getState().paymentMethods.length ? getState().paymentMethods : ['TUNAI']
         const asal = String(struk.tipe_pembayaran || '').toUpperCase()
@@ -380,7 +392,9 @@ export const HistoryScreen = {
         const body = document.createElement('div')
         body.className = 'refund-form'
         body.innerHTML = `
-          <p class="refund-form__intro">Transaksi <span class="mono">${esc(struk.nomor)}</span>. Isi jumlah yang dikembalikan per item (kosong = tidak direfund).</p>
+          <p class="refund-form__intro">${lokal
+            ? `Transaksi lokal <span class="mono">${esc(struk.nomor)}</span> (belum tersinkron). Refund dicatat server begitu tersambung; baris per nominal (Rp) bisa direfund setelah tersinkron.`
+            : `Transaksi <span class="mono">${esc(struk.nomor)}</span>. Isi jumlah yang dikembalikan per item (kosong = tidak direfund).`}</p>
           <table class="table refund-form__tabel">
             <thead><tr><th>Item</th><th class="u-right">Sisa</th><th class="u-right">Refund</th></tr></thead>
             <tbody>${baris.map((b) => `
@@ -416,7 +430,7 @@ export const HistoryScreen = {
         // Terima desimal gaya Indonesia (koma) maupun titik: "0,5" → 0.5 (pola sama dengan inventory.js/dialog-ukuran.js).
         const qty = () => Object.fromEntries([...body.querySelectorAll('[data-refund-id]')].map((el) => [el.dataset.refundId, Number(String(el.value).trim().replace(',', '.')) || 0]))
         body.addEventListener('input', () => { body.querySelector('#rf-perkiraan').textContent = fmtIDR(perkiraanRefund(struk, qty())) })
-        // Satu client_ref per lembar: pengulangan tombol setelah timeout mengembalikan refund yang sama (pos.idempoten).
+        // Satu client_ref per lembar: pengulangan tombol setelah timeout (atau baris antrean) = refund yang sama (pos.idempoten).
         const clientRef = globalThis.crypto?.randomUUID ? crypto.randomUUID() : `rf-${Date.now()}-${Math.random().toString(16).slice(2)}`
 
         btnKirim.addEventListener('click', async () => {
@@ -434,25 +448,34 @@ export const HistoryScreen = {
           }
           const yes = await confirmDialog({
             title: 'Catat refund?',
-            message: `Sekitar ${fmtIDR(perkiraanRefund(struk, qty()))} dikembalikan ke pelanggan via ${payload.metode}. Dokumen refund bernomor akan dibuat dan tidak dapat diurungkan.`,
+            message: antre
+              ? `Sekitar ${fmtIDR(perkiraanRefund(struk, qty()))} dikembalikan ke pelanggan via ${payload.metode}. Refund disimpan di komputer ini dan dicatat server sebagai dokumen bernomor begitu tersambung.`
+              : `Sekitar ${fmtIDR(perkiraanRefund(struk, qty()))} dikembalikan ke pelanggan via ${payload.metode}. Dokumen refund bernomor akan dibuat dan tidak dapat diurungkan.`,
             confirmText: 'Ya, catat',
             cancelText: 'Kembali'
           })
           if (!yes) return
 
           let token
-          if (perluPersetujuan('transaksi.refund', { punyaHak: bisa('transaksi.refund') })) {
+          if (!antre && perluPersetujuan('transaksi.refund', { punyaHak: bisa('transaksi.refund') })) {
             token = await mintaOtorisasi({ aksi: 'transaksi.refund', transaksiId: struk.id })
             if (!token) return
           }
 
           btnKirim.disabled = true
           btnKirim.textContent = 'Mencatat…'
-          const result = await api.trx.refund({ ...payload, clientRef, waktuKlien: new Date().toISOString(), otorisasiToken: token })
+          // waktu_klien diisi proses utama (jam toko, format yang diterima kolom datetime server).
+          const result = await api.trx.refund({ ...payload, clientRef, otorisasiToken: token })
           if (!result.ok) {
             btnKirim.disabled = false
             btnKirim.textContent = 'Catat refund'
             toast(firstError(result), 'error')
+            return
+          }
+          if (result.tertunda) {
+            toast('Refund disimpan — dicatat server otomatis saat tersambung (Pengaturan → Sinkronisasi).', 'success')
+            close()
+            if (alive) loadData()
             return
           }
           const refund = result.data || {}
@@ -466,6 +489,7 @@ export const HistoryScreen = {
 
       // Struk lokal (belum tersinkron, id "lokal:<ref>") masih dilayani lewat antrean offline via trx:detail;
       // trx:struk hanya mengenal transaksi yang sudah tersinkron ke server.
+      kemampuan = await kemampuanPlatform()
       const result = await (String(id).startsWith('lokal:') ? api.trx.detail({ id }) : api.trx.struk({ id }))
       if (!result.ok || !result.data) {
         // firstError() mengembalikan '' saat result.ok — beri pesan fallback
