@@ -134,12 +134,22 @@
     })
   }
 
-  /** Baris refund: id baris struk + kuantitas > 0; minimal satu baris. */
+  /**
+   * Baris refund: kuantitas > 0 dan TEPAT SATU rujukan — `id` baris struk server, atau `baris` (indeks item
+   * checkout untuk transaksi lokal yang belum tersinkron; server Fase 4 memetakannya dari urutan item).
+   */
   function barisRefund (baris) {
     if (!Array.isArray(baris) || baris.length === 0) throw new Error('Pilih minimal satu item yang direfund.')
     return baris.map(function (b) {
       const kuantitas = num(b && b.kuantitas, { required: true })
       if (kuantitas <= 0) throw new Error('Jumlah refund harus lebih dari nol.')
+      const adaBaris = !!b && b.baris !== undefined && b.baris !== null && b.baris !== ''
+      if (adaBaris) {
+        const n = Number(b.baris)
+        const adaId = b.id !== undefined && b.id !== null && b.id !== ''
+        if (!Number.isInteger(n) || n < 0 || adaId) throw new Error('Baris refund tidak valid.')
+        return { baris: n, kuantitas: kuantitas }
+      }
       return { id: str(b && b.id, { required: true }), kuantitas: kuantitas }
     })
   }
@@ -254,8 +264,32 @@
 
     // Pesanan hidup (KDS / papan proses / nota bayar-nanti)
     'order:list': { permukaan: 'order.list', buat: function (p) { return GET('/orders', { stage: str(p.stage, { max: 40 }), bayar: str(p.bayar, { max: 40 }) }) } },
-    'order:transition': { permukaan: 'order.transition', buat: function (p) { return POST('/orders/' + id(p.id) + '/transition', { to: str(p.to, { required: true, max: 40 }) }) } },
-    'order:konfirmasiBayar': { permukaan: 'order.konfirmasiBayar', struk: true, buat: function (p) { return POST('/orders/' + id(p.id) + '/transition', { to: 'ANTRIAN', tipe_pembayaran: str(p.tipePembayaran, { max: 20 }) }) } },
+    // Transisi & pelunasan pesanan boleh diantrekan desktop saat offline (Fase 4, jenis ORDER_TRANSISI);
+    // client_ref = kiriman ulang yang sama (server pos.idempoten). Android mengirim langsung.
+    'order:transition': {
+      permukaan: 'order.transition',
+      antrean: { jenis: 'ORDER_TRANSISI' },
+      buat: function (p) {
+        return POST('/orders/' + id(p.id) + '/transition', {
+          to: str(p.to, { required: true, max: 40 }),
+          client_ref: str(p.clientRef, { max: 64 }) || undefined,
+          waktu_klien: str(p.waktuKlien, { max: 40 }) || undefined
+        })
+      }
+    },
+    'order:konfirmasiBayar': {
+      permukaan: 'order.konfirmasiBayar',
+      struk: true,
+      antrean: { jenis: 'ORDER_TRANSISI' },
+      buat: function (p) {
+        return POST('/orders/' + id(p.id) + '/transition', {
+          to: 'ANTRIAN',
+          tipe_pembayaran: str(p.tipePembayaran, { max: 20 }),
+          client_ref: str(p.clientRef, { max: 64 }) || undefined,
+          waktu_klien: str(p.waktuKlien, { max: 40 }) || undefined
+        })
+      }
+    },
     'order:simpanNota': {
       permukaan: 'order.simpanNota',
       struk: true,
@@ -281,7 +315,19 @@
         return POST('/orders', body)
       }
     },
-    'order:lunasi': { permukaan: 'order.lunasi', struk: true, buat: function (p) { return POST('/orders/' + id(p.id) + '/transition', { to: 'SELESAI', tipe_pembayaran: str(p.tipePembayaran, { max: 20 }) }) } },
+    'order:lunasi': {
+      permukaan: 'order.lunasi',
+      struk: true,
+      antrean: { jenis: 'ORDER_TRANSISI' },
+      buat: function (p) {
+        return POST('/orders/' + id(p.id) + '/transition', {
+          to: 'SELESAI',
+          tipe_pembayaran: str(p.tipePembayaran, { max: 20 }),
+          client_ref: str(p.clientRef, { max: 64 }) || undefined,
+          waktu_klien: str(p.waktuKlien, { max: 40 }) || undefined
+        })
+      }
+    },
 
     // Meja (server memiliki daftar + kode QR; `semua` menyertakan meja nonaktif)
     'table:list': { permukaan: 'table.list', buat: function (p) { return GET('/tables', p.semua ? { semua: 1 } : {}) } },
@@ -325,7 +371,20 @@
     },
     'bill:setPax': { permukaan: 'bill.setPax', buat: function (p) { return { metode: 'PATCH', jalur: '/bills/' + id(p.id), body: { pax: num(p.pax, { required: true }) } } } },
     'bill:cetak': { permukaan: 'bill.cetak', buat: function (p) { return GET('/bills/' + id(p.id) + '/prebill') } },
-    'bill:bayar': { permukaan: 'bill.bayar', struk: true, buat: function (p) { return POST('/bills/' + id(p.id) + '/settle', { tipe_pembayaran: str(p.tipePembayaran, { max: 20 }), dibayar: num(p.dibayar) === undefined ? null : num(p.dibayar) }) } },
+    'bill:bayar': {
+      permukaan: 'bill.bayar',
+      struk: true,
+      // Pelunasan bon boleh diantrekan desktop saat offline (Fase 4, jenis BILL_BAYAR).
+      antrean: { jenis: 'BILL_BAYAR' },
+      buat: function (p) {
+        return POST('/bills/' + id(p.id) + '/settle', {
+          tipe_pembayaran: str(p.tipePembayaran, { max: 20 }),
+          dibayar: num(p.dibayar) === undefined ? null : num(p.dibayar),
+          client_ref: str(p.clientRef, { max: 64 }) || undefined,
+          waktu_klien: str(p.waktuKlien, { max: 40 }) || undefined
+        })
+      }
+    },
     'bill:gabung': { permukaan: 'bill.gabung', buat: function (p) { return POST('/bills/' + id(p.idUtama) + '/merge', { bill_id: str(p.idGabung, { required: true }) }) } },
     'bill:batal': { permukaan: 'bill.batal', buat: function (p) { return POST('/bills/' + id(p.id) + '/void', {}) } },
 
@@ -460,21 +519,28 @@
     'trx:detail': { permukaan: 'trx.detail', buat: function (p) { return GET('/transaksi/' + id(p.id)) } },
     'trx:batal': {
       permukaan: 'trx.batal',
+      // Desktop mengantrekan pembatalan saat offline (Fase 4, jenis BATAL) — termasuk atas transaksi lokal.
+      antrean: { jenis: 'BATAL' },
       buat: function (p) {
         return POST('/transaksi/' + id(p.id) + '/batal', {
           alasan: str(p.alasan, { max: 255 }) || undefined,
           // Token persetujuan atasan bila pemanggil tak punya hak batal sendiri (§2c).
-          otorisasi_token: str(p.otorisasiToken, { max: 2048 }) || undefined
+          otorisasi_token: str(p.otorisasiToken, { max: 2048 }) || undefined,
+          // Kiriman ulang dengan client_ref sama = pembatalan yang sama (server pos.idempoten, Fase 4).
+          client_ref: str(p.clientRef, { max: 64 }) || undefined,
+          waktu_klien: str(p.waktuKlien, { max: 40 }) || undefined
         })
       }
     },
     // Struk lengkap (qty_bisa_refund per baris, refunds[], total_refund, nilai_bersih) — sama dengan trx:detail di server kini,
     // dipisah agar layar Riwayat jelas memakai bentuk struk.
     'trx:struk': { permukaan: 'trx.struk', buat: function (p) { return GET('/transaksi/' + id(p.id) + '/struk') } },
-    // Refund penuh/sebagian per baris (hak transaksi.refund). baris = [{id: id baris dari struk, kuantitas}].
+    // Refund penuh/sebagian per baris (hak transaksi.refund). baris = [{id: id baris dari struk, kuantitas}] atau
+    // [{baris: indeks item, kuantitas}] untuk transaksi lokal yang belum tersinkron (desktop Fase 4, diantrekan).
     // client_ref idempoten (pos.idempoten): pengulangan setelah timeout mengembalikan refund yang sama, bukan mencatat ganda.
     'trx:refund': {
       permukaan: 'trx.refund',
+      antrean: { jenis: 'REFUND' },
       buat: function (p) {
         return POST('/transaksi/' + id(p.id) + '/refund', {
           items: barisRefund(p.baris),

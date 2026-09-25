@@ -1,7 +1,8 @@
 'use strict'
 
 // Nomor lokal & struk lokal untuk transaksi yang dibuat saat offline.
-// Nomor: L-yyMMdd-NNNN per hari per komputer (padanan Android NomorLokal).
+// Nomor: L-<AWALAN>-yyMMdd-NNNN per hari per komputer; AWALAN = 4 karakter pertama id perangkat antrean
+// (padanan Android NomorLokal) supaya struk dua kasir/instal ulang di hari yang sama tidak kembar.
 // Struk: bentuk yang sama dengan jawaban /transaksi/checkout server agar layar
 // struk, riwayat, dan cetak ulang tidak perlu tahu asalnya.
 
@@ -15,7 +16,7 @@ class NomorLokal {
     try { this.data = JSON.parse(fs.readFileSync(berkas, 'utf8')) || {} } catch { /* kosong */ }
   }
 
-  berikutnya(sekarang = new Date()) {
+  berikutnya(sekarang = new Date(), awalan = '') {
     const d = new Date(sekarang)
     const yy = String(d.getFullYear()).slice(2)
     const mm = String(d.getMonth() + 1).padStart(2, '0')
@@ -29,7 +30,8 @@ class NomorLokal {
         fs.writeFileSync(this.berkas, JSON.stringify(this.data))
       } catch { /* abaikan */ }
     }
-    return `L-${hari}-${String(n).padStart(4, '0')}`
+    const a = String(awalan || '').replace(/[^0-9A-Za-z]/g, '').slice(0, 4).toUpperCase()
+    return a ? `L-${a}-${hari}-${String(n).padStart(4, '0')}` : `L-${hari}-${String(n).padStart(4, '0')}`
   }
 }
 
@@ -52,7 +54,7 @@ function buatStrukLokal({ nomor, body, tampilan = [], kasir = null, pelangganNam
     const potongan = bruto * diskon / 100
     const dpp = bruto - potongan
     const pjk = dpp * pajak / 100
-    return {
+    const baris = {
       id_produk: it.id_produk,
       nama: t.nama || `Produk ${it.id_produk}`,
       satuan: t.satuan || '',
@@ -63,6 +65,9 @@ function buatStrukLokal({ nomor, body, tampilan = [], kasir = null, pelangganNam
       subtotal: round2(dpp + pjk),
       _bruto: bruto, _diskon: potongan, _pajak: pjk
     }
+    // Baris per rupiah: kuantitas pastinya dihitung ulang server dari nominal → refund sebagian menunggu tersinkron.
+    if (Number(it.nominal) > 0) baris.per_nominal = true
+    return baris
   })
   const subtotal = round2(items.reduce((s, i) => s + i._bruto, 0))
   const totalDiskon = round2(items.reduce((s, i) => s + i._diskon, 0))
