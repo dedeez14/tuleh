@@ -53,10 +53,20 @@ const LABEL_PERINGATAN = Object.freeze({
   JAM_PERANGKAT: 'Jam perangkat tidak tepat'
 })
 
-function labelKode(kode) { return LABEL_KODE[kode] || String(kode || 'Ditolak server') }
+// Pencarian tabel HANYA pada kunci milik tabel itu sendiri: `LABEL_KODE['constructor']` /
+// `JENIS_BATCH['toString']` tidak boleh jatuh ke fungsi warisan prototipe Object (temuan review Task 16).
+function ambilSendiri(tabel, kunci) {
+  if (kunci === null || kunci === undefined) return undefined
+  return Object.hasOwn(tabel, kunci) ? tabel[kunci] : undefined
+}
+
+/** Tipe operasi batch untuk jenis baris antrean; null bila jenis itu tidak dikirim lewat batch. */
+function tipeBatch(jenis) { return ambilSendiri(JENIS_BATCH, jenis) || null }
+
+function labelKode(kode) { return ambilSendiri(LABEL_KODE, kode) || String(kode || 'Ditolak server') }
 
 function labelPeringatan(daftar) {
-  return (Array.isArray(daftar) ? daftar : []).map((k) => LABEL_PERINGATAN[k] || String(k))
+  return (Array.isArray(daftar) ? daftar : []).map((k) => ambilSendiri(LABEL_PERINGATAN, k) || String(k))
 }
 
 /**
@@ -74,7 +84,7 @@ function idDariJalur(jalur, grup) {
  * diantrekan) + field batch: waktu ber-zona, toko kejadian, rujukan dokumen dari jalur.
  */
 function opDariBaris(p, { deviceId, kini = Date.now(), nomorLokal = null } = {}) {
-  const type = JENIS_BATCH[p.jenis]
+  const type = tipeBatch(p.jenis)
   if (!type) throw new Error(`Jenis ${p.jenis} tidak dikirim lewat batch.`)
   const body = p.body && typeof p.body === 'object' ? p.body : {}
   const dibuat = Number(p.dibuat) || kini
@@ -125,8 +135,8 @@ function bulatSidik(v) {
  */
 function sidikKomposisi(baris) {
   return baris
-    .filter((p) => p && JENIS_BATCH[p.jenis])
-    .map((p) => `${JENIS_BATCH[p.jenis]}:${p.clientRef}:${bulatSidik(p.kirimUlangKe)}`)
+    .filter((p) => p && tipeBatch(p.jenis))
+    .map((p) => `${tipeBatch(p.jenis)}:${p.clientRef}:${bulatSidik(p.kirimUlangKe)}`)
     .join('\n')
 }
 
@@ -151,19 +161,33 @@ function hasilDariItem(item) {
     nomor: it.nomor ?? null,
     kode: it.kode || 'OK',
     tipe: it.type || null,
-    peringatan: Array.isArray(it.peringatan) ? it.peringatan.slice() : [],
+    // Selalu daftar teks (paritas Flutter '$x'): UI & label tidak menerima angka/objek mentah.
+    peringatan: Array.isArray(it.peringatan) ? it.peringatan.map((x) => String(x)) : [],
     idempoten: it.idempoten === true,
     _idempoten: it.idempoten === true,
     data: it.data && typeof it.data === 'object' ? it.data : null
   }
 }
 
+/**
+ * Nomor `baris` sebagai bilangan bulat (paritas Flutter `_bulatBaris`): angka hingga yang bulat, atau teks
+ * yang nilainya bulat ("2", " 2 ", "1.0"); null, "", boolean, pecahan, NaN, ∞, larik/objek → null.
+ * Tanpa ini `Number(null)`/`Number('')`/`Number(false)` = 0 diam-diam merujuk item PERTAMA.
+ */
+function bulatBaris(v) {
+  let n = null
+  if (typeof v === 'number') n = v
+  else if (typeof v === 'string' && v.trim() !== '') n = Number(v.trim())
+  if (n === null || !Number.isFinite(n) || n % 1 !== 0) return null
+  return n || 0 // -0 → 0
+}
+
 /** Id item transaksi server dari hasil induk: ringkasan batch (data.items[{baris,id}]) atau struk per baris (items[i].id). */
 function idItemDariHasil(hasil, baris) {
   if (!hasil || typeof hasil !== 'object') return null
-  const n = Number(baris)
-  if (!Number.isInteger(n) || n < 0) return null
-  const ringkas = hasil.data && Array.isArray(hasil.data.items) ? hasil.data.items.find((x) => Number(x && x.baris) === n) : null
+  const n = bulatBaris(baris)
+  if (n === null || n < 0) return null
+  const ringkas = hasil.data && Array.isArray(hasil.data.items) ? hasil.data.items.find((x) => !!x && bulatBaris(x.baris) === n) : null
   if (ringkas && ringkas.id) return String(ringkas.id)
   const struk = Array.isArray(hasil.items) ? hasil.items[n] : null
   return struk && struk.id ? String(struk.id) : null
@@ -203,6 +227,7 @@ module.exports = {
   BATAS_BYTE_SEGMEN,
   LABEL_KODE,
   LABEL_PERINGATAN,
+  tipeBatch,
   labelKode,
   labelPeringatan,
   opDariBaris,

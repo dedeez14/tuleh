@@ -157,3 +157,49 @@ test('opDariBaris tepi: id jalur gagal di-decode → null; waktu_klien tak terur
   assert.match(op.payload.waktu_klien, /^2026-09-24T08:00:00/)
   assert.match(op.payload.waktu_klien, ZONA)
 })
+
+// ── Pengerasan temuan review Task 16 ──
+
+test('tabel jenis/label hanya kunci sendiri: "constructor"/"toString"/"__proto__" tidak terbaca dari prototipe Object', () => {
+  for (const k of ['constructor', 'toString', '__proto__', 'hasOwnProperty', 'valueOf']) {
+    assert.equal(B.tipeBatch(k), null, `tipeBatch(${k})`)
+    assert.throws(() => B.opDariBaris({ clientRef: 'x', jenis: k, path: '/x', dibuat: 1, body: {} }, { deviceId: 'd', kini: 1 }), /tidak dikirim lewat batch/, `opDariBaris(${k})`)
+    assert.equal(B.labelKode(k), k, `labelKode(${k})`)
+    assert.deepEqual(B.labelPeringatan([k]), [k], `labelPeringatan(${k})`)
+  }
+  assert.equal(B.sidikKomposisi([{ jenis: 'constructor', clientRef: 'x' }, { jenis: 'CHECKOUT', clientRef: 'a' }]), 'checkout:a:0')
+  assert.equal(B.tipeBatch('CHECKOUT'), 'checkout')
+  assert.equal(B.tipeBatch('ORDER_TRANSISI'), 'orders.transition')
+  assert.equal(B.tipeBatch(null), null)
+  assert.equal(B.tipeBatch(undefined), null)
+  assert.equal(B.labelKode(null), 'Ditolak server')
+  assert.equal(B.labelKode(''), 'Ditolak server')
+})
+
+test('idItemDariHasil: baris hanya bilangan bulat hingga ≥ 0 atau teks bernilai bulat; null/""/boolean/pecahan ditolak', () => {
+  const hasil = { data: { items: [{ baris: 0, id: 'I-0' }, { baris: 1, id: 'I-1' }] }, items: [{ id: 'S-0' }, { id: 'S-1' }] }
+  assert.equal(B.idItemDariHasil(hasil, 1), 'I-1')
+  assert.equal(B.idItemDariHasil(hasil, '1'), 'I-1')
+  assert.equal(B.idItemDariHasil(hasil, ' 1 '), 'I-1')
+  assert.equal(B.idItemDariHasil(hasil, '1.0'), 'I-1', 'teks bernilai bulat (paritas Flutter _bulatBaris)')
+  assert.equal(B.idItemDariHasil(hasil, 0), 'I-0')
+  assert.equal(B.idItemDariHasil(hasil, -0), 'I-0')
+  for (const v of [null, undefined, '', '   ', true, false, 1.5, '1.5', -1, '-1', NaN, Infinity, 'abc', [], {}, [1]]) {
+    assert.equal(B.idItemDariHasil(hasil, v), null, `baris ${JSON.stringify(v)} (${typeof v})`)
+  }
+  // Entri ringkasan ber-baris null/""/false TIDAK dianggap baris 0.
+  const kotor = { data: { items: [{ baris: null, id: 'X-null' }, { baris: '', id: 'X-kosong' }, { baris: false, id: 'X-false' }, { baris: 0, id: 'I-0' }] } }
+  assert.equal(B.idItemDariHasil(kotor, 0), 'I-0')
+  // Baris refund ber-baris "" tidak lagi dirujuk ke item 0 → rujukan gagal (null), bukan salah item.
+  const anak = { path: '/transaksi/lokal%3Ac1/refund', body: { items: [{ baris: '', kuantitas: 1 }] } }
+  assert.equal(B.gantiRujukanLokal(anak, { hasil: { id: 'S', ...hasil } }), null)
+  const anakBool = { path: '/transaksi/lokal%3Ac1/refund', body: { items: [{ baris: true, kuantitas: 1 }] } }
+  assert.equal(B.gantiRujukanLokal(anakBool, { hasil: { id: 'S', ...hasil } }), null)
+})
+
+test('hasilDariItem: peringatan selalu daftar teks', () => {
+  const h = B.hasilDariItem({ accepted: true, peringatan: ['SELISIH_STOK', 7, null, { a: 1 }] })
+  assert.deepEqual(h.peringatan, ['SELISIH_STOK', '7', 'null', '[object Object]'])
+  assert.ok(h.peringatan.every((x) => typeof x === 'string'))
+  assert.deepEqual(B.hasilDariItem({ accepted: true, peringatan: 'SELISIH_STOK' }).peringatan, [])
+})

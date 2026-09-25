@@ -253,3 +253,34 @@ test('timeoutMs per panggilan menggantikan batas bawaan hanya untuk permintaan i
   const tidakSah = await klien.post('/x', { body: {}, pantauKoneksi: false, timeoutMs: 'x' })
   assert.equal(tidakSah.timeout, true, 'nilai tak sah → batas bawaan')
 })
+
+// Gateway lokal (353b855): batas waktu upstream habis SETELAH permintaan terkirim → 504 `upstream-timeout`
+// (bukan 502 upstream-unreachable). Pengurai memperlakukannya seperti timeout klien: mundur per baris,
+// tanpa pita offline, tidak dihitung galat server menuju batas tinjau.
+test('jenisGangguan: 504 upstream-timeout = TIMEOUT (seperti timeout klien), bukan JARINGAN/SERVER', () => {
+  const { jenisGangguan } = require('../src/main/lib/klasifikasi-http')
+  assert.equal(klasifikasi(504, { 'X-Tuleh-Gateway': 'upstream-timeout' }), JENIS.GANGGUAN, 'tetap gangguan: tulis diantrekan')
+  assert.equal(adalahGangguan({ ok: false, status: 504, gangguan: true, gateway: 'upstream-timeout' }), true)
+  assert.equal(jenisGangguan({ ok: false, status: 504, gangguan: true, gateway: 'upstream-timeout' }), 'TIMEOUT')
+  // Penanda gateway menentukan, bukan status.
+  assert.equal(jenisGangguan({ ok: false, status: 502, gangguan: true, gateway: 'upstream-timeout' }), 'TIMEOUT')
+  // Pembanding: perilaku lain tidak berubah.
+  assert.equal(jenisGangguan({ ok: false, status: -1, gangguan: true }), 'TIMEOUT')
+  assert.equal(jenisGangguan({ ok: false, status: 0, gangguan: true, timeout: true }), 'TIMEOUT')
+  assert.equal(jenisGangguan({ ok: false, status: 0, gangguan: true }), 'JARINGAN')
+  assert.equal(jenisGangguan({ ok: false, status: 502, gangguan: true, gateway: 'upstream-unreachable' }), 'JARINGAN')
+  assert.equal(jenisGangguan({ ok: false, status: 429, gangguan: true, gateway: 'rate-limited' }), 'JARINGAN')
+  assert.equal(jenisGangguan({ ok: false, status: 504, gangguan: true }), 'SERVER', '504 dari server (tanpa penanda) tetap galat server')
+  assert.equal(jenisGangguan({ ok: false, status: 503, gangguan: true, gateway: 'internal' }), 'SERVER')
+  assert.equal(jenisGangguan({ ok: false, status: 422 }), null)
+  assert.equal(jenisGangguan({ ok: true, status: 200 }), null)
+})
+
+test('504 upstream-timeout dari gateway pada kiriman latar → amplop gangguan ber-gateway, tetap online', async () => {
+  const { jenisGangguan } = require('../src/main/lib/klasifikasi-http')
+  const { klien, offline } = rakit(jawaban(504, { success: false, message: 'Server terlalu lama menjawab. Coba lagi beberapa saat lagi.' }, { 'X-Tuleh-Gateway': 'upstream-timeout' }))
+  const r = await klien.post('/sync/v2/batch', { body: {}, pantauKoneksi: false })
+  assert.deepEqual([r.ok, r.status, r.gangguan, r.gateway], [false, 504, true, 'upstream-timeout'])
+  assert.equal(jenisGangguan(r), 'TIMEOUT')
+  assert.equal(offline.koneksi.online, true)
+})

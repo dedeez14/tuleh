@@ -29,6 +29,11 @@ const HEADER_GATEWAY = 'x-tuleh-gateway'
 // Penanda galat buatan gateway yang berarti "server tidak terjangkau" (lihat backend/proxy.go).
 const PENANDA_GATEWAY_GANGGUAN = new Set(['upstream-unreachable', 'rate-limited', 'internal'])
 
+// Gateway: permintaan SUDAH terkirim tetapi server tak menjawab dalam batas waktu rute (504, backend/proxy.go
+// 353b855). Tetap gangguan (tulis diantrekan — client_ref membuat kirim ulang aman), tetapi bagi pengurai
+// sifatnya TIMEOUT seperti timeout klien: mundur per baris, tanpa pita offline, bukan galat server.
+const PENANDA_GATEWAY_TIMEOUT = 'upstream-timeout'
+
 function ambilHeader(headers, nama) {
   if (!headers) return null
   if (typeof headers.get === 'function') return headers.get(nama)
@@ -65,7 +70,7 @@ function klasifikasi(status, headers = null, payload = null) {
   const s = Number(status) || 0
   if (s === 0) return JENIS.GANGGUAN
   const gw = penandaGateway(headers)
-  if (gw && PENANDA_GATEWAY_GANGGUAN.has(gw)) return JENIS.GANGGUAN
+  if (gw && (PENANDA_GATEWAY_GANGGUAN.has(gw) || gw === PENANDA_GATEWAY_TIMEOUT)) return JENIS.GANGGUAN
   if (penolakanDomain(s, payload)) return JENIS.TOLAK
   if (s >= 500 || s === 408 || s === 429) return JENIS.GANGGUAN
   if (s === 402) return JENIS.LANGGANAN
@@ -88,13 +93,14 @@ function adalahGangguan(res) {
  *                atau rate-limited, 429): semua kiriman akan gagal sama → hentikan putaran.
  *   'SERVER'   — server menjawab 5xx/408 untuk permintaan INI (mis. bug pada satu muatan):
  *                mundur per baris & lanjut ke baris lain; dihitung menuju batas tinjau.
- *   'TIMEOUT'  — tak ada jawaban dalam batas waktu (-1): mundur per baris, tidak dihitung
- *                sebagai galat server (tak ada pesan server).
+ *   'TIMEOUT'  — tak ada jawaban dalam batas waktu (-1 / timeout klien / gateway 504
+ *                upstream-timeout): permintaan mungkin sudah sampai → mundur per baris, tanpa
+ *                menandai offline, tidak dihitung sebagai galat server (tak ada pesan server).
  */
 function jenisGangguan(res) {
   if (!adalahGangguan(res)) return null
   const s = Number(res.status) || 0
-  if (s === -1 || res.timeout === true) return 'TIMEOUT'
+  if (s === -1 || res.timeout === true || res.gateway === PENANDA_GATEWAY_TIMEOUT) return 'TIMEOUT'
   if (s === 0 || s === 429 || res.gateway === 'upstream-unreachable' || res.gateway === 'rate-limited') return 'JARINGAN'
   return 'SERVER'
 }
