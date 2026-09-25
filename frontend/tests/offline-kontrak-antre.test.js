@@ -264,6 +264,49 @@ test('tulisAtauAntre: pemilik dibaca SEKALI di awal — keluar/ganti akun selagi
   }
 })
 
+test('tulisAtauAntre: toko dibaca SEKALI di awal — kiriman online, siapkanAntre & baris antre memakai toko awal walau toko berganti selagi kirim menggantung', async () => {
+  const off = offlinePalsu(true)
+  let toko = 'T1'
+  let lepas
+  const menggantung = new Promise((resolve) => { lepas = resolve })
+  const pesanKirim = []
+  const konteksSiapkan = []
+  const tulis = buatTulisAtauAntre({
+    offline: off,
+    kirim: (jalur, body, pesan) => { pesanKirim.push(pesan); return menggantung },
+    tokoAktif: () => toko
+  })
+  const janji = tulis({
+    jenis: 'CHECKOUT', jalur: '/transaksi/checkout', body: { items: [] },
+    siapkanAntre: (badan, ref, ctx) => { konteksSiapkan.push(ctx); return { transaksi: { tokoId: ctx && ctx.tokoId, nomorLokal: 'L-1' } } }
+  })
+  await Promise.resolve()
+  toko = 'T2' // kasir pindah toko selagi permintaan menggantung, lalu timeout
+  lepas({ ok: false, status: -1, timeout: true })
+  const r = await janji
+  assert.equal(r.tertunda, true)
+  assert.deepEqual(pesanKirim, [{ tokoId: 'T1' }], 'kiriman online atas nama toko awal (eksplisit, bukan toko aktif saat itu)')
+  assert.deepEqual(konteksSiapkan, [{ tokoId: 'T1' }])
+  assert.equal(off.antrean.cari(r.clientRef).tokoId, 'T1', 'baris antre tetap toko awal')
+  assert.equal(off.antrean.transaksiLokal(r.clientRef).tokoId, 'T1', 'transaksi lokal (Riwayat) tetap toko awal')
+
+  // Tanpa toko aktif → pesan tanpa tokoId (klien HTTP tak menyisipkan apa pun, perilaku lama).
+  const off2 = offlinePalsu(true)
+  const pesan2 = []
+  const t2 = buatTulisAtauAntre({ offline: off2, kirim: async (j, b, pesan) => { pesan2.push(pesan); return { ok: true, status: 200, data: {} } }, tokoAktif: () => null })
+  await t2({ jenis: 'PENGELUARAN', jalur: '/pengeluaran', body: {} })
+  assert.deepEqual(pesan2, [{ tokoId: null }])
+})
+
+test('ipc: kirim tulisAtauAntre memakai toko pesan (toko_id eksplisit) & checkout memakai toko konteks siapkanAntre', () => {
+  const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '../src/main/ipc.js'), 'utf8')
+  const blok = src.slice(src.indexOf('const tulisAtauAntre = buatTulisAtauAntre({'), src.indexOf("handle('offline:status'"))
+  assert.match(blok, /kirim: \(jalur, body, pesan\) =>/)
+  assert.match(blok, /toko_id: pesan\.tokoId/)
+  assert.match(src, /siapkanAntre: \(badan, _ref, ctx\) =>/)
+  assert.match(src, /transaksi: \{ tokoId: ctx\.tokoId,/)
+})
+
 test('Antrean.antrekan: clientRef yang sudah ada → baris itu dikembalikan, tidak ditambah (pertahanan berlapis)', () => {
   const a = new Antrean({ berkas: null, sekarang: () => 1, buatId: () => 'dev-uji' })
   const p1 = a.antrekan({ clientRef: 'x', jenis: 'CHECKOUT', tokoId: 'T1', path: '/transaksi/checkout', body: { a: 1 } }, { transaksi: { nomorLokal: 'L-1' }, deltaStok: { P1: -1 } })

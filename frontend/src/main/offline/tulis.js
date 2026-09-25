@@ -40,7 +40,8 @@ function dataHasilTersimpan(h) {
 /**
  * @param {object} o
  * @param {object} o.offline      modul offline ({ koneksi, antrean, STATUS, buatClientRef, waktuKlien })
- * @param {(jalur: string, body: object) => Promise<object>} o.kirim  api.post terbungkus (withAuthWatch)
+ * @param {(jalur: string, body: object, pesan: {tokoId: string|null}) => Promise<object>} o.kirim  api.post
+ *        terbungkus (withAuthWatch); kirim atas nama `pesan.tokoId` (toko saat operasi dimulai), bukan toko aktif
  * @param {() => string|null} o.tokoAktif
  * @param {() => string|null} [o.pemilikAktif]  kunci pemilik akun aktif (baris hanya dikirim akun pembuatnya)
  * @param {() => void} [o.setelahAntre]  kirim status offline ke renderer
@@ -57,8 +58,9 @@ function buatTulisAtauAntre({ offline, kirim, tokoAktif, pemilikAktif = () => nu
   /**
    * @param {object} o
    * @param {boolean} [o.langsungAntre]  jangan coba kirim (rujukan transaksi lokal yang server belum kenal)
-   * @param {(badan: object, clientRef: string) => ({body?: object, transaksi?: object}|void)} [o.siapkanAntre]
-   *        tambahan HANYA untuk baris yang benar-benar diantrekan (checkout: offline:true, nomor & struk lokal)
+   * @param {(badan: object, clientRef: string, ctx: {tokoId: string|null}) => ({body?: object, transaksi?: object}|void)} [o.siapkanAntre]
+   *        tambahan HANYA untuk baris yang benar-benar diantrekan (checkout: offline:true, nomor & struk lokal);
+   *        `ctx.tokoId` = toko baris ini (pakai untuk transaksi lokal, bukan toko aktif saat itu)
    */
   return async function tulisAtauAntre({ jenis, jalur, body, transaksi = null, deltaStok = {}, langsungAntre = false, siapkanAntre = null }) {
     // client_ref pemanggil dipertahankan (refund: satu ref per lembar — tombol diulang setelah timeout =
@@ -73,13 +75,15 @@ function buatTulisAtauAntre({ offline, kirim, tokoAktif, pemilikAktif = () => nu
       return r
     }
     const badan = { ...body, client_ref: clientRef, waktu_klien: teks(body && body.waktu_klien) || offline.waktuKlien() }
-    // Pemilik dibaca SEKALI, sebelum mencoba online: kasir bisa keluar (auth:logout → akun dilupakan) atau
-    // akun lain masuk selagi permintaan menggantung lalu timeout — baris tetap milik akun yang membuatnya,
-    // tidak diklaim/dikirim dengan token akun berikutnya.
+    // Pemilik & toko dibaca SEKALI, sebelum mencoba online: kasir bisa keluar (auth:logout → akun dilupakan),
+    // akun lain masuk, atau pindah toko selagi permintaan menggantung lalu timeout — baris tetap milik akun &
+    // toko saat operasi dimulai (sama dengan kiriman online-nya), tidak dikirim dengan token akun berikutnya
+    // dan penjualan/refund tidak jatuh ke toko lain.
     let pemilik = null
     try { pemilik = pemilikAktif() || null } catch { pemilik = null }
+    const toko = tokoAktif() || null
     if (!langsungAntre && offline.koneksi.online) {
-      const r = await kirim(jalur, badan)
+      const r = await kirim(jalur, badan, { tokoId: toko })
       if (r.ok) return { ...r, clientRef }
       if (!adalahGangguan(r)) return r // ditolak server / langganan: tampilkan apa adanya
     }
@@ -93,7 +97,7 @@ function buatTulisAtauAntre({ offline, kirim, tokoAktif, pemilikAktif = () => nu
     if (typeof siapkanAntre === 'function') {
       // Galat penyiapan (nomor/struk lokal) tidak boleh menghilangkan operasi: antrekan dengan badan dasar.
       try {
-        const s = siapkanAntre(badan, clientRef) || {}
+        const s = siapkanAntre(badan, clientRef, { tokoId: toko }) || {}
         if (s.body) badanAntre = s.body
         if (s.transaksi) transaksiAntre = s.transaksi
       } catch (err) {
@@ -103,7 +107,7 @@ function buatTulisAtauAntre({ offline, kirim, tokoAktif, pemilikAktif = () => nu
       }
     }
     offline.antrean.antrekan({
-      clientRef, jenis, tokoId: tokoAktif(), path: jalur, body: badanAntre,
+      clientRef, jenis, tokoId: toko, path: jalur, body: badanAntre,
       status: offline.STATUS.MENUNGGU, pemilik
     }, { transaksi: transaksiAntre, deltaStok })
     setelahAntre()

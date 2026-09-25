@@ -170,7 +170,8 @@ function registerIpcHandlers(getMainWindow) {
    */
   const tulisAtauAntre = buatTulisAtauAntre({
     offline,
-    kirim: (jalur, body) => withAuthWatch(api.post(jalur, { body })),
+    // Toko dibaca sekali di awal operasi (tulis.js) → dikirim eksplisit, sama dengan tokoId baris antre-nya.
+    kirim: (jalur, body, pesan) => withAuthWatch(api.post(jalur, { body, query: pesan && pesan.tokoId ? { toko_id: pesan.tokoId } : undefined })),
     tokoAktif: () => api.getActiveTokoId(),
     pemilikAktif,
     setelahAntre: () => kirimStatusOffline(),
@@ -721,7 +722,7 @@ function registerIpcHandlers(getMainWindow) {
     let struk = null
     const r = await tulisAtauAntre({
       jenis: 'CHECKOUT', jalur: '/transaksi/checkout', body, deltaStok,
-      siapkanAntre: (badan) => {
+      siapkanAntre: (badan, _ref, ctx) => {
         const nomor = offline.nomorLokal.berikutnya(new Date(), offline.antrean.perangkat().id)
         struk = offline.buatStrukLokal({
           nomor, body: badan,
@@ -733,7 +734,8 @@ function registerIpcHandlers(getMainWindow) {
         // selisih stok. nomor_lokal = nomor di struk yang dipegang pelanggan (dicari di Riwayat server).
         return {
           body: { ...badan, offline: true, nomor_lokal: nomor },
-          transaksi: { tokoId: api.getActiveTokoId(), nomorLokal: nomor, waktuKlien: struk.tanggal, struk }
+          // Toko baris antre (dibaca di awal operasi), bukan toko aktif sekarang — Riwayat menyaring per toko.
+          transaksi: { tokoId: ctx.tokoId, nomorLokal: nomor, waktuKlien: struk.tanggal, struk }
         }
       }
     })
