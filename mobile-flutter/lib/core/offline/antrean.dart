@@ -38,7 +38,9 @@ class PesanAntrean {
   final int urut;
   final String clientRef;
 
-  /// CHECKOUT | PENGELUARAN | STOK_MASUK
+  /// CHECKOUT | PENGELUARAN | STOK_MASUK | OPNAME | SESI_BUKA | BILL_BUKA |
+  /// BILL_RONDE | BILL_BAYAR | REFUND | BATAL | ORDER_TRANSISI (teks bebas —
+  /// jenis baru tidak butuh perubahan skema).
   final String jenis;
   final String? tokoId;
 
@@ -72,6 +74,9 @@ class PesanAntrean {
     'BILL_BUKA' => 'Buka bon',
     'BILL_RONDE' => 'Pesanan bon',
     'BILL_BAYAR' => 'Bayar bon',
+    'REFUND' => 'Refund',
+    'BATAL' => 'Pembatalan',
+    'ORDER_TRANSISI' => 'Pesanan',
     _ => jenis,
   };
 }
@@ -188,6 +193,9 @@ abstract interface class AntreanStore {
 
   Future<PesanAntrean?> cari(String clientRef);
 
+  /// [body] menimpa badan tersimpan (kolom `body_json` yang sudah ada — mis.
+  /// penghitung kirim ulang `_kirim_ulang`); [hapusGalat] mengosongkan
+  /// `galat_terakhir`. Keduanya memakai kolom lama: tanpa perubahan skema.
   Future<void> perbarui(
     String clientRef, {
     StatusAntrean? status,
@@ -196,7 +204,9 @@ abstract interface class AntreanStore {
     DateTime? cobaLagiSetelah,
     bool hapusCobaLagi = false,
     String? galatTerakhir,
+    bool hapusGalat = false,
     Map<String, dynamic>? hasil,
+    Map<String, dynamic>? body,
   });
 
   /// Selesai terkirim: catat hasil, hapus transaksi lokal & delta stoknya.
@@ -217,6 +227,10 @@ abstract interface class AntreanStore {
 
   /// Delta stok tertunda per id produk (dijumlahkan).
   Future<Map<String, double>> deltaStokTertunda({String? tokoId});
+
+  /// Delta stok tertunda milik SATU baris (per id produk) — pembatalan/refund
+  /// atas transaksi lokal membalik delta checkout-nya.
+  Future<Map<String, double>> deltaStokUntuk(String clientRef);
 }
 
 // ---------------------------------------------------------------- memori
@@ -248,13 +262,15 @@ class AntreanMemori implements AntreanStore {
     DateTime? cobaLagiSetelah,
     bool hapusCobaLagi = false,
     String? galatTerakhir,
+    bool hapusGalat = false,
     Map<String, dynamic>? hasil,
+    Map<String, dynamic>? body,
   }) => PesanAntrean(
     urut: urut ?? p.urut,
     clientRef: p.clientRef,
     jenis: p.jenis,
     path: p.path,
-    body: p.body,
+    body: body ?? p.body,
     dibuat: p.dibuat,
     tokoId: p.tokoId,
     pemilik: pemilik ?? p.pemilik,
@@ -262,7 +278,7 @@ class AntreanMemori implements AntreanStore {
     galatServer: galatServer ?? p.galatServer,
     cobaLagiSetelah: hapusCobaLagi ? null : (cobaLagiSetelah ?? p.cobaLagiSetelah),
     status: status ?? p.status,
-    galatTerakhir: galatTerakhir ?? p.galatTerakhir,
+    galatTerakhir: hapusGalat ? null : (galatTerakhir ?? p.galatTerakhir),
     hasil: hasil ?? p.hasil,
   );
 
@@ -295,7 +311,9 @@ class AntreanMemori implements AntreanStore {
     DateTime? cobaLagiSetelah,
     bool hapusCobaLagi = false,
     String? galatTerakhir,
+    bool hapusGalat = false,
     Map<String, dynamic>? hasil,
+    Map<String, dynamic>? body,
   }) async {
     final i = _pesan.indexWhere((p) => p.clientRef == clientRef);
     if (i < 0) return;
@@ -307,7 +325,9 @@ class AntreanMemori implements AntreanStore {
       cobaLagiSetelah: cobaLagiSetelah,
       hapusCobaLagi: hapusCobaLagi,
       galatTerakhir: galatTerakhir,
+      hapusGalat: hapusGalat,
       hasil: hasil,
+      body: body,
     );
   }
 
@@ -360,6 +380,15 @@ class AntreanMemori implements AntreanStore {
     for (final d in _delta) {
       if (refToko != null && !refToko.contains(d.$1)) continue;
       out[d.$2] = (out[d.$2] ?? 0) + d.$3;
+    }
+    return out;
+  }
+
+  @override
+  Future<Map<String, double>> deltaStokUntuk(String clientRef) async {
+    final out = <String, double>{};
+    for (final d in _delta) {
+      if (d.$1 == clientRef) out[d.$2] = (out[d.$2] ?? 0) + d.$3;
     }
     return out;
   }
@@ -485,7 +514,9 @@ class AntreanDriftStore implements AntreanStore {
     DateTime? cobaLagiSetelah,
     bool hapusCobaLagi = false,
     String? galatTerakhir,
+    bool hapusGalat = false,
     Map<String, dynamic>? hasil,
+    Map<String, dynamic>? body,
   }) async {
     await (_db.update(_db.outbox)..where((t) => t.clientRef.equals(clientRef))).write(
       OutboxCompanion(
@@ -495,8 +526,11 @@ class AntreanDriftStore implements AntreanStore {
         cobaLagiSetelah: hapusCobaLagi
             ? const Value(null)
             : (cobaLagiSetelah == null ? const Value.absent() : Value(cobaLagiSetelah)),
-        galatTerakhir: galatTerakhir == null ? const Value.absent() : Value(galatTerakhir),
+        galatTerakhir: hapusGalat
+            ? const Value(null)
+            : (galatTerakhir == null ? const Value.absent() : Value(galatTerakhir)),
         hasilJson: hasil == null ? const Value.absent() : Value(jsonEncode(hasil)),
+        bodyJson: body == null ? const Value.absent() : Value(jsonEncode(body)),
       ),
     );
   }
@@ -542,6 +576,16 @@ class AntreanDriftStore implements AntreanStore {
   Future<TransaksiTertunda?> transaksiLokal(String clientRef) async {
     final b = await (_db.select(_db.transaksiLokal)..where((t) => t.clientRef.equals(clientRef))).getSingleOrNull();
     return b == null ? null : _trxDari(b);
+  }
+
+  @override
+  Future<Map<String, double>> deltaStokUntuk(String clientRef) async {
+    final rows = await (_db.select(_db.stokDelta)..where((t) => t.clientRef.equals(clientRef))).get();
+    final out = <String, double>{};
+    for (final r in rows) {
+      out[r.idProduk] = (out[r.idProduk] ?? 0) + r.delta;
+    }
+    return out;
   }
 
   @override
