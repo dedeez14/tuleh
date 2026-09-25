@@ -602,7 +602,9 @@ export const SessionsScreen = {
         const result = await api.sesi.tutup({
           id,
           kasAkhirFisik: parseAmount(raw),
-          catatan: root.querySelector('#ses-close-note').value.trim()
+          catatan: root.querySelector('#ses-close-note').value.trim(),
+          // Sesi kasir lain tidak ditahan antrean offline perangkat ini (desktop menahan tutup sesi sendiri).
+          sesiLain: !milikSendiri
         })
         if (!result.ok) {
           restore()

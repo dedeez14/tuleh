@@ -16,6 +16,8 @@ const customerWindow = require('./customer-window')
 const updater = require('./updater')
 const offline = require('./offline')
 const { buatTulisAtauAntre } = require('./offline/tulis')
+const { kunciPemilik } = require('./offline/antrean')
+const { daftarKanalAntre, putuskanTulisAntre, pesanTahanTutupSesi, barisUntukTampilan } = require('./offline/kanal-antre')
 const diagnostik = require('./diagnostik')
 const firewall = require('./firewall')
 const { urlHttpsAman, domainServer, hostMilik } = require('./lib/url-aman')
@@ -102,6 +104,12 @@ function registerIpcHandlers(getMainWindow) {
   }
 
   // ---------- Mode offline (salinan baca + antrean kirim) ----------
+  // Akun aktif (email) = pemilik baris antrean: baris hanya dikirim dengan token akun pembuatnya (Fase 4).
+  let akunEmail = null
+  const pemilikAktif = () => kunciPemilik(akunEmail, api.getBaseUrl())
+  // Untuk hitungan status/penjaga: akun belum diketahui → semua baris (undefined), bukan "tanpa pemilik".
+  const pemilikStatus = () => pemilikAktif() || undefined
+
   // Pengurai mengirim ulang lewat api.post; timeout diberi status -1 agar
   // dibedakan dari "tidak sampai" (0) — lihat offline/pengurai.js.
   offline.init({
@@ -113,6 +121,14 @@ function registerIpcHandlers(getMainWindow) {
       const r = await withAuthWatch(api.post(jalur, { body, query, pantauKoneksi: false }))
       return r.timeout ? { ...r, status: -1 } : r
     },
+    // Satu POST per segmen (≤25 op). Batas 60 dtk: gateway 55 dtk, server berhenti mengambil item di ±40 dtk.
+    // Toko ada per operasi (payload.toko_id); `toko_id: undefined` mencegah klien menyisipkan toko aktif.
+    kirimBatch: async (badan) => {
+      const r = await withAuthWatch(api.post('/sync/v2/batch', { body: badan, query: { toko_id: undefined }, pantauKoneksi: false, timeoutMs: 60000 }))
+      return r.timeout ? { ...r, status: -1 } : r
+    },
+    pemilikAktif,
+    laporGalat: ({ pesan, jumlah }) => diagnostik.lapor({ jenis: 'error', pesan, stack: '', konteks: { layar: 'antrean-offline', jumlah } }),
     // Daftar transaksi server untuk memulihkan baris "mungkin sudah sampai".
     ambilDaftar: async (tokoId, dari, sampai) => {
       const r = await api.get('/transaksi', {
@@ -120,8 +136,8 @@ function registerIpcHandlers(getMainWindow) {
       })
       return r.ok && Array.isArray(r.data) ? r.data : null
     },
-    // Tanpa token (mis. setelah 401) pengurai tidak mengirim — tidak memukul server tiap detik.
-    siapKirim: () => api.hasToken(),
+    // Tanpa token (mis. setelah 401) atau akun belum dikenali, pengurai tidak mengirim.
+    siapKirim: () => api.hasToken() && !!pemilikAktif(),
     // Antrean gagal ditulis / berkas rusak → pita status (lewat koneksi._siar) + laporan dukungan.
     onGalatAntrean: (galat) => {
       diagnostik.lapor({
@@ -132,10 +148,24 @@ function registerIpcHandlers(getMainWindow) {
       })
     }
   })
+  const statusOffline = () => offline.status(api.getActiveTokoId(), pemilikStatus())
   const kirimStatusOffline = () => {
     const win = getMainWindow()
-    if (win && !win.isDestroyed()) win.webContents.send('offline:status', offline.status(api.getActiveTokoId()))
+    if (win && !win.isDestroyed()) win.webContents.send('offline:status', statusOffline())
   }
+  /** Akun dikenali (login, salinan /auth/me, auth:me): baris lama tanpa pemilik diklaim akun ini. */
+  function aturAkun(email) {
+    const e = typeof email === 'string' && email.trim() ? email.trim() : null
+    if (!e) return
+    akunEmail = e
+    const pemilik = pemilikAktif()
+    if (pemilik && offline.antrean.klaimTanpaPemilik(pemilik) > 0) kirimStatusOffline()
+  }
+  // Akun dari salinan /auth/me (tersimpan saat masuk): antrean bisa dikirim sebelum renderer memuat identitas.
+  try {
+    const s = offline.salinan.ambil(null, '/auth/me', {})
+    if (s && s.data && s.data.user) aturAkun(s.data.user.email)
+  } catch { /* abaikan */ }
   offline.koneksi.langgan(kirimStatusOffline)
   // Kembali online (dari permintaan mana pun) → uraikan antrean + kirim laporan diagnostik tertunda.
   offline.koneksi.langgan(() => {
@@ -155,13 +185,17 @@ function registerIpcHandlers(getMainWindow) {
     offline,
     kirim: (jalur, body) => withAuthWatch(api.post(jalur, { body })),
     tokoAktif: () => api.getActiveTokoId(),
-    setelahAntre: () => kirimStatusOffline()
+    pemilikAktif,
+    setelahAntre: () => kirimStatusOffline(),
+    // Penyiapan baris antre (nomor/struk lokal) gagal → baris tetap diantrekan dengan badan dasar; dilaporkan.
+    laporGalat: (pesan, err) => diagnostik.lapor({ jenis: 'error', pesan, stack: (err && err.stack) || '', konteks: { layar: 'antrean-offline' } })
   })
 
-  handle('offline:status', () => ({ ok: true, data: offline.status(api.getActiveTokoId()) }))
+  handle('offline:status', () => ({ ok: true, data: statusOffline() }))
   handle('offline:daftar', () => ({
     ok: true,
-    data: offline.antrean.semua().map((p) => ({ ...p, label: offline.labelJenis(p.jenis) }))
+    // Tanpa token persetujuan; label kode & peringatan disusun di sini (satu sumber dengan pengurai).
+    data: offline.antrean.semua().map((p) => barisUntukTampilan(p, pemilikStatus()))
   }))
   handle('offline:sinkron', async () => {
     const ping = await api.get('/ping', { auth: false })
@@ -170,17 +204,17 @@ function registerIpcHandlers(getMainWindow) {
     // Manual: lewati jeda global (mis. setelah langganan diperpanjang) lalu kirim yang siap.
     const n = await offline.pengurai.sinkronSekarang()
     kirimStatusOffline()
-    return { ok: true, data: { terkirim: n, ...offline.status(api.getActiveTokoId()) } }
+    return { ok: true, data: { terkirim: n, ...statusOffline() } }
   })
   handle('offline:kirimUlang', async ({ clientRef }) => {
     await offline.pengurai.kirimUlang(str(clientRef, { required: true }))
     kirimStatusOffline()
-    return { ok: true, data: offline.status(api.getActiveTokoId()) }
+    return { ok: true, data: statusOffline() }
   })
   handle('offline:batalkan', ({ clientRef }) => {
     offline.antrean.batalkan(str(clientRef, { required: true }))
     kirimStatusOffline()
-    return { ok: true, data: offline.status(api.getActiveTokoId()) }
+    return { ok: true, data: statusOffline() }
   })
   const savedToken = authStore.restore()
   if (savedToken) api.setToken(savedToken)
@@ -557,7 +591,8 @@ function registerIpcHandlers(getMainWindow) {
       // Identitas disalin sebagai /auth/me agar masuk otomatis tetap bisa
       // saat internet mati (bentuknya sama dengan jawaban /auth/me).
       if (offline.salinan) offline.salinan.simpan(null, '/auth/me', {}, { data: result.data, meta: null })
-      // Antrean yang tertahan karena sesi berakhir dilanjutkan dengan token baru.
+      // Pemilik antrean = akun ini; antrean yang tertahan karena sesi berakhir dilanjutkan dengan token baru.
+      aturAkun(result.data.user && result.data.user.email)
       if (offline.antrean.ringkas().menunggu > 0) offline.pengurai.sinkronSekarang()
     }
     return result
@@ -577,26 +612,50 @@ function registerIpcHandlers(getMainWindow) {
   })
 
   // Kanal HTTP generik: SEMUA entri kontrak kecuali yang butuh perilaku khusus desktop
-  // (penanda koneksi, antrean offline, riwayat lokal) — ditulis sesudah perulangan ini.
-  const KANAL_KHUSUS_DESKTOP = new Set(['net:ping', 'inventory:stokMasuk', 'pengeluaran:create', 'trx:checkout', 'trx:list', 'trx:detail'])
+  // (penanda koneksi, antrean offline, riwayat lokal, penjaga tutup sesi) — ditulis sesudah perulangan ini.
+  const KANAL_ANTRE = daftarKanalAntre(kontrak.KANAL)
+  const KANAL_KHUSUS_DESKTOP = new Set(['net:ping', 'trx:checkout', 'trx:list', 'trx:detail', 'sesi:tutup', ...KANAL_ANTRE])
   for (const kanal of Object.keys(kontrak.KANAL)) {
     if (KANAL_KHUSUS_DESKTOP.has(kanal)) continue
     handle(kanal, async (payload) => {
       const r = await withAuthWatch(kirimKontrak(kanal, payload))
-      // /config membawa batas tinjau otomatis antrean (juga saat disajikan dari salinan offline).
-      if (kanal === 'config:get' && r.ok && r.data) offline.aturKebijakanAntrean(r.data)
+      // /config membawa batas tinjau otomatis & versi sinkron batch (juga saat disajikan dari salinan offline).
+      if (kanal === 'config:get' && r.ok && r.data) {
+        offline.aturKebijakanAntrean(r.data)
+        offline.aturSyncBatch(r.data)
+        kirimStatusOffline()
+      }
+      if (kanal === 'auth:me' && r.ok && r.data && r.data.user) aturAkun(r.data.user.email)
       return r
     })
   }
 
-  // Tulis yang boleh diantrekan saat offline (kontrak menandai `antrean`).
-  for (const kanal of ['inventory:stokMasuk', 'pengeluaran:create']) {
+  // Tulis yang boleh diantrekan saat offline: SEMUA kanal kontrak ber-`antrean` (diturunkan, bukan daftar tangan).
+  for (const kanal of KANAL_ANTRE) {
     const { antrean } = kontrak.KANAL[kanal]
     handle(kanal, (payload) => {
       const minta = kontrak.bentuk(kanal, payload, konteksKontrak())
-      return tulisAtauAntre({ jenis: antrean.jenis, jalur: minta.jalur, body: minta.body, deltaStok: antrean.deltaStok ? antrean.deltaStok(payload) : {} })
+      const putusan = putuskanTulisAntre({ jenis: antrean.jenis, jalur: minta.jalur, body: minta.body, antrean: offline.antrean, pemilik: pemilikStatus() })
+      if (putusan.tolak) return fail(putusan.tolak)
+      return tulisAtauAntre({
+        jenis: antrean.jenis,
+        jalur: putusan.jalur,
+        body: putusan.body,
+        langsungAntre: putusan.langsungAntre,
+        deltaStok: antrean.deltaStok ? antrean.deltaStok(payload) : {}
+      })
     })
   }
+
+  // Tutup sesi SENDIRI ditahan selama antrean akun ini untuk toko aktif belum kosong: rekap & kas server baru
+  // benar setelah semua penjualan/pembayaran tercatat (paritas Flutter). Menutup sesi kasir lain tidak ditahan.
+  handle('sesi:tutup', async (payload) => {
+    if (!payload.sesiLain) {
+      const pesan = pesanTahanTutupSesi(offline.antrean, { tokoId: api.getActiveTokoId(), pemilik: pemilikStatus() })
+      if (pesan) return { ok: false, status: 409, code: 'ANTREAN', message: pesan, errors: null }
+    }
+    return withAuthWatch(kirimKontrak('sesi:tutup', payload))
+  })
 
   // Buka halaman pembayaran Midtrans DI DALAM aplikasi (BrowserWindow modal,
   // Chromium penuh → 3-D Secure & QRIS jalan). Pantau navigasi: saat Midtrans
@@ -665,24 +724,32 @@ function registerIpcHandlers(getMainWindow) {
     // QRIS otomatis butuh server (tagihan diverifikasi online) → tanpa antrean.
     if (body.qris_tagihan_id) return withAuthWatch(api.post(minta.jalur, { body }))
 
-    // Struk lokal disusun dulu (nomor L-…) agar bisa dicetak & masuk riwayat
-    // walau antre; bila terkirim langsung, struk server yang dipakai.
-    const nomor = offline.nomorLokal.berikutnya()
-    const struk = offline.buatStrukLokal({
-      nomor, body,
-      tampilan: Array.isArray(tampilan) ? tampilan : [],
-      kasir: str(kasirNama, { max: 100 }) || null,
-      pelangganNama: str(pelangganNama, { max: 150 }) || null
-    })
+    const daftarTampilan = Array.isArray(tampilan) ? tampilan : []
     const deltaStok = {}
-    for (const t of (Array.isArray(tampilan) ? tampilan : [])) {
+    for (const t of daftarTampilan) {
       if (t && t.kelola_stok) deltaStok[String(t.id_produk)] = -(Number((body.items.find((i) => i.id_produk === String(t.id_produk)) || {}).kuantitas) || 0)
     }
+    // Nomor & struk lokal HANYA untuk penjualan yang benar-benar diantrekan (terkirim langsung = nomor server).
+    let struk = null
     const r = await tulisAtauAntre({
       jenis: 'CHECKOUT', jalur: '/transaksi/checkout', body, deltaStok,
-      transaksi: { tokoId: api.getActiveTokoId(), nomorLokal: nomor, waktuKlien: struk.tanggal, struk }
+      siapkanAntre: (badan) => {
+        const nomor = offline.nomorLokal.berikutnya(new Date(), offline.antrean.perangkat().id)
+        struk = offline.buatStrukLokal({
+          nomor, body: badan,
+          tampilan: daftarTampilan,
+          kasir: str(kasirNama, { max: 100 }) || null,
+          pelangganNama: str(pelangganNama, { max: 150 }) || null
+        })
+        // offline:true — penjualan sudah terjadi fisik; server menerimanya walau stok kurang dan mencatat
+        // selisih stok. nomor_lokal = nomor di struk yang dipegang pelanggan (dicari di Riwayat server).
+        return {
+          body: { ...badan, offline: true, nomor_lokal: nomor },
+          transaksi: { tokoId: api.getActiveTokoId(), nomorLokal: nomor, waktuKlien: struk.tanggal, struk }
+        }
+      }
     })
-    if (r.tertunda) {
+    if (r.tertunda && struk) {
       struk.catatan_kaki = 'Belum tersinkron — nomor resmi menyusul setelah online.'
       return { ...r, data: struk }
     }
@@ -694,7 +761,7 @@ function registerIpcHandlers(getMainWindow) {
     // Daftar per sesi (detail sesi kasir) hanya berisi transaksi server sesi itu.
     if (payload && payload.sesiId) return r
     // Transaksi lokal yang belum terkirim ditaruh paling atas (id lokal:<ref>).
-    const lokal = offline.antrean.transaksiTertunda(api.getActiveTokoId())
+    const lokal = offline.antrean.transaksiTertunda(api.getActiveTokoId(), pemilikStatus())
       .map((t) => ({ ...t.struk, id: `lokal:${t.clientRef}`, nomor: t.nomorLokal, status: 'BELUM SINKRON' }))
     if (!lokal.length) return r
     if (r.ok && Array.isArray(r.data)) return { ...r, data: [...lokal, ...r.data] }

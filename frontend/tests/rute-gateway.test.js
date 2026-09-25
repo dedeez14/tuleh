@@ -103,6 +103,7 @@ test('tabel rute gateway terbaca (sanity)', () => {
   assert.ok(cocok(rute, 'PUT', '/api/pos/v1/tables/M1'), 'PUT /tables/{id} wajib ada')
   assert.ok(cocok(rute, 'DELETE', '/api/pos/v1/tables/M1'), 'DELETE /tables/{id} wajib ada')
   assert.ok(cocok(rute, 'POST', '/api/pos/v1/diagnostik'), 'POST /diagnostik wajib ada')
+  assert.ok(cocok(rute, 'POST', '/api/pos/v1/sync/v2/batch'), 'POST /sync/v2/batch (batch v2 Fase 4) wajib ada')
   assert.ok(!cocok(rute, 'PATCH', '/api/pos/v1/tables/M1'))
 })
 
