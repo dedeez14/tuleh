@@ -284,3 +284,46 @@ test('504 upstream-timeout dari gateway pada kiriman latar → amplop gangguan b
   assert.equal(jenisGangguan(r), 'TIMEOUT')
   assert.equal(offline.koneksi.online, true)
 })
+
+// Fase 4: pengurai membaca `retryAfter` (detik) dari amplop gagal untuk jeda 429 BATCH_BERJALAN / 503.
+// 429 ber-`errors` = penolakan domain (jalur TOLAK), 503 = gangguan — keduanya wajib membawa nilainya.
+test('Retry-After server → retryAfter (detik) pada amplop gagal 429 & 503; tanpa header / tak sah → tidak ada', async () => {
+  const { Pengurai } = require('../src/main/offline/pengurai')
+  const { Antrean } = require('../src/main/offline/antrean')
+  const a = rakit(jawaban(429, { success: false, message: 'Batch berjalan', errors: { kode: ['BATCH_BERJALAN'] } }, { 'Retry-After': '7' }))
+  const r429 = await a.klien.post('/sync/v2/batch', { body: {}, pantauKoneksi: false })
+  assert.deepEqual([r429.ok, r429.status, r429.retryAfter, r429.errors.kode[0]], [false, 429, 7, 'BATCH_BERJALAN'])
+  // Amplop tidak membawa header: tanpa retryAfter pengurai jatuh ke jeda bawaan 5 dtk.
+  const pengurai = new Pengurai({ antrean: new Antrean({ berkas: null, buatId: () => 'dev' }), kirim: async () => ({ ok: true }), kirimBatch: async () => r429, sekarang: () => 1000 })
+  pengurai._olahJawabanBatch([], r429)
+  assert.equal(pengurai._batchTundaSampai, 1000 + 7000, 'pengurai memakai nilai server')
+
+  const b = rakit(jawaban(503, { success: false, message: 'Tidak tersedia', errors: { kode: ['BATCH_TIDAK_TERSEDIA'] } }, { 'Retry-After': '120' }))
+  const r503 = await b.klien.post('/sync/v2/batch', { body: {}, pantauKoneksi: false })
+  assert.deepEqual([r503.ok, r503.status, r503.gangguan, r503.retryAfter], [false, 503, true, 120])
+
+  // Bentuk tanggal HTTP → detik dari sekarang (dibulatkan ke atas, minimal 0).
+  const nanti = new Date(Date.now() + 30000).toUTCString()
+  const c = rakit(jawaban(429, { success: false, message: 'Terlalu banyak' }, { 'Retry-After': nanti }))
+  const rTanggal = await c.klien.post('/x', { body: {}, pantauKoneksi: false })
+  assert.ok(rTanggal.retryAfter >= 28 && rTanggal.retryAfter <= 30, `retryAfter ${rTanggal.retryAfter}`)
+
+  for (const nilai of [null, 'kapan-kapan', '-5']) {
+    const d = rakit(jawaban(429, { success: false, message: 'x' }, nilai === null ? {} : { 'Retry-After': nilai }))
+    const r = await d.klien.post('/x', { body: {}, pantauKoneksi: false })
+    assert.equal('retryAfter' in r, false, `Retry-After ${nilai}`)
+  }
+  // Sukses tidak membawa field ini.
+  const e = rakit(jawaban(200, { success: true, data: {} }, { 'Retry-After': '5' }))
+  assert.equal('retryAfter' in await e.klien.post('/x', { body: {} }), false)
+})
+
+// Batch v2: toko ada per operasi (payload.toko_id) — `query: { toko_id: undefined }` menekan ?toko_id toko aktif.
+test('query toko_id: undefined → tanpa ?toko_id walau ada toko aktif (sinkron batch)', async () => {
+  const { klien, panggilan } = rakit(jawaban(200, { success: true, data: { versi: 2, results: [] } }))
+  klien.setActiveTokoId('T-AKTIF')
+  await klien.post('/sync/v2/batch', { body: {}, query: { toko_id: undefined }, pantauKoneksi: false, timeoutMs: 60000 })
+  assert.equal(panggilan[0].url.searchParams.has('toko_id'), false)
+  await klien.post('/transaksi/checkout', { body: {} })
+  assert.equal(panggilan[1].url.searchParams.get('toko_id'), 'T-AKTIF', 'permintaan lain tetap disisipi toko aktif')
+})

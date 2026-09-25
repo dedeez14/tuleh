@@ -135,6 +135,19 @@
   }
 
   /**
+   * Indeks baris item: HANYA angka bulat ≥ 0 atau teks berisi digit saja ("2"). Number(true) = 1 dan
+   * Number([2]) = 2 — tanpa saringan tipe, nilai seperti itu diam-diam merujuk baris lain. null = tak sah.
+   */
+  function indeksBaris (v) {
+    if (typeof v === 'number') return Number.isSafeInteger(v) && v >= 0 ? v : null
+    if (typeof v === 'string' && /^\d+$/.test(v)) {
+      const n = Number(v)
+      return Number.isSafeInteger(n) ? n : null
+    }
+    return null
+  }
+
+  /**
    * Baris refund: kuantitas > 0 dan TEPAT SATU rujukan — `id` baris struk server, atau `baris` (indeks item
    * checkout untuk transaksi lokal yang belum tersinkron; server Fase 4 memetakannya dari urutan item).
    */
@@ -145,9 +158,9 @@
       if (kuantitas <= 0) throw new Error('Jumlah refund harus lebih dari nol.')
       const adaBaris = !!b && b.baris !== undefined && b.baris !== null && b.baris !== ''
       if (adaBaris) {
-        const n = Number(b.baris)
+        const n = indeksBaris(b.baris)
         const adaId = b.id !== undefined && b.id !== null && b.id !== ''
-        if (!Number.isInteger(n) || n < 0 || adaId) throw new Error('Baris refund tidak valid.')
+        if (n === null || adaId) throw new Error('Baris refund tidak valid.')
         return { baris: n, kuantitas: kuantitas }
       }
       return { id: str(b && b.id, { required: true }), kuantitas: kuantitas }

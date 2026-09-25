@@ -117,3 +117,73 @@ test('buatStrukLokal: baris per nominal ditandai per_nominal (tak bisa direfund 
   assert.equal(s.items[0].per_nominal, true)
   assert.equal('per_nominal' in s.items[1], false)
 })
+
+test('tulisAtauAntre: client_ref yang masih ada di antrean (belum terkirim) tidak diantrekan dua kali & tidak dicoba online', async () => {
+  const off = offlinePalsu(true)
+  let dikirim = 0
+  const tulis = buatTulisAtauAntre({ offline: off, kirim: async () => { dikirim++; return { ok: false, status: 0, gangguan: true } }, tokoAktif: () => 'T1', pemilikAktif: () => 'k@toko.test' })
+  const r1 = await tulis({ jenis: 'REFUND', jalur: '/transaksi/T1/refund', body: { items: [], client_ref: 'rf-1' } })
+  assert.equal(r1.tertunda, true)
+  assert.equal(dikirim, 1)
+  // Tombol yang sama ditekan lagi (lembar refund yang sama) selagi baris pertama masih menunggu / ditinjau.
+  for (const status of [STATUS.MENUNGGU, STATUS.TINJAU]) {
+    off.antrean.perbarui('rf-1', { status })
+    const r2 = await tulis({ jenis: 'REFUND', jalur: '/transaksi/T1/refund', body: { items: [], client_ref: 'rf-1' } })
+    assert.deepEqual(r2, { ok: true, status: 202, data: null, meta: null, message: '', tertunda: true, clientRef: 'rf-1' })
+  }
+  assert.equal(dikirim, 1, 'tidak ada percobaan online kedua')
+  assert.equal(off.antrean.semua().filter((p) => p.clientRef === 'rf-1').length, 1, 'tetap satu baris')
+
+  // Sudah terkirim → jalur biasa (server memutar ulang jawaban menurut client_ref).
+  off.antrean.selesai('rf-1', { id: 'R1' })
+  const t2 = buatTulisAtauAntre({ offline: off, kirim: async () => { dikirim++; return { ok: true, status: 200, data: { id: 'R1' } } }, tokoAktif: () => 'T1' })
+  const r3 = await t2({ jenis: 'REFUND', jalur: '/transaksi/T1/refund', body: { items: [], client_ref: 'rf-1' } })
+  assert.equal(r3.ok, true)
+  assert.equal(r3.tertunda, undefined)
+  assert.equal(dikirim, 2)
+})
+
+test('tulisAtauAntre: siapkanAntre melempar → tetap diantrekan dengan badan & transaksi dasar, galat dilaporkan', async () => {
+  const off = offlinePalsu(false)
+  const laporan = []
+  const tulis = buatTulisAtauAntre({
+    offline: off, kirim: async () => ({ ok: true }), tokoAktif: () => 'T1',
+    laporGalat: (pesan, err) => laporan.push({ pesan, err })
+  })
+  const r = await tulis({
+    jenis: 'CHECKOUT', jalur: '/transaksi/checkout', body: { items: [{ id_produk: 'P1' }] },
+    transaksi: { tokoId: 'T1', nomorLokal: 'DASAR' },
+    siapkanAntre: () => { throw new Error('nomor lokal rusak') }
+  })
+  assert.equal(r.tertunda, true)
+  const p = off.antrean.cari(r.clientRef)
+  assert.ok(p, 'operasi tidak hilang')
+  assert.deepEqual(p.body.items, [{ id_produk: 'P1' }])
+  assert.equal(p.body.client_ref, r.clientRef)
+  assert.equal(typeof p.body.waktu_klien, 'string')
+  assert.equal(off.antrean.transaksiLokal(r.clientRef).nomorLokal, 'DASAR')
+  assert.equal(laporan.length, 1)
+  assert.match(laporan[0].pesan, /nomor lokal rusak/)
+
+  // Tanpa laporGalat → tidak melempar (bawaan: console.error).
+  const asli = console.error
+  let dicatat = 0
+  console.error = () => { dicatat++ }
+  try {
+    const t2 = buatTulisAtauAntre({ offline: off, kirim: async () => ({ ok: true }), tokoAktif: () => 'T1' })
+    const r2 = await t2({ jenis: 'CHECKOUT', jalur: '/transaksi/checkout', body: {}, siapkanAntre: () => { throw new Error('x') } })
+    assert.equal(r2.tertunda, true)
+    assert.ok(off.antrean.cari(r2.clientRef))
+  } finally { console.error = asli }
+  assert.equal(dicatat, 1)
+})
+
+test('trx:refund: indeks baris hanya bilangan bulat ≥ 0 atau teks digit (true/false/[2]/"1.0" ditolak)', () => {
+  const refund = (baris) => kontrak.bentuk('trx:refund', { id: 'lokal:abc', baris: [{ baris, kuantitas: 1 }], metode: 'TUNAI', alasan: 'Rusak' })
+  for (const salah of [true, false, [2], [], {}, '1.0', ' 2', '-1', '1e1', 1.5, -1, NaN, Infinity]) {
+    assert.throws(() => refund(salah), /tidak valid/, `baris ${JSON.stringify(salah)} harus ditolak`)
+  }
+  assert.deepEqual(badan(refund(0)).items, [{ baris: 0, kuantitas: 1 }])
+  assert.deepEqual(badan(refund(3)).items, [{ baris: 3, kuantitas: 1 }])
+  assert.deepEqual(badan(refund('2')).items, [{ baris: 2, kuantitas: 1 }])
+})

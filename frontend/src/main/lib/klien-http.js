@@ -5,7 +5,9 @@
 //
 // Semua jawaban dinormalisasi ke amplop:
 //   sukses → { ok: true,  status, data, meta, message }
-//   gagal  → { ok: false, status, message, errors, meta, gangguan?, gateway?, timeout? }
+//   gagal  → { ok: false, status, message, errors, meta, gangguan?, gateway?, timeout?, retryAfter? }
+// `retryAfter` = detik dari header Retry-After (429/503) — amplop tak membawa header, jadi pengurai
+// membaca jeda server dari field ini.
 // `gangguan: true` = server tak terjangkau / galat sementara (lihat klasifikasi-http.js):
 // pemanggil tulis mengantrekan, GET disajikan dari salinan offline bila ada.
 
@@ -52,6 +54,30 @@ function sambunganDitolak(err) {
   if (!err) return false
   const kode = (err.cause && err.cause.code) || err.code || ''
   return kode === 'ECONNREFUSED' || /ERR_CONNECTION_REFUSED|ECONNREFUSED/i.test(String(err.message || ''))
+}
+
+/**
+ * Header Retry-After → detik (bilangan bulat ≥ 0): bentuk detik ("7") atau tanggal HTTP (selisih dari
+ * sekarang, dibulatkan ke atas). null bila tak ada / tak sah.
+ */
+function retryAfterDetik(headers, sekarang = Date.now()) {
+  if (!headers) return null
+  let v = null
+  if (typeof headers.get === 'function') v = headers.get('retry-after')
+  else if (typeof headers === 'object') {
+    const kunci = Object.keys(headers).find((k) => k.toLowerCase() === 'retry-after')
+    v = kunci ? headers[kunci] : null
+  }
+  if (v === null || v === undefined) return null
+  const t = String(v).trim()
+  if (/^\d+$/.test(t)) {
+    const n = Number(t)
+    return Number.isSafeInteger(n) ? n : null
+  }
+  if (!/[a-z]/i.test(t)) return null // "-5", "1.5" — bukan detik sah dan bukan tanggal
+  const waktu = Date.parse(t)
+  if (!Number.isFinite(waktu)) return null
+  return Math.max(0, Math.ceil((waktu - sekarang) / 1000))
 }
 
 async function readJsonSafe(response) {
@@ -146,10 +172,11 @@ function buatKlienHttp({ fetch, versiApp, platform, offline, pura2Offline = () =
     }
   }
 
-  function amplopGangguan({ status, message, errors = null, meta = null, gateway = null, timeout = false }) {
+  function amplopGangguan({ status, message, errors = null, meta = null, gateway = null, timeout = false, retryAfter = null }) {
     const r = { ok: false, status, message, errors, meta, gangguan: true }
     if (gateway) r.gateway = gateway
     if (timeout) r.timeout = true
+    if (retryAfter !== null) r.retryAfter = retryAfter
     return r
   }
 
@@ -176,10 +203,11 @@ function buatKlienHttp({ fetch, versiApp, platform, offline, pura2Offline = () =
     const message = (payload && typeof payload.message === 'string' && payload.message) || statusMessage(response.status)
     const errors = (payload && payload.errors) || null
     const meta = payload && payload.meta !== undefined ? payload.meta : null
+    const retryAfter = jenis === JENIS.SUKSES ? null : retryAfterDetik(response.headers)
 
     if (jenis === JENIS.GANGGUAN) {
       return sajikanSalinanAtau(method, endpoint, query, auth,
-        amplopGangguan({ status: response.status, message, errors, meta, gateway: gw }))
+        amplopGangguan({ status: response.status, message, errors, meta, gateway: gw, retryAfter }))
     }
     // Server menjawab (bukan galat buatan gateway) → online.
     if (auth && !gw && koneksi()) koneksi().tandaiOnline()
@@ -194,6 +222,7 @@ function buatKlienHttp({ fetch, versiApp, platform, offline, pura2Offline = () =
       // (mis. data.terkunci_detik pada 429 kunci PIN → hitung mundur di dialog persetujuan).
       const r = { ok: false, status: response.status, data: payload && payload.data !== undefined ? payload.data : null, message, errors, meta }
       if (gw) r.gateway = gw
+      if (retryAfter !== null) r.retryAfter = retryAfter
       return r
     }
 
@@ -321,4 +350,4 @@ function buatKlienHttp({ fetch, versiApp, platform, offline, pura2Offline = () =
   }
 }
 
-module.exports = { buatKlienHttp, statusMessage, bolehDisalin, sambunganDitolak, API_PREFIX }
+module.exports = { buatKlienHttp, statusMessage, bolehDisalin, sambunganDitolak, retryAfterDetik, API_PREFIX }

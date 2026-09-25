@@ -2,6 +2,7 @@
 
 // Permintaan tulis dengan jalur offline (dipakai ipc.js untuk semua kanal kontrak ber-`antrean`
 // dan checkout). Keputusan per jawaban mengikuti kontrak "Klien — perilaku wajib":
+//   - client_ref masih di antrean (belum terkirim) → tertunda lagi, tanpa kirim & tanpa baris kedua;
 //   - diketahui offline / `langsungAntre` → antrekan langsung;
 //   - sukses                            → kembalikan apa adanya (+ clientRef);
 //   - gangguan (jaringan/timeout/5xx/408/429/galat gateway) → antrekan, dikirim ulang
@@ -23,8 +24,16 @@ const teks = (v) => (typeof v === 'string' && v ? v : null)
  * @param {() => string|null} o.tokoAktif
  * @param {() => string|null} [o.pemilikAktif]  kunci pemilik akun aktif (baris hanya dikirim akun pembuatnya)
  * @param {() => void} [o.setelahAntre]  kirim status offline ke renderer
+ * @param {(pesan: string, err: Error) => void} [o.laporGalat]  galat penyiapan baris antre (bawaan console.error)
  */
-function buatTulisAtauAntre({ offline, kirim, tokoAktif, pemilikAktif = () => null, setelahAntre = () => {} }) {
+function buatTulisAtauAntre({ offline, kirim, tokoAktif, pemilikAktif = () => null, setelahAntre = () => {}, laporGalat = null }) {
+  const lapor = (pesan, err) => {
+    try {
+      if (typeof laporGalat === 'function') laporGalat(pesan, err)
+      else console.error('[antrean-offline]', pesan)
+    } catch { /* abaikan */ }
+  }
+
   /**
    * @param {object} o
    * @param {boolean} [o.langsungAntre]  jangan coba kirim (rujukan transaksi lokal yang server belum kenal)
@@ -35,6 +44,12 @@ function buatTulisAtauAntre({ offline, kirim, tokoAktif, pemilikAktif = () => nu
     // client_ref pemanggil dipertahankan (refund: satu ref per lembar — tombol diulang setelah timeout =
     // refund yang sama); tanpa itu dibuat baru. waktu_klien pemanggil juga dipertahankan.
     const clientRef = teks(body && body.client_ref) || offline.buatClientRef()
+    // Ref yang sama masih di antrean (tombol diulang selagi barisnya menunggu/ditinjau) → operasi yang SAMA:
+    // jangan coba online (server bisa mencatatnya lalu baris antre dikirim lagi) dan jangan antrekan baris kedua.
+    const ada = offline.antrean.cari(clientRef)
+    if (ada && ada.status !== offline.STATUS.TERKIRIM) {
+      return { ok: true, status: 202, data: null, meta: null, message: '', tertunda: true, clientRef }
+    }
     const badan = { ...body, client_ref: clientRef, waktu_klien: teks(body && body.waktu_klien) || offline.waktuKlien() }
     if (!langsungAntre && offline.koneksi.online) {
       const r = await kirim(jalur, badan)
@@ -44,9 +59,16 @@ function buatTulisAtauAntre({ offline, kirim, tokoAktif, pemilikAktif = () => nu
     let badanAntre = badan
     let transaksiAntre = transaksi
     if (typeof siapkanAntre === 'function') {
-      const s = siapkanAntre(badan, clientRef) || {}
-      if (s.body) badanAntre = s.body
-      if (s.transaksi) transaksiAntre = s.transaksi
+      // Galat penyiapan (nomor/struk lokal) tidak boleh menghilangkan operasi: antrekan dengan badan dasar.
+      try {
+        const s = siapkanAntre(badan, clientRef) || {}
+        if (s.body) badanAntre = s.body
+        if (s.transaksi) transaksiAntre = s.transaksi
+      } catch (err) {
+        badanAntre = badan
+        transaksiAntre = transaksi
+        lapor(`Penyiapan baris antrean ${jenis} gagal (${err && err.message ? err.message : String(err)}); diantrekan dengan badan dasar.`, err)
+      }
     }
     let pemilik = null
     try { pemilik = pemilikAktif() || null } catch { pemilik = null }
