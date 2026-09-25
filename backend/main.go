@@ -35,6 +35,9 @@ const (
 	rateGlobalPerSec = 20
 	rateGlobalBurst  = 40
 	rateLoginPerMin  = 5
+	// Batas tulis jawaban gateway ke klien; batas upstream tiap rute × percobaan wajib di bawahnya
+	// (dijaga TestBatasWaktuMuatDalamWriteTimeout) agar klien menerima 504/502 bertanda, bukan koneksi putus.
+	serverWriteTimeout = 60 * time.Second
 )
 
 // appVersion diisi saat build: go build -ldflags "-X main.appVersion=<versi package.json>".
@@ -126,7 +129,7 @@ func main() {
 		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       30 * time.Second,
-		WriteTimeout:      60 * time.Second,
+		WriteTimeout:      serverWriteTimeout,
 		IdleTimeout:       90 * time.Second,
 	}
 

@@ -23,8 +23,9 @@ type route struct {
 
 const apiPrefix = "/api/pos/v1"
 
-// Batas tunggu upstream rute sinkronisasi batch: server berhenti mengambil item baru setelah ±40 dtk
-// (sisanya DITUNDA) dan nginx memutus di 60 dtk; 55 dtk memberi ruang jawaban parsial tiba utuh.
+// Batas tunggu upstream rute sinkronisasi batch: server berhenti mengambil item baru setelah anggaran
+// 20 dtk (+ antrean FPM/unggah/item pertama; sisanya DITUNDA) dan nginx memutus di 60 dtk; 55 dtk memberi
+// ruang jawaban parsial tiba utuh.
 const timeoutSyncBatch = 55 * time.Second
 
 var routeTable = []route{

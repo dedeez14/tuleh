@@ -21,10 +21,13 @@ const (
 
 // Penanda galat yang DIBUAT gateway sendiri (bukan jawaban server). Aplikasi membedakan
 // "server menolak" dari "server tak terjangkau" lewat header ini: upstream-unreachable
-// = gangguan jaringan → antre & sajikan salinan, bukan penolakan.
+// = gangguan jaringan → antre & sajikan salinan, bukan penolakan. upstream-timeout (504)
+// = permintaan terkirim tetapi server tak menjawab dalam batas waktu rute → mundur per
+// baris tanpa menandai offline (bisa jadi server sudah memprosesnya).
 const (
 	gatewayHeader            = "X-Tuleh-Gateway"
 	gatewayUpstreamUnreached = "upstream-unreachable"
+	gatewayUpstreamTimeout   = "upstream-timeout"
 	gatewayRateLimited       = "rate-limited"
 	gatewayRouteUnknown      = "route-unknown"
 	gatewayBodyTooLarge      = "body-too-large"
@@ -34,6 +37,7 @@ const (
 // Pesan galat gateway sengaja netral merek: gateway melayani server tenant mana pun.
 const (
 	pesanUpstreamTakTerjangkau = "Server tidak dapat dihubungi. Periksa koneksi internet."
+	pesanUpstreamTerlambat     = "Server terlalu lama menjawab. Coba lagi beberapa saat lagi."
 	pesanBodyTerlaluBesar      = "Data yang dikirim terlalu besar."
 )
 
@@ -114,11 +118,18 @@ func (p *proxy) handler(rt route) http.Handler {
 			}
 		}
 
-		status, contentType, body, err := p.forward(r, p.batasWaktu(rt))
+		batas := p.batasWaktu(rt)
+		status, contentType, body, err := p.forward(r, batas)
 		if err != nil {
 			var tooLarge *http.MaxBytesError
 			if errors.As(err, &tooLarge) {
 				writeGatewayError(w, http.StatusRequestEntityTooLarge, gatewayBodyTooLarge, pesanBodyTerlaluBesar)
+				return
+			}
+			// Batas waktu rute habis selagi klien masih tersambung: permintaan sudah sampai, server lambat.
+			if errors.Is(err, context.DeadlineExceeded) && r.Context().Err() == nil {
+				p.log.Warn("upstream melewati batas waktu", "path", r.URL.Path, "batas", batas, "error", err)
+				writeGatewayError(w, http.StatusGatewayTimeout, gatewayUpstreamTimeout, pesanUpstreamTerlambat)
 				return
 			}
 			p.log.Warn("upstream tidak terjangkau", "path", r.URL.Path, "error", err)
@@ -164,11 +175,7 @@ func (p *proxy) forward(r *http.Request, batas time.Duration) (status int, conte
 	target.Path = r.URL.Path
 	target.RawQuery = r.URL.RawQuery
 
-	attempts := 1
-	if r.Method == http.MethodGet {
-		attempts = 2
-	}
-
+	attempts := jumlahPercobaan(r.Method)
 	for attempt := 1; attempt <= attempts; attempt++ {
 		status, contentType, body, err = p.doOnce(r, target.String(), reqBody, batas)
 		retryable := err != nil || status == http.StatusBadGateway ||
@@ -179,6 +186,14 @@ func (p *proxy) forward(r *http.Request, batas time.Duration) (status int, conte
 		time.Sleep(retryBackoff)
 	}
 	return status, contentType, body, err
+}
+
+// jumlahPercobaan = berapa kali forward mencoba upstream: GET sekali coba ulang, metode lain sekali saja.
+func jumlahPercobaan(method string) int {
+	if method == http.MethodGet {
+		return 2
+	}
+	return 1
 }
 
 func (p *proxy) doOnce(orig *http.Request, targetURL string, reqBody []byte, batas time.Duration) (int, string, []byte, error) {

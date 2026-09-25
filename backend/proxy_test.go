@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -479,8 +480,9 @@ func TestProxyOtorisasiDiteruskan(t *testing.T) {
 	}
 }
 
-// Sinkronisasi batch v2 sah berjalan sampai ±40 dtk di server: rute ber-timeout menunggu upstream lebih
-// lama dari batas bawaan, rute biasa tetap diputus di batas bawaan → 502 upstream-unreachable.
+// Sinkronisasi batch v2 sah berjalan sampai 20 dtk (+ antrean FPM/unggah/item pertama) di server: rute
+// ber-timeout menunggu upstream lebih lama dari batas bawaan, rute biasa diputus di batas bawaan → 504
+// upstream-timeout (permintaan sudah terkirim, server lambat — BUKAN "server tak terjangkau").
 func TestBatasWaktuPerRute(t *testing.T) {
 	lambat := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		time.Sleep(150 * time.Millisecond)
@@ -508,8 +510,53 @@ func TestBatasWaktuPerRute(t *testing.T) {
 		t.Fatalf("rute ber-timeout: status %d, ingin 200", res.StatusCode)
 	}
 	res := kirim("/biasa")
-	if res.StatusCode != http.StatusBadGateway || res.Header.Get(gatewayHeader) != gatewayUpstreamUnreached {
-		t.Fatalf("rute biasa: status %d penanda %q, ingin 502 upstream-unreachable", res.StatusCode, res.Header.Get(gatewayHeader))
+	if res.StatusCode != http.StatusGatewayTimeout || res.Header.Get(gatewayHeader) != gatewayUpstreamTimeout {
+		t.Fatalf("rute biasa: status %d penanda %q, ingin 504 upstream-timeout", res.StatusCode, res.Header.Get(gatewayHeader))
+	}
+}
+
+// Batas waktu yang habis saat badan jawaban masih diunduh (header sudah tiba) tetap 504 upstream-timeout;
+// upstream mati pada rute ber-timeout panjang tetap 502 upstream-unreachable (antre & tandai offline).
+func TestBatasWaktuBadanTerlambatDanUpstreamMati(t *testing.T) {
+	badanLambat := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"success":true,`))
+		w.(http.Flusher).Flush()
+		time.Sleep(200 * time.Millisecond)
+		_, _ = w.Write([]byte(`"data":null}`))
+	}))
+	t.Cleanup(badanLambat.Close)
+	uLambat, _ := url.Parse(badanLambat.URL)
+	pLambat := newProxy(uLambat, newTTLCache(8), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	pLambat.timeoutBawaan = 50 * time.Millisecond
+
+	mati := httptest.NewServer(http.NotFoundHandler())
+	uMati, _ := url.Parse(mati.URL)
+	mati.Close() // port tertutup → koneksi ditolak
+	pMati := newProxy(uMati, newTTLCache(8), slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	mux := http.NewServeMux()
+	mux.Handle("POST /badan-lambat", pLambat.handler(route{method: "POST", pattern: "/badan-lambat"}))
+	mux.Handle("POST /mati", pMati.handler(route{method: "POST", pattern: "/mati", timeout: timeoutSyncBatch}))
+	gw := httptest.NewServer(mux)
+	t.Cleanup(gw.Close)
+
+	for jalur, ingin := range map[string]struct {
+		status  int
+		penanda string
+	}{
+		"/badan-lambat": {http.StatusGatewayTimeout, gatewayUpstreamTimeout},
+		"/mati":         {http.StatusBadGateway, gatewayUpstreamUnreached},
+	} {
+		res, err := http.Post(gw.URL+jalur, "application/json", strings.NewReader("{}"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != ingin.status || res.Header.Get(gatewayHeader) != ingin.penanda {
+			t.Errorf("%s: status %d penanda %q, ingin %d %q", jalur, res.StatusCode, res.Header.Get(gatewayHeader), ingin.status, ingin.penanda)
+		}
 	}
 }
 
@@ -525,13 +572,48 @@ func TestRuteSyncBatchBerbatasWaktuPanjang(t *testing.T) {
 		if rt.timeout != 55*time.Second {
 			t.Errorf("POST %s timeout = %v, ingin 55s", rt.pattern, rt.timeout)
 		}
-		if len(rt.purge) != 3 {
-			t.Errorf("POST %s purge = %v, ingin produk/laporan/transaksi", rt.pattern, rt.purge)
+		ingin := []string{apiPrefix + "/produk", apiPrefix + "/laporan", apiPrefix + "/transaksi"}
+		if !slices.Equal(rt.purge, ingin) {
+			t.Errorf("POST %s purge = %v, ingin %v", rt.pattern, rt.purge, ingin)
 		}
 	}
 	for pola, ketemu := range ada {
 		if !ketemu {
 			t.Errorf("rute POST %s tidak ada di allowlist", pola)
+		}
+	}
+}
+
+// Bawaan: proxy baru memakai upstreamTimeout (20 dtk) dan hanya dua rute sinkronisasi batch yang
+// memperpanjangnya — rute lain yang diam-diam ber-timeout panjang menahan koneksi kasir terlalu lama.
+func TestBatasWaktuBawaan(t *testing.T) {
+	u, _ := url.Parse("http://127.0.0.1:1")
+	p := newProxy(u, newTTLCache(8), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if p.timeoutBawaan != upstreamTimeout {
+		t.Fatalf("timeoutBawaan = %v, ingin upstreamTimeout %v", p.timeoutBawaan, upstreamTimeout)
+	}
+	for _, rt := range routeTable {
+		batch := rt.method == "POST" && (rt.pattern == "/sync/batch" || rt.pattern == "/sync/v2/batch")
+		if !batch && rt.timeout != 0 {
+			t.Errorf("%s %s timeout = %v, ingin 0 (bawaan)", rt.method, rt.pattern, rt.timeout)
+		}
+	}
+}
+
+// Jawaban gateway harus tiba sebelum WriteTimeout server gateway memutus koneksi: untuk tiap rute,
+// batas × percobaan (+ jeda coba ulang) < serverWriteTimeout — selain itu klien menerima koneksi putus
+// alih-alih 504/502 bertanda.
+func TestBatasWaktuMuatDalamWriteTimeout(t *testing.T) {
+	u, _ := url.Parse("http://127.0.0.1:1")
+	p := newProxy(u, newTTLCache(8), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	for _, rt := range routeTable {
+		n := jumlahPercobaan(rt.method)
+		if rt.method == "GET" && n != 2 {
+			t.Fatalf("GET: percobaan = %d, ingin 2", n)
+		}
+		total := time.Duration(n)*p.batasWaktu(rt) + time.Duration(n-1)*retryBackoff
+		if total >= serverWriteTimeout {
+			t.Errorf("%s %s: batas %v × %d percobaan = %v, ingin < serverWriteTimeout %v", rt.method, rt.pattern, p.batasWaktu(rt), n, total, serverWriteTimeout)
 		}
 	}
 }
