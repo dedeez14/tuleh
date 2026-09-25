@@ -229,3 +229,27 @@ test('pantauKoneksi:false (pengurai latar): 5xx tidak menandai aplikasi offline,
   assert.deepEqual([r.ok, r.status, r.gangguan], [false, 500, true])
   assert.equal(offline.koneksi.online, true)
 })
+
+// Sinkronisasi batch (Fase 4) sah berjalan sampai ±55 dtk di gateway: pemanggil menaikkan batas per
+// permintaan tanpa mengubah batas 15 dtk permintaan lain.
+test('timeoutMs per panggilan menggantikan batas bawaan hanya untuk permintaan itu', async () => {
+  const lambat = (ms) => (url, init) => new Promise((resolve, reject) => {
+    const t = setTimeout(() => resolve(jawaban(200, { success: true, data: { ok: 1 } })), ms)
+    init.signal.addEventListener('abort', () => { clearTimeout(t); reject(Object.assign(new Error('aborted'), { name: 'AbortError' })) })
+  })
+  const offline = { salinan: null, koneksi: new Koneksi() }
+  const klien = buatKlienHttp({ fetch: lambat(80), versiApp: () => '0.9.99', platform: 'desktop', offline, timeoutMs: 30 })
+  klien.setBaseUrl('https://toko.contoh.test')
+  klien.setToken('rahasia')
+
+  const biasa = await klien.post('/x', { body: {}, pantauKoneksi: false })
+  assert.equal(biasa.ok, false)
+  assert.equal(biasa.timeout, true, 'batas bawaan 30 ms < 80 ms')
+
+  const panjang = await klien.post('/x', { body: {}, pantauKoneksi: false, timeoutMs: 500 })
+  assert.equal(panjang.ok, true)
+  assert.deepEqual(panjang.data, { ok: 1 })
+
+  const tidakSah = await klien.post('/x', { body: {}, pantauKoneksi: false, timeoutMs: 'x' })
+  assert.equal(tidakSah.timeout, true, 'nilai tak sah → batas bawaan')
+})

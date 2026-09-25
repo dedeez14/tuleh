@@ -214,13 +214,16 @@ function buatKlienHttp({ fetch, versiApp, platform, offline, pura2Offline = () =
    * `pantauKoneksi: false` = permintaan latar (pengurai antrean) yang TIDAK mengubah penanda
    * online/offline aplikasi dan tanpa salinan: satu muatan yang terus ditolak 5xx tidak boleh
    * membuat seluruh aplikasi tampak offline. Pengurai sendiri menandai offline untuk gangguan jaringan.
+   * `timeoutMs` (angka > 0) = batas waktu khusus permintaan ini (sinkronisasi batch 60 dtk); selain itu
+   * batas bawaan klien.
    */
-  async function request(method, endpoint, { query, body, auth = true, pantauKoneksi = true } = {}) {
+  async function request(method, endpoint, { query, body, auth = true, pantauKoneksi = true, timeoutMs: batasPanggilan } = {}) {
     query = denganToko(query, auth)
     const efek = auth && pantauKoneksi // koneksi & salinan offline
     const headers = headerDasar()
     if (body !== undefined) headers['Content-Type'] = 'application/json'
     if (auth && token) headers.Authorization = `Bearer ${token}`
+    const batas = Number(batasPanggilan) > 0 ? Number(batasPanggilan) : timeoutMs
 
     let response
     try {
@@ -229,7 +232,7 @@ function buatKlienHttp({ fetch, versiApp, platform, offline, pura2Offline = () =
         method,
         headers,
         body: body !== undefined ? JSON.stringify(body) : undefined
-      }, timeoutMs)
+      }, batas)
     } catch (err) {
       const timedOut = !!err && err.name === 'AbortError'
       return sajikanSalinanAtau(method, endpoint, query, efek, amplopGangguan({
