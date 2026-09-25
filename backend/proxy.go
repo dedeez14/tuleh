@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -48,15 +49,19 @@ type proxy struct {
 	client   *http.Client
 	cache    *ttlCache
 	log      *slog.Logger
+	// Batas tunggu upstream untuk rute tanpa timeout sendiri (tes boleh mengecilkannya).
+	timeoutBawaan time.Duration
 }
 
 func newProxy(upstream *url.URL, cache *ttlCache, logger *slog.Logger) *proxy {
 	return &proxy{
-		upstream: upstream,
-		cache:    cache,
-		log:      logger,
+		upstream:      upstream,
+		cache:         cache,
+		log:           logger,
+		timeoutBawaan: upstreamTimeout,
+		// Tanpa Client.Timeout: batas waktu dipasang per permintaan lewat konteks (batasWaktu) agar
+		// rute sinkronisasi batch boleh menunggu lebih lama dari rute biasa.
 		client: &http.Client{
-			Timeout: upstreamTimeout,
 			Transport: &http.Transport{
 				MaxIdleConns:        20,
 				MaxIdleConnsPerHost: 10,
@@ -66,6 +71,14 @@ func newProxy(upstream *url.URL, cache *ttlCache, logger *slog.Logger) *proxy {
 			},
 		},
 	}
+}
+
+// batasWaktu = timeout rute bila diisi, selain itu batas bawaan proxy.
+func (p *proxy) batasWaktu(rt route) time.Duration {
+	if rt.timeout > 0 {
+		return rt.timeout
+	}
+	return p.timeoutBawaan
 }
 
 // tokenHash memisahkan cache antar pengguna tanpa pernah menyimpan token asli.
@@ -101,7 +114,7 @@ func (p *proxy) handler(rt route) http.Handler {
 			}
 		}
 
-		status, contentType, body, err := p.forward(r)
+		status, contentType, body, err := p.forward(r, p.batasWaktu(rt))
 		if err != nil {
 			var tooLarge *http.MaxBytesError
 			if errors.As(err, &tooLarge) {
@@ -138,7 +151,7 @@ func (p *proxy) handler(rt route) http.Handler {
 
 // forward meneruskan permintaan ke upstream. GET dicoba ulang sekali bila
 // gagal jaringan / 502-504; metode lain tidak (tidak idempoten).
-func (p *proxy) forward(r *http.Request) (status int, contentType string, body []byte, err error) {
+func (p *proxy) forward(r *http.Request, batas time.Duration) (status int, contentType string, body []byte, err error) {
 	var reqBody []byte
 	if r.Body != nil {
 		reqBody, err = io.ReadAll(r.Body) // sudah dibatasi MaxBytesReader
@@ -157,7 +170,7 @@ func (p *proxy) forward(r *http.Request) (status int, contentType string, body [
 	}
 
 	for attempt := 1; attempt <= attempts; attempt++ {
-		status, contentType, body, err = p.doOnce(r, target.String(), reqBody)
+		status, contentType, body, err = p.doOnce(r, target.String(), reqBody, batas)
 		retryable := err != nil || status == http.StatusBadGateway ||
 			status == http.StatusServiceUnavailable || status == http.StatusGatewayTimeout
 		if !retryable || attempt == attempts {
@@ -168,8 +181,10 @@ func (p *proxy) forward(r *http.Request) (status int, contentType string, body [
 	return status, contentType, body, err
 }
 
-func (p *proxy) doOnce(orig *http.Request, targetURL string, reqBody []byte) (int, string, []byte, error) {
-	req, err := http.NewRequestWithContext(orig.Context(), orig.Method, targetURL, bytes.NewReader(reqBody))
+func (p *proxy) doOnce(orig *http.Request, targetURL string, reqBody []byte, batas time.Duration) (int, string, []byte, error) {
+	ctx, cancel := context.WithTimeout(orig.Context(), batas)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, orig.Method, targetURL, bytes.NewReader(reqBody))
 	if err != nil {
 		return 0, "", nil, err
 	}
@@ -192,6 +207,7 @@ func (p *proxy) doOnce(orig *http.Request, targetURL string, reqBody []byte) (in
 	}
 	defer res.Body.Close()
 
+	// Badan dibaca selagi konteks hidup: batas waktu mencakup unduhan jawaban seperti Client.Timeout dulu.
 	body, err := io.ReadAll(io.LimitReader(res.Body, maxUpstreamBody))
 	if err != nil {
 		return 0, "", nil, err

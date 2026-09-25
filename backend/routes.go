@@ -17,9 +17,15 @@ type route struct {
 	cache   time.Duration
 	purge   []string
 	isLogin bool // dikenai rate limit ketat anti brute-force
+	// timeout > 0 menggantikan batas tunggu upstream bawaan (20 dtk) untuk rute ini.
+	timeout time.Duration
 }
 
 const apiPrefix = "/api/pos/v1"
+
+// Batas tunggu upstream rute sinkronisasi batch: server berhenti mengambil item baru setelah ±40 dtk
+// (sisanya DITUNDA) dan nginx memutus di 60 dtk; 55 dtk memberi ruang jawaban parsial tiba utuh.
+const timeoutSyncBatch = 55 * time.Second
 
 var routeTable = []route{
 	// Util
@@ -74,7 +80,9 @@ var routeTable = []route{
 	{method: "POST", pattern: "/orders"},
 	{method: "GET", pattern: "/orders/{id}"},
 	{method: "POST", pattern: "/orders/{id}/transition"},
-	{method: "POST", pattern: "/sync/batch", purge: []string{apiPrefix + "/produk", apiPrefix + "/laporan", apiPrefix + "/transaksi"}},
+	{method: "POST", pattern: "/sync/batch", timeout: timeoutSyncBatch, purge: []string{apiPrefix + "/produk", apiPrefix + "/laporan", apiPrefix + "/transaksi"}},
+	// Batch v2 (Fase 4) di rute baru: server lama menjawab 404 sehingga app kembali ke kiriman per baris.
+	{method: "POST", pattern: "/sync/v2/batch", timeout: timeoutSyncBatch, purge: []string{apiPrefix + "/produk", apiPrefix + "/laporan", apiPrefix + "/transaksi"}},
 
 	// Bon meja (open bill dine-in) — selalu segar; pelunasan menyegarkan stok/laporan/transaksi
 	{method: "GET", pattern: "/bills"},

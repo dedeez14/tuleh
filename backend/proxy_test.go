@@ -478,3 +478,60 @@ func TestProxyOtorisasiDiteruskan(t *testing.T) {
 		t.Fatalf("jalur upstream = %q", jalur)
 	}
 }
+
+// Sinkronisasi batch v2 sah berjalan sampai ±40 dtk di server: rute ber-timeout menunggu upstream lebih
+// lama dari batas bawaan, rute biasa tetap diputus di batas bawaan → 502 upstream-unreachable.
+func TestBatasWaktuPerRute(t *testing.T) {
+	lambat := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		time.Sleep(150 * time.Millisecond)
+		_, _ = w.Write([]byte(`{"success":true,"data":null}`))
+	}))
+	t.Cleanup(lambat.Close)
+	u, _ := url.Parse(lambat.URL)
+	p := newProxy(u, newTTLCache(8), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	p.timeoutBawaan = 50 * time.Millisecond
+	mux := http.NewServeMux()
+	mux.Handle("POST /panjang", p.handler(route{method: "POST", pattern: "/panjang", timeout: time.Second}))
+	mux.Handle("POST /biasa", p.handler(route{method: "POST", pattern: "/biasa"}))
+	gw := httptest.NewServer(mux)
+	t.Cleanup(gw.Close)
+
+	kirim := func(jalur string) *http.Response {
+		res, err := http.Post(gw.URL+jalur, "application/json", strings.NewReader("{}"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		return res
+	}
+	if res := kirim("/panjang"); res.StatusCode != http.StatusOK {
+		t.Fatalf("rute ber-timeout: status %d, ingin 200", res.StatusCode)
+	}
+	res := kirim("/biasa")
+	if res.StatusCode != http.StatusBadGateway || res.Header.Get(gatewayHeader) != gatewayUpstreamUnreached {
+		t.Fatalf("rute biasa: status %d penanda %q, ingin 502 upstream-unreachable", res.StatusCode, res.Header.Get(gatewayHeader))
+	}
+}
+
+// App Fase 4 memanggil /sync/v2/batch (server lama → 404 → per baris); /sync/batch lama tetap ada.
+// Keduanya wajib ber-timeout 55 dtk dan membersihkan cache stok/laporan/transaksi setelah sukses.
+func TestRuteSyncBatchBerbatasWaktuPanjang(t *testing.T) {
+	ada := map[string]bool{"/sync/batch": false, "/sync/v2/batch": false}
+	for _, rt := range routeTable {
+		if _, dicari := ada[rt.pattern]; !dicari || rt.method != "POST" {
+			continue
+		}
+		ada[rt.pattern] = true
+		if rt.timeout != 55*time.Second {
+			t.Errorf("POST %s timeout = %v, ingin 55s", rt.pattern, rt.timeout)
+		}
+		if len(rt.purge) != 3 {
+			t.Errorf("POST %s purge = %v, ingin produk/laporan/transaksi", rt.pattern, rt.purge)
+		}
+	}
+	for pola, ketemu := range ada {
+		if !ketemu {
+			t.Errorf("rute POST %s tidak ada di allowlist", pola)
+		}
+	}
+}
