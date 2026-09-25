@@ -9,7 +9,8 @@ const assert = require('node:assert/strict')
 
 const kontrak = require('../src/shared/kontrak-kanal.js')
 const { Antrean, STATUS, buatClientRef, waktuKlien } = require('../src/main/offline/antrean')
-const { buatTulisAtauAntre } = require('../src/main/offline/tulis')
+const { buatTulisAtauAntre, dataHasilTersimpan } = require('../src/main/offline/tulis')
+const { buatAkunAktif } = require('../src/main/offline/kanal-antre')
 const { Koneksi } = require('../src/main/offline')
 const { NomorLokal, buatStrukLokal, strukCadangan } = require('../src/main/offline/struk-lokal')
 
@@ -213,9 +214,54 @@ test('tulisAtauAntre: ref sama sudah TERKIRIM + offline / galat jaringan → has
   assert.equal(dikirim, 1, 'tetap dicoba online dulu')
   assert.equal(on.antrean.semua().length, 1)
 
-  // Hasil batch ber-data → data itu yang dikembalikan.
+  // Hasil batch ber-data → data itu + id/nomor item (bentuk sama dengan respons online).
   on.antrean.perbarui('b-1', { hasil: { id: 'T1', nomor: 'POS/1', kode: 'OK', tipe: 'transaksi.batal', peringatan: [], idempoten: true, data: { status: 'DIBATALKAN' } } })
-  assert.deepEqual((await t2({ jenis: 'BATAL', jalur: '/transaksi/T1/batal', body: { client_ref: 'b-1' } })).data, { status: 'DIBATALKAN' })
+  assert.deepEqual((await t2({ jenis: 'BATAL', jalur: '/transaksi/T1/batal', body: { client_ref: 'b-1' } })).data, { status: 'DIBATALKAN', id: 'T1', nomor: 'POS/1' })
+})
+
+test('dataHasilTersimpan: hasil batch membawa id & nomor item di samping data (toast "Refund <nomor> tercatat")', () => {
+  // Refund lewat batch: id/nomor dokumen refund ada di item, total & transaksi asal di data.
+  const refund = { id: 'R9', nomor: 'RF/9', kode: 'OK', tipe: 'transaksi.refund', peringatan: [], idempoten: false, _idempoten: false, data: { total: 5000, transaksi_id: 'T1', transaksi_nomor: 'POS/1' } }
+  assert.deepEqual(dataHasilTersimpan(refund), { total: 5000, transaksi_id: 'T1', transaksi_nomor: 'POS/1', id: 'R9', nomor: 'RF/9' })
+  // Tanpa data / data bukan objek → {id, nomor}.
+  assert.deepEqual(dataHasilTersimpan({ ...refund, data: null }), { id: 'R9', nomor: 'RF/9' })
+  assert.deepEqual(dataHasilTersimpan({ ...refund, data: 'x' }), { id: 'R9', nomor: 'RF/9' })
+  // id/nomor item kosong → pakai milik data bila ada (jangan menimpa dengan null).
+  assert.deepEqual(dataHasilTersimpan({ ...refund, id: null, nomor: undefined, data: { id: 'R9', nomor: 'RF/9', total: 1 } }), { id: 'R9', nomor: 'RF/9', total: 1 })
+  // Hasil pemulih & hasil per baris tetap seperti sebelumnya.
+  assert.deepEqual(dataHasilTersimpan({ id: 'R1', nomor: 'RF/1', dipulihkan: true }), { id: 'R1', nomor: 'RF/1' })
+  assert.deepEqual(dataHasilTersimpan({ id: 'R1', nomor: 'RF/1', total: 2, _idempoten: true }), { id: 'R1', nomor: 'RF/1', total: 2 })
+})
+
+test('tulisAtauAntre: pemilik dibaca SEKALI di awal — keluar/ganti akun selagi kirim menggantung tidak memindahkan baris', async () => {
+  const antreanMaya = { klaimTanpaPemilik: () => 0 }
+  for (const [label, sesudahKirim] of [
+    ['keluar akun (auth:logout → lupakan)', (akun) => akun.lupakan()],
+    ['akun lain masuk', (akun) => akun.atur('lain@toko.test')]
+  ]) {
+    const off = offlinePalsu(true)
+    const akun = buatAkunAktif({ antrean: () => antreanMaya, baseUrl: () => 'https://pos.contoh.test' })
+    akun.atur('k@toko.test')
+    const awal = akun.pemilikAktif()
+    assert.ok(awal)
+    let lepas
+    const menggantung = new Promise((resolve) => { lepas = resolve })
+    const tulis = buatTulisAtauAntre({
+      offline: off,
+      // Permintaan menggantung; selagi itu kasir keluar / akun lain masuk; lalu timeout (gangguan).
+      kirim: () => menggantung,
+      tokoAktif: () => 'T1',
+      pemilikAktif: akun.pemilikAktif
+    })
+    const janji = tulis({ jenis: 'REFUND', jalur: '/transaksi/T1/refund', body: { items: [], client_ref: `rf-${label}` } })
+    await Promise.resolve()
+    sesudahKirim(akun)
+    assert.notEqual(akun.pemilikAktif(), awal, `${label}: pemilik aktif memang berubah`)
+    lepas({ ok: false, status: -1, timeout: true })
+    const r = await janji
+    assert.equal(r.tertunda, true)
+    assert.equal(off.antrean.cari(r.clientRef).pemilik, awal, `${label}: baris tetap milik akun awal`)
+  }
 })
 
 test('Antrean.antrekan: clientRef yang sudah ada → baris itu dikembalikan, tidak ditambah (pertahanan berlapis)', () => {

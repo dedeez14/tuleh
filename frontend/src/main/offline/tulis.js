@@ -21,13 +21,17 @@ const teks = (v) => (typeof v === 'string' && v ? v : null)
 
 /**
  * `data` dari hasil baris TERKIRIM: hasil batch ({id, nomor, kode, tipe, idempoten, data, …}) → `data` item
- * atau {id, nomor}; hasil pemulih ({id, nomor, dipulihkan}) → {id, nomor}; hasil per baris = data server
- * mentah (tanpa penanda internal `_idempoten`).
+ * + id/nomor item (bentuk sama dengan respons online, mis. refund {id, nomor, total, transaksi_id,
+ * transaksi_nomor}; id/nomor item kosong → milik `data` bila ada); hasil pemulih ({id, nomor, dipulihkan})
+ * → {id, nomor}; hasil per baris = data server mentah (tanpa penanda internal `_idempoten`).
  */
 function dataHasilTersimpan(h) {
   if (!h || typeof h !== 'object') return null
   const bentukBatch = 'kode' in h && 'tipe' in h && 'idempoten' in h
-  if (bentukBatch) return h.data && typeof h.data === 'object' ? h.data : { id: h.id ?? null, nomor: h.nomor ?? null }
+  if (bentukBatch) {
+    const d = h.data && typeof h.data === 'object' && !Array.isArray(h.data) ? h.data : {}
+    return { ...d, id: h.id ?? d.id ?? null, nomor: h.nomor ?? d.nomor ?? null }
+  }
   if (h.dipulihkan === true) return { id: h.id ?? null, nomor: h.nomor ?? null }
   const { _idempoten, ...data } = h
   return data
@@ -69,6 +73,11 @@ function buatTulisAtauAntre({ offline, kirim, tokoAktif, pemilikAktif = () => nu
       return r
     }
     const badan = { ...body, client_ref: clientRef, waktu_klien: teks(body && body.waktu_klien) || offline.waktuKlien() }
+    // Pemilik dibaca SEKALI, sebelum mencoba online: kasir bisa keluar (auth:logout → akun dilupakan) atau
+    // akun lain masuk selagi permintaan menggantung lalu timeout — baris tetap milik akun yang membuatnya,
+    // tidak diklaim/dikirim dengan token akun berikutnya.
+    let pemilik = null
+    try { pemilik = pemilikAktif() || null } catch { pemilik = null }
     if (!langsungAntre && offline.koneksi.online) {
       const r = await kirim(jalur, badan)
       if (r.ok) return { ...r, clientRef }
@@ -93,8 +102,6 @@ function buatTulisAtauAntre({ offline, kirim, tokoAktif, pemilikAktif = () => nu
         lapor(`Penyiapan baris antrean ${jenis} gagal (${err && err.message ? err.message : String(err)}); diantrekan dengan badan dasar.`, err)
       }
     }
-    let pemilik = null
-    try { pemilik = pemilikAktif() || null } catch { pemilik = null }
     offline.antrean.antrekan({
       clientRef, jenis, tokoId: tokoAktif(), path: jalur, body: badanAntre,
       status: offline.STATUS.MENUNGGU, pemilik
