@@ -11,6 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tuleh_pos/core/offline/antrean.dart';
 import 'package:tuleh_pos/core/offline/koneksi.dart';
 import 'package:tuleh_pos/core/offline/operasi_batch.dart';
+import 'package:tuleh_pos/core/offline/pemulih_tinjau.dart';
 import 'package:tuleh_pos/core/offline/pengurai.dart';
 import 'package:tuleh_pos/core/offline/sinkron_latar.dart';
 
@@ -447,8 +448,9 @@ void main() {
     expect(tua.status, StatusAntrean.tinjau);
     expect(tua.percobaan, 1);
     expect(tua.galatServer, 0, reason: 'timeout bukan galat server');
-    expect(tua.galatTerakhir, contains('tidak menjawab tepat waktu'));
-    expect(tua.galatTerakhir, contains('lebih dari 2 jam'));
+    expect(tua.galatTerakhir, '${PenguraiAntrean.pesanTimeoutSetelahKirim} (tertunda lebih dari 2 jam; perlu ditinjau)');
+    expect(tua.galatTerakhir, contains('setelah data dikirim'));
+    expect(PemulihTinjau.layakDipulihkan(tua), isTrue, reason: 'pemulih memeriksanya ke daftar transaksi server');
     expect(tua.cobaLagiSetelah, isNull);
     final muda = (await a.cari('muda'))!;
     expect(muda.status, StatusAntrean.menunggu);
@@ -629,6 +631,106 @@ void main() {
     await _baris(a, 'c1', body: {'client_ref': 'c1', 'nomor_lokal': 'L-3B9D-260924-0001'});
     await _pengurai(a, _Server(), konfig: null).jalankan();
     expect((await a.cari('c1'))!.hasil!['nomor_lokal'], 'L-3B9D-260924-0001');
+  });
+
+  test('429 BATCH_BERJALAN = jeda batch tingkat perangkat: tidak ada POST batch lain selama Retry-After, baris endpoint tunggal tetap jalan', () async {
+    final a = AntreanMemori();
+    for (var i = 0; i < 30; i++) {
+      await _baris(a, 'c$i');
+    }
+    await _baris(a, 'x1', jenis: 'PENGELUARAN');
+    var kini = _kini;
+    var berjalan = true;
+    final s = _Server((o) => o.path == jalurSyncBatch && berjalan
+        ? (429, {'success': false, 'message': 'Masih diproses', 'errors': {'kode': ['BATCH_BERJALAN']}})
+        : _terimaSemua(o));
+    final p = _pengurai(a, s, sekarang: () => kini);
+    await p.jalankan();
+    expect(s.batch, hasLength(1), reason: 'segmen kedua tidak dikirim setelah 429');
+    expect((s.batch.single['operations'] as List).length, 25);
+
+    // Putaran lain di dalam jendela: baris batch (termasuk 5 yang belum pernah dikirim) menunggu.
+    kini = kini.add(const Duration(seconds: 2));
+    await p.jalankan();
+    expect(s.batch, hasLength(1), reason: 'masih dalam jeda batch perangkat');
+    expect(s.log.last, 'baris:x1', reason: 'endpoint tunggal tetap jalan');
+    expect(p.jadwalBerikutnya, isNotNull);
+    expect(p.jadwalBerikutnya!.isBefore(_kini.add(PenguraiAntrean.jedaBatchBerjalan)), isFalse, reason: 'timer ≥ 5 dtk sejak 429');
+
+    berjalan = false;
+    kini = _kini.add(PenguraiAntrean.jedaBatchBerjalan);
+    await p.jalankan();
+    expect([for (final b in s.batch) (b['operations'] as List).length], [25, 25, 5]);
+  });
+
+  test('Retry-After batch: detik desimal diterima, tanggal HTTP diterima, dijepit ≤ 10 menit, tak sah → null', () {
+    Headers h(String v) => Headers.fromMap({'retry-after': [v]});
+    expect(PenguraiAntrean.jedaRetryAfter(h('5')), const Duration(seconds: 5));
+    expect(PenguraiAntrean.jedaRetryAfter(h('5.5')), const Duration(milliseconds: 5500));
+    expect(PenguraiAntrean.jedaRetryAfter(h('99999')), const Duration(minutes: 10));
+    final kini = DateTime.utc(2026, 9, 24, 3);
+    expect(PenguraiAntrean.jedaRetryAfter(h(HttpDate.format(kini.add(const Duration(seconds: 30)))), sekarang: kini), const Duration(seconds: 30));
+    for (final salah in ['0', '-3', 'NaN', 'Infinity', 'nanti']) {
+      expect(PenguraiAntrean.jedaRetryAfter(h(salah)), isNull, reason: salah);
+    }
+    expect(PenguraiAntrean.jedaRetryAfter(Headers()), isNull);
+  });
+
+  test('per baris: timeout setelah POST terkirim → mundur baris itu saja tanpa menandai offline, lanjut ke baris lain; lewat umur → TINJAU "setelah data dikirim"', () async {
+    final a = AntreanMemori();
+    await _baris(a, 'c1'); // dibuat 09:00
+    await _baris(a, 'c2');
+    final penanda = _Penanda();
+    final s = _Server((o) => (o.data as Map?)?['client_ref'] == 'c1' ? DioExceptionType.receiveTimeout : _terimaSemua(o));
+    await _pengurai(a, s, konfig: null, penanda: penanda).jalankan();
+    expect(s.log, ['baris:c1', 'baris:c2']);
+    final c1 = (await a.cari('c1'))!;
+    expect(c1.status, StatusAntrean.menunggu);
+    expect(c1.percobaan, 1);
+    expect(c1.galatServer, 0);
+    expect(c1.cobaLagiSetelah, _kini.add(PenguraiAntrean.mundur(1)));
+    expect(c1.galatTerakhir, contains('tidak menjawab tepat waktu'));
+    expect(penanda.offline, isFalse);
+    expect((await a.cari('c2'))!.status, StatusAntrean.terkirim);
+
+    final b = AntreanMemori();
+    await _baris(b, 'tua');
+    final s2 = _Server((o) => DioExceptionType.receiveTimeout);
+    await _pengurai(b, s2, konfig: null, sekarang: () => DateTime(2026, 9, 24, 12), batas: () async => const BatasAntrean(maksUmurJam: 2)).jalankan();
+    final tua = (await b.cari('tua'))!;
+    expect(tua.status, StatusAntrean.tinjau);
+    expect(tua.galatTerakhir, '${PenguraiAntrean.pesanTimeoutSetelahKirim} (tertunda lebih dari 2 jam; perlu ditinjau)');
+    expect(PemulihTinjau.layakDipulihkan(tua), isTrue);
+
+    // Gagal tersambung (belum terkirim) tetap jaringan: offline & putaran berhenti.
+    final c = AntreanMemori();
+    await _baris(c, 'c1');
+    await _baris(c, 'c2');
+    final penanda3 = _Penanda();
+    final s3 = _Server((o) => DioExceptionType.connectionTimeout);
+    await _pengurai(c, s3, konfig: null, penanda: penanda3).jalankan();
+    expect(s3.log, ['baris:c1']);
+    expect(penanda3.offline, isTrue);
+  });
+
+  test('404 / 503 BATCH_TIDAK_TERSEDIA / server lama: baris kembali per baris tanpa kode lama di galat', () async {
+    for (final jawab in <Object>[
+      (404, {'success': false, 'message': 'Not Found'}),
+      (503, {'success': false, 'message': 'Tidak tersedia', 'errors': {'kode': ['BATCH_TIDAK_TERSEDIA']}}),
+      (200, {'success': true, 'data': {'results': <Object>[]}}),
+    ]) {
+      final a = AntreanMemori();
+      await _baris(a, 'c1');
+      await a.perbarui('c1', galatTerakhir: galatBerkode('DITUNDA', 'Ditunda server (batas waktu kiriman); dikirim lagi sebentar.'));
+      final s = _Server((o) => o.path == jalurSyncBatch ? jawab : _terimaSemua(o));
+      await _pengurai(a, s).jalankan();
+      expect(s.log, ['batch:c1', 'baris:c1'], reason: '$jawab');
+      final c1 = (await a.cari('c1'))!;
+      expect(c1.status, StatusAntrean.terkirim, reason: '$jawab');
+      // Galat lama tetap tersimpan pada baris terkirim, tetapi kodenya sudah dibersihkan saat kembali ke antrean.
+      expect(c1.galatTerakhir, isNotNull, reason: '$jawab');
+      expect(kodeGalat(c1.galatTerakhir), isNull, reason: '$jawab');
+    }
   });
 }
 

@@ -1,3 +1,4 @@
+import 'antrean.dart';
 import 'waktu_klien.dart';
 
 /// Rujukan lokal (fase 3): entitas yang lahir saat offline (bon meja, sesi)
@@ -35,4 +36,38 @@ Object? _waktuRapi(Object? nilai) {
   if (nilai is! String || nilai.isEmpty) return nilai;
   final t = DateTime.tryParse(nilai);
   return t == null ? nilai : waktuKlienIso(t);
+}
+
+/// Teks TINJAU turunan bon (fase 3) yang menunggu bon induknya terkirim
+/// (`PenguraiAntrean.pesanIndukBelumTerkirim`).
+const pesanTurunanBonMenunggu =
+    'Menunggu bon induknya terkirim. Selesaikan baris bon tersebut dulu, '
+    'lalu tekan Kirim ulang di sini.';
+
+/// Awalan galat berkode refund/batal yang menunggu transaksi asalnya ditinjau
+/// (`galatBerkode('INDUK_TINJAU', …)` di `operasi_batch.dart`).
+const awalanGalatIndukTinjau = '[INDUK_TINJAU]';
+
+/// Turunan TINJAU yang menunggu induk [refInduk] — turunan bon lama
+/// ([pesanTurunanBonMenunggu]) & refund/batal `[INDUK_TINJAU]` — kembali
+/// MENUNGGU (percobaan, galat server, jeda, dan galat dibersihkan). Dipakai
+/// "Kirim ulang" induk dan pemulih "mungkin sudah sampai" (induk kembali
+/// MENUNGGU / ternyata TERKIRIM). Mengembalikan jumlah baris yang dipulihkan.
+Future<int> pulihkanTurunan(AntreanStore store, String refInduk) async {
+  var n = 0;
+  for (final t in await store.semua()) {
+    if (t.status != StatusAntrean.tinjau || rujukanDalamPath(t.path) != refInduk) continue;
+    final g = t.galatTerakhir ?? '';
+    if (g != pesanTurunanBonMenunggu && !g.startsWith(awalanGalatIndukTinjau)) continue;
+    await store.perbarui(
+      t.clientRef,
+      status: StatusAntrean.menunggu,
+      percobaan: 0,
+      galatServer: 0,
+      hapusCobaLagi: true,
+      hapusGalat: true,
+    );
+    n++;
+  }
+  return n;
 }

@@ -9,7 +9,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tuleh_pos/core/offline/antrean.dart';
 import 'package:tuleh_pos/core/offline/koneksi.dart';
 import 'package:tuleh_pos/core/offline/operasi_batch.dart';
+import 'package:tuleh_pos/core/offline/pemulih_tinjau.dart';
 import 'package:tuleh_pos/core/offline/pengurai.dart';
+import 'package:tuleh_pos/core/offline/rujukan_lokal.dart';
 
 class _Penanda implements PenandaKoneksi {
   bool offlineNilai = false;
@@ -35,7 +37,9 @@ class _Server implements HttpClientAdapter {
   @override
   Future<ResponseBody> fetch(RequestOptions o, Stream<List<int>>? s, Future<void>? c) async {
     diminta.add(o);
-    final (int code, Object body) = jawab(o) as (int, Object);
+    final r = jawab(o);
+    if (r is DioExceptionType) throw DioException(requestOptions: o, type: r);
+    final (int code, Object body) = r as (int, Object);
     return ResponseBody.fromString(jsonEncode(body), code, headers: {Headers.contentTypeHeader: [Headers.jsonContentType]});
   }
 
@@ -77,21 +81,30 @@ Future<void> _anakRefund(AntreanStore a, [String ref = 'anak', String induk = 'i
   body: {'client_ref': ref, 'items': [{'baris': 1, 'kuantitas': 1}], 'metode': 'TUNAI', 'alasan': 'Rusak', 'kembali_stok': true},
 ));
 
+Future<void> _anakBatal(AntreanStore a, [String ref = 'anak', String induk = 'induk']) => a.antrekan(PesanAntrean(
+  urut: 0, clientRef: ref, jenis: 'BATAL', path: '/transaksi/lokal:$induk/batal', tokoId: 'T1', dibuat: DateTime(2026, 9, 24, 9, 5),
+  body: {'client_ref': ref, 'alasan': 'Salah input'},
+));
+
 PenguraiAntrean _pengurai(
   AntreanStore a,
   _Server s, {
   bool batch = false,
   KonfigSyncBatch konfig = const KonfigSyncBatch(versi: 2),
   DateTime Function()? sekarang,
+  Future<BatasAntrean?> Function()? batas,
+  bool pemulih = false,
+  _Penanda? penanda,
 }) {
   final p = PenguraiAntrean(
     store: a,
     dio: _dio(s),
-    koneksi: _Penanda(),
-    tanpaPemulih: true,
+    koneksi: penanda ?? _Penanda(),
+    tanpaPemulih: !pemulih,
     konfigBatch: batch ? () async => konfig : null,
     idPerangkat: () async => 'dev-uji',
     sekarang: sekarang ?? () => DateTime(2026, 9, 24, 10),
+    batas: batas,
   );
   addTearDown(p.hentikan);
   return p;
@@ -314,5 +327,189 @@ void main() {
     final s = _Server((o) => (201, {'success': true, 'data': <String, dynamic>{}}));
     await _pengurai(a, s).jalankan();
     expect(s.kiriman, isEmpty);
+  });
+
+  test('anak BATAL: per baris jalur ditulis ulang ke id server (badan apa adanya); batch merujuk transaksi_ref', () async {
+    final a = AntreanMemori();
+    await _induk(a);
+    await _anakBatal(a);
+    await a.selesai('induk', hasil: {'id': 'SRV3', 'nomor': 'POS-3'});
+    final s = _Server((o) => (201, {'success': true, 'data': {'id': 'BT1', 'nomor': 'BTL-1'}}));
+    await _pengurai(a, s).jalankan();
+    expect([for (final o in s.kiriman) o.path], ['/transaksi/SRV3/batal']);
+    expect(s.kiriman.single.data, {'client_ref': 'anak', 'alasan': 'Salah input'});
+    expect((await a.cari('anak'))!.status, StatusAntrean.terkirim);
+
+    final b = AntreanMemori();
+    await _induk(b);
+    await _anakBatal(b);
+    final s2 = _Server((o) => _hasilBatch(o));
+    await _pengurai(b, s2, batch: true).jalankan();
+    expect(s2.batch, [['induk', 'anak']]);
+    final op = _ops(s2.kiriman.single)[1];
+    expect(op['type'], 'batal');
+    expect(op['payload']['transaksi_ref'], 'induk');
+  });
+
+  test('induk sudah dibatalkan dari antrean → anak TINJAU INDUK_TIDAK_DIKENAL (pesanIndukDibatalkan), kedua mode', () async {
+    for (final batch in [false, true]) {
+      final a = AntreanMemori();
+      await _anakRefund(a, 'anak', 'hilang');
+      final s = _Server((o) => _hasilBatch(o));
+      await _pengurai(a, s, batch: batch).jalankan();
+      expect(s.kiriman, isEmpty, reason: 'batch=$batch');
+      final anak = (await a.cari('anak'))!;
+      expect(anak.status, StatusAntrean.tinjau);
+      expect(anak.galatTerakhir, galatBerkode('INDUK_TIDAK_DIKENAL', PenguraiAntrean.pesanIndukDibatalkan), reason: 'batch=$batch');
+    }
+  });
+
+  test('kaskade dari batas galat server (per baris 503 → TINJAU) → anak INDUK_TINJAU', () async {
+    final a = AntreanMemori();
+    await _induk(a);
+    await _anakRefund(a);
+    final s = _Server((o) => (503, {'success': false, 'message': 'Pemeliharaan'}));
+    await _pengurai(a, s, batas: () async => const BatasAntrean(maksPercobaanGalatServer: 1)).jalankan();
+    expect((await a.cari('induk'))!.status, StatusAntrean.tinjau);
+    expect(kodeGalat((await a.cari('anak'))!.galatTerakhir), 'INDUK_TINJAU');
+    expect(s.kiriman, hasLength(1));
+  });
+
+  test('kaskade dari timeout lewat umur: batch (anak satu segmen yang juga tua) & per baris → anak INDUK_TINJAU; kirim ulang induk memulihkan', () async {
+    for (final batch in [true, false]) {
+      final a = AntreanMemori();
+      await _induk(a);
+      await _anakRefund(a);
+      var putus = true;
+      final penanda = _Penanda();
+      final s = _Server((o) => putus
+          ? DioExceptionType.receiveTimeout
+          : (o.path == jalurSyncBatch
+              ? _hasilBatch(o)
+              : (201, {'success': true, 'data': {'id': 'S-${(o.data as Map)['client_ref']}', 'items': [{'id': 'I-a'}, {'id': 'I-b'}]}})));
+      final p = _pengurai(
+        a, s, batch: batch, penanda: penanda,
+        sekarang: () => DateTime(2026, 9, 24, 12), batas: () async => const BatasAntrean(maksUmurJam: 2),
+      );
+      await p.jalankan();
+      final induk = (await a.cari('induk'))!;
+      expect(induk.status, StatusAntrean.tinjau, reason: 'batch=$batch');
+      expect(induk.galatTerakhir, contains('setelah data dikirim'));
+      final anak = (await a.cari('anak'))!;
+      expect(anak.status, StatusAntrean.tinjau, reason: 'batch=$batch');
+      expect(kodeGalat(anak.galatTerakhir), 'INDUK_TINJAU', reason: 'batch=$batch');
+      expect(penanda.offline, isFalse, reason: 'timeout bukan offline (batch=$batch)');
+
+      putus = false;
+      await p.kirimUlang('induk');
+      expect((await a.cari('induk'))!.status, StatusAntrean.terkirim, reason: 'batch=$batch');
+      expect((await a.cari('anak'))!.status, StatusAntrean.terkirim, reason: 'batch=$batch');
+    }
+  });
+
+  test('pemulih asli: induk "mungkin sudah sampai" dipulihkan → anak INDUK_TINJAU ikut kembali & terkirim (per baris/batch × cocok/belum tercatat)', () async {
+    for (final batch in [false, true]) {
+      for (final cocok in [true, false]) {
+        final alasan = 'batch=$batch cocok=$cocok';
+        final a = AntreanMemori();
+        await _induk(a);
+        await _anakBatal(a);
+        await a.perbarui('induk', status: StatusAntrean.tinjau, galatTerakhir: '${PenguraiAntrean.pesanTimeoutSetelahKirim} (tertunda lebih dari 2 jam; perlu ditinjau)');
+        await a.perbarui('anak', status: StatusAntrean.tinjau, galatTerakhir: galatBerkode('INDUK_TINJAU', PenguraiAntrean.pesanIndukTinjau));
+        final s = _Server((o) {
+          if (o.method == 'GET' && o.path == '/transaksi') {
+            return (200, {
+              'success': true,
+              'data': [
+                if (cocok)
+                  {
+                    'id': 'SRV-P', 'nomor': 'POS-P', 'grand_total': 0, 'tipe_pembayaran': 'TUNAI', 'status': 'SELESAI',
+                    'tanggal': DateTime(2026, 9, 24, 9, 2).toUtc().toIso8601String(),
+                  },
+              ],
+            });
+          }
+          if (o.path == jalurSyncBatch) return _hasilBatch(o);
+          if (o.path == '/transaksi/checkout') return (201, {'success': true, 'data': {'id': 'SRV1', 'nomor': 'POS-1'}});
+          return (201, {'success': true, 'data': {'id': 'BT1', 'nomor': 'BTL-1'}});
+        });
+        await _pengurai(a, s, batch: batch, pemulih: true).jalankan();
+        expect((await a.cari('induk'))!.status, StatusAntrean.terkirim, reason: alasan);
+        expect((await a.cari('anak'))!.status, StatusAntrean.terkirim, reason: alasan);
+        final harap = switch ((batch, cocok)) {
+          (false, true) => ['/transaksi/SRV-P/batal'],
+          (false, false) => ['/transaksi/checkout', '/transaksi/SRV1/batal'],
+          _ => [jalurSyncBatch],
+        };
+        expect([for (final o in s.kiriman) o.path], harap, reason: alasan);
+        if (batch) expect(s.batch.single, cocok ? ['anak'] : ['induk', 'anak'], reason: alasan);
+      }
+    }
+  });
+
+  test('awal putaran: anak INDUK_TINJAU yang induknya kini MENUNGGU pulih; anak PRASYARAT dari induk TERKIRIM lepas jeda & galat', () async {
+    final a = AntreanMemori();
+    await _induk(a);
+    await _anakRefund(a);
+    // Induk dikembalikan ke antrean di luar pengurai (mis. pemulih pada isolate lain).
+    await a.perbarui('anak', status: StatusAntrean.tinjau, galatTerakhir: galatBerkode('INDUK_TINJAU', PenguraiAntrean.pesanIndukTinjau));
+    final s = _Server((o) => _hasilBatch(o));
+    await _pengurai(a, s, batch: true).jalankan();
+    expect(s.batch, [['induk', 'anak']]);
+
+    final b = AntreanMemori();
+    await _induk(b);
+    await _anakRefund(b);
+    await b.selesai('induk', hasil: {'id': 'SRV1', 'items': [{'id': 'I-a'}, {'id': 'I-b'}]});
+    await b.perbarui('anak', percobaan: 1, cobaLagiSetelah: DateTime(2026, 9, 24, 11), galatTerakhir: galatBerkode('PRASYARAT', 'Belum.'));
+    final s2 = _Server((o) => (201, {'success': true, 'data': {'id': 'RF1'}}));
+    await _pengurai(b, s2).jalankan();
+    expect([for (final o in s2.kiriman) o.path], ['/transaksi/SRV1/refund']);
+    expect((await b.cari('anak'))!.status, StatusAntrean.terkirim);
+  });
+
+  test('anak PRASYARAT yang dibebaskan: jeda & galat basi dibersihkan', () async {
+    final a = AntreanMemori();
+    await _induk(a);
+    await _anakRefund(a);
+    await a.perbarui('anak', percobaan: 1, cobaLagiSetelah: DateTime(2026, 9, 24, 11), galatTerakhir: galatBerkode('PRASYARAT', 'Belum.'));
+    final s = _Server((o) => _hasilBatch(o));
+    await _pengurai(a, s, batch: true).jalankan();
+    expect(s.batch, [['induk']]);
+    final anak = (await a.cari('anak'))!;
+    expect(anak.cobaLagiSetelah, isNull);
+    expect(anak.galatTerakhir, isNull);
+  });
+
+  test('baris tertahan penahan kausal tidak memasang timer sendiri: jadwal = jeda penahannya', () async {
+    final a = AntreanMemori();
+    await a.antrekan(PesanAntrean(urut: 0, clientRef: 'stok', jenis: 'STOK_MASUK', path: '/inventory/stok-masuk', tokoId: 'T1', body: const {'client_ref': 'stok'}, dibuat: DateTime(2026, 9, 24, 8)));
+    await _induk(a, 'jual', 'T1');
+    await a.perbarui('stok', cobaLagiSetelah: DateTime(2026, 9, 24, 11));
+    final s = _Server((o) => (201, {'success': true, 'data': <String, dynamic>{}}));
+    final p = _pengurai(a, s);
+    await p.jalankan();
+    expect(s.kiriman, isEmpty);
+    expect(p.jadwalBerikutnya, DateTime(2026, 9, 24, 11));
+  });
+
+  test('pulihkanTurunan: hanya TINJAU menunggu induk itu (bon lama & INDUK_TINJAU); PemulihTinjau mengenali TINJAU timeout', () async {
+    final a = AntreanMemori();
+    await _induk(a);
+    await _anakRefund(a, 'r1');
+    await _anakBatal(a, 'b1');
+    await a.antrekan(PesanAntrean(urut: 0, clientRef: 'bon', jenis: 'BILL_BAYAR', path: '/bills/lokal:induk/settle', body: const {}, dibuat: DateTime(2026, 9, 24, 9)));
+    await _anakRefund(a, 'lain', 'induk2');
+    await a.perbarui('r1', status: StatusAntrean.tinjau, galatTerakhir: galatBerkode('INDUK_TINJAU', PenguraiAntrean.pesanIndukTinjau));
+    await a.perbarui('b1', status: StatusAntrean.tinjau, galatTerakhir: galatBerkode('VALIDASI', 'Ditolak.'));
+    await a.perbarui('bon', status: StatusAntrean.tinjau, galatTerakhir: PenguraiAntrean.pesanIndukBelumTerkirim);
+    await a.perbarui('lain', status: StatusAntrean.tinjau, galatTerakhir: galatBerkode('INDUK_TINJAU', PenguraiAntrean.pesanIndukTinjau));
+    expect(await pulihkanTurunan(a, 'induk'), 2);
+    expect([for (final r in ['r1', 'b1', 'bon', 'lain']) (await a.cari(r))!.status],
+        [StatusAntrean.menunggu, StatusAntrean.tinjau, StatusAntrean.menunggu, StatusAntrean.tinjau]);
+    expect((await a.cari('r1'))!.galatTerakhir, isNull);
+
+    await a.perbarui('induk', status: StatusAntrean.tinjau, galatTerakhir: '${PenguraiAntrean.pesanTimeoutSetelahKirim} (tertunda lebih dari 2 jam; perlu ditinjau)');
+    expect(PemulihTinjau.layakDipulihkan((await a.cari('induk'))!), isTrue);
   });
 }

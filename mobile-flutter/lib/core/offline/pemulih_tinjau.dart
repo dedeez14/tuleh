@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import 'antrean.dart';
+import 'rujukan_lokal.dart';
 
 /// Pemulihan otomatis baris CHECKOUT yang berstatus TINJAU karena server
 /// tidak menjawab setelah data dikirim ("mungkin sudah sampai").
@@ -67,6 +68,9 @@ class PemulihTinjau {
         diklaim.add(t.id);
         await store.selesai(p.clientRef, hasil: {'nomor': t.nomor, 'id': t.id, 'dipulihkan': true});
         berubah++;
+        // Refund/batal lokal yang TINJAU `[INDUK_TINJAU]` menunggu baris ini
+        // ikut kembali ke antrean (pengurai memutuskannya dari hasil induk).
+        berubah += await pulihkanTurunan(store, p.clientRef);
       } else if (kandidat.isEmpty) {
         await store.perbarui(
           p.clientRef,
@@ -76,6 +80,7 @@ class PemulihTinjau {
           galatTerakhir: 'Dipastikan belum tercatat di server; dikirim ulang otomatis.',
         );
         berubah++;
+        berubah += await pulihkanTurunan(store, p.clientRef);
       } else {
         final nomor = kandidat.map((t) => t.nomor).take(3).join(', ');
         await store.perbarui(
