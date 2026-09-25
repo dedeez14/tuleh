@@ -602,3 +602,30 @@ test('maks_operasi/saran/maks_byte /config pecahan dibulatkan ke bawah (10.5 →
   await pg.jalankan()
   assert.deepEqual(ukuran, [2, 2, 1], 'aturSyncBatch ikut membulatkan')
 })
+
+test('429 BATCH_BERJALAN = jeda batch tingkat perangkat: putaran berikut di dalam jendela tidak mem-POST segmen lain', async () => {
+  const a = antreanMemori()
+  baris(a, 'c1'); baris(a, 'c2')
+  let jam = 1000
+  let ke = 0
+  const jadwal = []
+  const log = []
+  const pg = new Pengurai({
+    antrean: a,
+    kirim: async (jalur, body, p) => { log.push(`baris:${p.clientRef}`); return { ok: true, status: 201, data: {} } },
+    kirimBatch: async (b) => { log.push(`batch:${b.operations.map((op) => op.idempotency_key).join(',')}`); return ++ke === 1 ? { ok: false, status: 429, errors: { kode: ['BATCH_BERJALAN'] }, message: 'Masih diproses' } : terimaSemua(b) },
+    sekarang: () => jam,
+    jadwal: (fn, ms) => { jadwal.push(ms); return null },
+    batalJadwal: () => {}
+  })
+  pg.aturSyncBatch({ versi: 2, maksOperasi: 1 })
+  await pg.jalankan()
+  assert.deepEqual(log, ['batch:c1'])
+  jam = 2000
+  assert.equal(await pg.jalankan(), 0)
+  assert.deepEqual(log, ['batch:c1'], 'c2 (belum pernah dikirim) tidak di-POST selama jendela Retry-After')
+  assert.equal(jadwal[jadwal.length - 1], 1000 + JEDA_BERJALAN_MS - 2000, 'timer digeser ke akhir jendela, bukan 1 dtk')
+  jam = 1000 + JEDA_BERJALAN_MS
+  assert.equal(await pg.jalankan(), 2)
+  assert.deepEqual(log, ['batch:c1', 'batch:c1', 'batch:c2'])
+})

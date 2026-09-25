@@ -34,12 +34,14 @@
 //   retriable:true lain (PRASYARAT, SESI_TIDAK_ADA, SESI_BEDA_TOKO, kode baru) → jeda panjang 1–60 mnt
 // Jawaban batch non-200: 401/402/426/jaringan → jeda global seperti per baris; 404 atau 503
 // BATCH_TIDAK_TERSEDIA → per baris sampai /config berikutnya; 409 BATCH_REF_BENTROK → ref bergaram
-// sekali; 413 → segmen dibelah; 429 BATCH_BERJALAN → tunggu Retry-After (bawaan 5 dtk); 429 tanpa kode →
+// sekali; 413 → segmen dibelah; 429 BATCH_BERJALAN → tidak ada POST batch dari perangkat ini selama Retry-After
+// (bawaan 5 dtk; baris endpoint tunggal tetap jalan); 429 tanpa kode →
 // jeda jaringan; 5xx/408/422/409 berulang/4xx lain → mundur per baris. Patch non-item membersihkan `kode`.
 //
 // Urutan (kedua mode, `_penahan`): refund/batal atas transaksi LOKAL (`/transaksi/lokal:<ref>/…`) ditahan tanpa
 // penalti sampai induknya TERKIRIM (batch: atau satu segmen → `transaksi_ref`; per baris: jalur & `items[].baris`
-// ditulis ulang ke id server); induk TINJAU → anak ikut TINJAU `INDUK_TINJAU` (pulih saat induk dikirim ulang).
+// ditulis ulang ke id server); induk TINJAU → anak ikut TINJAU `INDUK_TINJAU` (pulih saat induk dikirim ulang atau
+// kembali MENUNGGU/TERKIRIM lewat pemulih — diperiksa di awal tiap putaran).
 // Checkout/bayar bon toko T menunggu stok masuk/opname/buka sesi/buka bon toko T yang lebih tua.
 
 const { STATUS, badanWaktuRapi, refIndukLokal } = require('./antrean')
@@ -65,6 +67,11 @@ const JEDA_BERJALAN_MS = 5000
 // TERKIRIM, TINJAU, atau dibatalkan — batas tinjau /config tetap mencegah tertahan selamanya.
 const PENAHAN_KAUSAL = new Set(['STOK_MASUK', 'OPNAME', 'SESI_BUKA', 'BILL_BUKA'])
 const JENIS_TERTAHAN_KAUSAL = new Set(['CHECKOUT', 'BILL_BAYAR'])
+
+// Baris TINJAU `INDUK_TINJAU` yang dipulihkan (induk dikirim ulang / kembali menunggu / sudah tercatat).
+const PATCH_PULIH_TURUNAN = Object.freeze({ status: STATUS.MENUNGGU, percobaan: 0, galatServer: 0, cobaLagiSetelah: null, sebabTunda: null, kode: null, galat: null })
+// Anak PRASYARAT yang dibebaskan karena induknya tercatat: jeda & kode/galat PRASYARAT sudah basi.
+const PATCH_BEBAS_PRASYARAT = Object.freeze({ cobaLagiSetelah: null, sebabTunda: null, kode: null, galat: null })
 
 const PESAN_INDUK_TINJAU = 'Menunggu transaksi asal ditinjau — kirim ulang atau batalkan transaksi asalnya dulu.'
 const PESAN_INDUK_TIDAK_DIKENAL = 'Transaksi asal belum punya nomor server yang bisa dirujuk. Batalkan data ini lalu ulangi dari Riwayat setelah transaksi asal tersinkron.'
@@ -187,6 +194,9 @@ class Pengurai {
     this._syncBatch = { versi: pr ? Math.floor(Number(pr.syncBatchVersi) || 0) : 0, maksOperasi: null, maksByte: null }
     this._batchMati = false // server menjawab 404/503 BATCH_TIDAK_TERSEDIA → per baris sampai /config berikutnya
     this._batasOpAdaptif = BATAS_OP_SEGMEN
+    // 429 BATCH_BERJALAN: kunci batch akun ini masih dipegang server → TIDAK ada POST batch (segmen mana pun)
+    // sampai waktu ini; tanpa ini putaran ±1 dtk berikutnya mem-POST segmen lain dan menghabiskan limiter pos-sync.
+    this._batchTundaSampai = null
   }
 
   _ubah() { if (this.setelahBerubah) { try { this.setelahBerubah() } catch { /* abaikan */ } } }
@@ -296,6 +306,7 @@ class Pengurai {
 
   /** Satu putaran menurut mode; server yang ternyata tak mendukung batch → lanjut per baris di putaran yang sama. */
   async _satuPutaran() {
+    this._pulihkanTurunan()
     if (!this.modeBatch()) return this._putaran()
     const b = await this._putaranBatch()
     if (!b.pindahPerBaris) return b
@@ -311,6 +322,7 @@ class Pengurai {
     const batasOp = Math.max(1, Math.min(BATAS_OP_SEGMEN, this._syncBatch.maksOperasi || BATAS_OP_SEGMEN, this._batasOpAdaptif))
     const batasByte = this._syncBatch.maksByte ? Math.min(BATAS_BYTE_SEGMEN, Math.floor(this._syncBatch.maksByte * 0.7)) : BATAS_BYTE_SEGMEN
     const semua = this.antrean.semua()
+    const batchDitunda = this._batchTundaSampai !== null && this._batchTundaSampai > kini
     let segmen = []
     let dalamSegmen = new Set()
     let ukuran = 0
@@ -334,6 +346,8 @@ class Pengurai {
     for (const p of semua) {
       if (this._jedaAktif(this.sekarang())) break
       if (!this._milik(p, pemilik) || !siapPerBaris(p, kini)) continue
+      // Jeda batch tingkat perangkat: baris jenis batch menunggu; jenis lain (endpoint tunggal) tetap jalan.
+      if (batchDitunda && tipeBatch(p.jenis)) continue
       if (tahanan(p)) continue
       if (tipeBatch(p.jenis)) {
         const t = this.antrean.transaksiLokal(p.clientRef)
@@ -409,6 +423,7 @@ class Pengurai {
     }
     if (res.status === 429 && kode === 'BATCH_BERJALAN') {
       const tunggu = jedaRetryAfter(res) ?? JEDA_BERJALAN_MS
+      this._batchTundaSampai = kini + tunggu
       semua({ status: STATUS.MENUNGGU, sebabTunda: SEBAB.BATCH, cobaLagiSetelah: kini + tunggu, kode: 'BATCH_BERJALAN', galat: 'Server masih memproses kiriman sebelumnya; dikirim lagi sebentar.' })
       return selesai('berhenti')
     }
@@ -447,7 +462,13 @@ class Pengurai {
     }
     if (gangguan === 'TIMEOUT') {
       semua((p) => this._patchTimeout(p, kini))
-      // Baris yang terlalu tua kini TINJAU: turunannya yang masih menunggu ikut ditinjau.
+      // Anak satu segmen yang induknya kini TINJAU (terlalu tua) → INDUK_TINJAU walau anak itu sendiri juga tua,
+      // agar kirim ulang induk / pemulih memulihkannya; turunan lain yang masih menunggu ikut ditinjau.
+      for (const p of baris) {
+        const indukRef = refIndukLokal(p.path)
+        const q = indukRef ? this.antrean.cari(indukRef) : null
+        if (q && q.status === STATUS.TINJAU && p.kode !== 'INDUK_TINJAU') this._tinjauIndukTinjau(p)
+      }
       for (const p of baris) if (p.status === STATUS.TINJAU) this._kaskadeTinjau(p.clientRef)
       return selesai('lanjut')
     }
@@ -601,10 +622,33 @@ class Pengurai {
     const patches = []
     for (const q of this.antrean.semua()) {
       if (q.status === STATUS.MENUNGGU && q.kode === 'PRASYARAT' && refIndukLokal(q.path) === ref) {
-        patches.push({ clientRef: q.clientRef, patch: { cobaLagiSetelah: null, sebabTunda: null } })
+        patches.push({ clientRef: q.clientRef, patch: { ...PATCH_BEBAS_PRASYARAT } })
       }
     }
     if (patches.length) this.antrean.perbaruiBanyak(patches)
+  }
+
+  /**
+   * Awal setiap putaran: induk bisa berubah lewat jalur di luar pengurai (pemulih "mungkin sudah sampai" memanggil
+   * antrean langsung — TERKIRIM bila cocok, MENUNGGU bila belum tercatat). Anak `INDUK_TINJAU` yang induknya kini
+   * MENUNGGU/TERKIRIM kembali MENUNGGU (penahan menanganinya), anak PRASYARAT dari induk TERKIRIM dibebaskan.
+   */
+  _pulihkanTurunan() {
+    const patches = []
+    for (const q of this.antrean.semua()) {
+      const indukRef = refIndukLokal(q.path)
+      const induk = indukRef ? this.antrean.cari(indukRef) : null
+      if (!induk) continue
+      if (q.status === STATUS.TINJAU && q.kode === 'INDUK_TINJAU' && (induk.status === STATUS.MENUNGGU || induk.status === STATUS.TERKIRIM)) {
+        patches.push({ clientRef: q.clientRef, patch: { ...PATCH_PULIH_TURUNAN } })
+      } else if (q.status === STATUS.MENUNGGU && q.kode === 'PRASYARAT' && induk.status === STATUS.TERKIRIM) {
+        patches.push({ clientRef: q.clientRef, patch: { ...PATCH_BEBAS_PRASYARAT } })
+      }
+    }
+    if (patches.length) {
+      this.antrean.perbaruiBanyak(patches)
+      this._ubah()
+    }
   }
 
   /**
@@ -732,6 +776,7 @@ class Pengurai {
     const jedaAktif = this._jedaAktif(kini)
     const pemilik = this._pemilik()
     const semua = this.antrean.semua()
+    const tundaBatch = this.modeBatch() && this._batchTundaSampai !== null && this._batchTundaSampai > kini ? this._batchTundaSampai : null
     let terdekat = null
     for (const p of semua) {
       // Baris akun lain tidak pernah dikirim akun ini → tidak menjadwalkan apa pun.
@@ -740,6 +785,7 @@ class Pengurai {
       if (this._penahan(p, semua, null) === 'tahan') continue
       let t = milikSendiri(p) && p.cobaLagiSetelah ? p.cobaLagiSetelah : kini
       if (jedaAktif) t = Math.max(t, this._jeda.sampai)
+      if (tundaBatch !== null && tipeBatch(p.jenis)) t = Math.max(t, tundaBatch)
       if (terdekat === null || t < terdekat) terdekat = t
     }
     if (terdekat === null) return
@@ -761,7 +807,7 @@ class Pengurai {
     }]
     for (const q of this.antrean.semua()) {
       if (q.status === STATUS.TINJAU && q.kode === 'INDUK_TINJAU' && refIndukLokal(q.path) === clientRef) {
-        patches.push({ clientRef: q.clientRef, patch: { status: STATUS.MENUNGGU, percobaan: 0, galatServer: 0, cobaLagiSetelah: null, sebabTunda: null, kode: null, galat: null } })
+        patches.push({ clientRef: q.clientRef, patch: { ...PATCH_PULIH_TURUNAN } })
       }
     }
     this.antrean.perbaruiBanyak(patches)
