@@ -17,7 +17,8 @@
 //                                     (GET /config: antrean_maks_percobaan_galat_server,
 //                                     antrean_maks_umur_jam) → TINJAU dengan pesan server terakhir.
 //                                     Batas tak dikirim server → tetap menunggu + peringatan UI.
-//   TIMEOUT (-1)                    → mundur per baris, lanjut (tidak dihitung galat server)
+//   TIMEOUT (-1)                    → mundur per baris, lanjut (tidak dihitung galat server); umur lewat
+//                                     antrean_maks_umur_jam → TINJAU "mungkin sudah sampai" (pemulih memeriksanya)
 //   402 langganan / 426 update      → jeda global, baris TETAP menunggu (tidak ditinjau)
 //   401 sesi berakhir               → berhenti; putaran berikutnya menunggu token (siapKirim)
 //   4xx lain                        → TINJAU
@@ -33,7 +34,8 @@
 //   retriable:true lain (PRASYARAT, SESI_TIDAK_ADA, SESI_BEDA_TOKO, kode baru) → jeda panjang 1–60 mnt
 // Jawaban batch non-200: 401/402/426/jaringan → jeda global seperti per baris; 404 atau 503
 // BATCH_TIDAK_TERSEDIA → per baris sampai /config berikutnya; 409 BATCH_REF_BENTROK → ref bergaram
-// sekali; 413 → segmen dibelah; 429 BATCH_BERJALAN → tunda 3 dtk; 5xx/408/422/4xx lain → mundur per baris.
+// sekali; 413 → segmen dibelah; 429 BATCH_BERJALAN → tunggu Retry-After (bawaan 5 dtk); 429 tanpa kode →
+// jeda jaringan; 5xx/408/422/409 berulang/4xx lain → mundur per baris. Patch non-item membersihkan `kode`.
 //
 // Urutan (kedua mode, `_penahan`): refund/batal atas transaksi LOKAL (`/transaksi/lokal:<ref>/…`) ditahan tanpa
 // penalti sampai induknya TERKIRIM (batch: atau satu segmen → `transaksi_ref`; per baris: jalur & `items[].baris`
@@ -50,9 +52,13 @@ const JEDA_MUNDUR_MS = [5000, 15000, 45000, 120000, 600000]
 // tercatat): bukan galat server, jadi tidak dihitung menuju batas tinjau galat server.
 const JEDA_LAMA_MS = [60000, 300000, 900000, 1800000, 3600000]
 
-// DITUNDA / BATCH_BERJALAN: dikirim lagi sebentar lagi tanpa menaikkan percobaan, tetapi tidak
-// "segera" — server yang sedang padat tidak dihantam ulang tiap detik.
+// DITUNDA: dikirim lagi sebentar lagi tanpa menaikkan percobaan, tetapi tidak "segera" — server yang
+// sedang padat tidak dihantam ulang tiap detik.
 const JEDA_TUNDA_MS = 3000
+
+// 429 BATCH_BERJALAN tanpa Retry-After: tunggu 5 dtk (kontrak §13.5 / K-7, sama dengan Retry-After server;
+// menggantikan 3 dtk A-7). Tanpa menaikkan percobaan.
+const JEDA_BERJALAN_MS = 5000
 
 // Penjualan/pembayaran bon toko T tidak dikirim selagi baris jenis ini (toko T, lebih tua, akun sama) belum
 // tercatat: stok masuk sebelum jual, sesi & bon dibuka sebelum dipakai. Penahan gugur saat penentunya
@@ -87,6 +93,27 @@ function angkaPositif(v) {
   return Number.isFinite(n) && n > 0 ? n : null
 }
 
+/** Bilangan bulat positif (pecahan dipotong ke bawah — paritas Flutter `toInt()`); < 1 / tak sah → null. */
+function bulatPositif(v) {
+  const n = angkaPositif(v)
+  return n === null || n < 1 ? null : Math.floor(n)
+}
+
+/**
+ * Jeda (ms) dari `Retry-After` pada amplop: field `retryAfter` (detik) atau header `Retry-After`
+ * (objek Headers / objek biasa). null bila tak ada / tak sah; dibatasi jeda mundur terpanjang.
+ */
+function jedaRetryAfter(res) {
+  if (!res) return null
+  let v = res.retryAfter
+  const h = res.headers
+  if ((v === undefined || v === null) && h && typeof h === 'object') {
+    v = typeof h.get === 'function' ? h.get('retry-after') : h[Object.keys(h).find((k) => k.toLowerCase() === 'retry-after')]
+  }
+  const detik = angkaPositif(v)
+  return detik === null ? null : Math.min(detik * 1000, JEDA_MUNDUR_MS[JEDA_MUNDUR_MS.length - 1])
+}
+
 /**
  * Kebijakan tinjau otomatis dari data GET /config (field aditif server). Tidak ada / tidak
  * sah → null (tanpa tinjau otomatis; jangan mengarang batas).
@@ -105,10 +132,11 @@ function syncBatchDariConfig(config) {
   const sb = config && typeof config === 'object' && config.sync_batch && typeof config.sync_batch === 'object' ? config.sync_batch : null
   if (!sb) return { versi: 0, maksOperasi: null, maksByte: null }
   // Batas op per segmen = yang terkecil dari maks_operasi dan saran_operasi_per_segmen server (paritas Flutter).
-  const maks = angkaPositif(sb.maks_operasi)
-  const saran = angkaPositif(sb.saran_operasi_per_segmen)
+  // Pecahan dibulatkan ke bawah: 10.5 op → 10 (bukan segmen 11 op karena `length >= 10.5`).
+  const maks = bulatPositif(sb.maks_operasi)
+  const saran = bulatPositif(sb.saran_operasi_per_segmen)
   const maksOperasi = maks === null ? saran : saran === null ? maks : Math.min(maks, saran)
-  return { versi: Math.floor(Number(sb.versi) || 0), maksOperasi, maksByte: angkaPositif(sb.maks_byte) }
+  return { versi: Math.floor(Number(sb.versi) || 0), maksOperasi, maksByte: bulatPositif(sb.maks_byte) }
 }
 
 const milikSendiri = (p) => p.sebabTunda === SEBAB.SERVER || p.sebabTunda === SEBAB.TIMEOUT || p.sebabTunda === SEBAB.BATCH
@@ -191,7 +219,7 @@ class Pengurai {
   /** Terapkan blok sync_batch dari /config (juga salinan offline). Mengembalikan mode batch sesudahnya. */
   aturSyncBatch(sb) {
     const s = sb && typeof sb === 'object' ? sb : {}
-    this._syncBatch = { versi: Math.floor(Number(s.versi) || 0), maksOperasi: angkaPositif(s.maksOperasi), maksByte: angkaPositif(s.maksByte) }
+    this._syncBatch = { versi: Math.floor(Number(s.versi) || 0), maksOperasi: bulatPositif(s.maksOperasi), maksByte: bulatPositif(s.maksByte) }
     this._batchMati = false
     if (typeof this.antrean.aturPerangkat === 'function') this.antrean.aturPerangkat({ syncBatchVersi: this._syncBatch.versi })
     return this.modeBatch()
@@ -318,7 +346,7 @@ class Pengurai {
           // Induk yang tadi satu segmen kini sudah dijawab: nilai ulang penahan untuk segmen baru.
           if (p.status !== STATUS.MENUNGGU || tahanan(p)) continue
         }
-        segmen.push({ p, op })
+        segmen.push({ p, op, nomorLokal: t ? t.nomorLokal : null })
         dalamSegmen.add(p.clientRef)
         ukuran += n
         continue
@@ -349,7 +377,12 @@ class Pengurai {
   async _kirimSegmen(isi, deviceId) {
     const baris = isi.map((x) => x.p)
     this.antrean.perbaruiBanyak(baris.map((p) => ({ clientRef: p.clientRef, patch: { status: STATUS.MENGIRIM } })))
-    const badan = (garam) => ({ client_ref: clientRefBatch(deviceId, baris, garam), device_id: deviceId, operations: isi.map((x) => x.op) })
+    // Operasi dibangun ulang menurut jam SAAT kiriman ini: umur_detik segmen berikutnya (setelah segmen lain
+    // menunggu jawaban) dan kiriman bergaram tidak memakai jam awal putaran yang sudah basi.
+    const badan = (garam) => {
+      const saatKirim = this.sekarang()
+      return { client_ref: clientRefBatch(deviceId, baris, garam), device_id: deviceId, operations: isi.map((x) => opDariBaris(x.p, { deviceId, kini: saatKirim, nomorLokal: x.nomorLokal })) }
+    }
     let res = await this._kirimBatchAman(badan(0))
     // Ref sama dengan isi berbeda (komposisi kembar setelah antrean dipulihkan): ref bergaram, sekali saja.
     if (!res.ok && res.status === 409 && kodeGalat(res) === 'BATCH_REF_BENTROK') res = await this._kirimBatchAman(badan(1))
@@ -371,11 +404,12 @@ class Pengurai {
     // Server/gateway belum mengenal batch v2 di koneksi ini: kembali per baris tanpa menghukum baris.
     if (res.status === 404 || (res.status === 503 && kode === 'BATCH_TIDAK_TERSEDIA')) {
       this._batchMati = true
-      semua({ status: STATUS.MENUNGGU })
+      semua({ status: STATUS.MENUNGGU, kode: null })
       return selesai('perBaris')
     }
     if (res.status === 429 && kode === 'BATCH_BERJALAN') {
-      semua({ status: STATUS.MENUNGGU, sebabTunda: SEBAB.BATCH, cobaLagiSetelah: kini + JEDA_TUNDA_MS, kode: 'BATCH_BERJALAN', galat: 'Server masih memproses kiriman sebelumnya; dikirim lagi sebentar.' })
+      const tunggu = jedaRetryAfter(res) ?? JEDA_BERJALAN_MS
+      semua({ status: STATUS.MENUNGGU, sebabTunda: SEBAB.BATCH, cobaLagiSetelah: kini + tunggu, kode: 'BATCH_BERJALAN', galat: 'Server masih memproses kiriman sebelumnya; dikirim lagi sebentar.' })
       return selesai('berhenti')
     }
     if (res.status === 413 || res.gateway === 'body-too-large' || kode === 'BATCH_TERLALU_BESAR') {
@@ -383,39 +417,38 @@ class Pengurai {
         this._tinjau(baris[0].clientRef, { sebabTunda: null, cobaLagiSetelah: null, kode: 'BATCH_TERLALU_BESAR', galat: 'Data ini terlalu besar untuk dikirim ke server. Batalkan lalu catat ulang dalam beberapa transaksi, atau hubungi dukungan.' })
       } else {
         this._batasOpAdaptif = Math.max(1, Math.floor(baris.length / 2))
-        semua({ status: STATUS.MENUNGGU })
+        semua({ status: STATUS.MENUNGGU, kode: null })
       }
       return selesai('lanjut')
     }
     if (res.status === 402) {
       const jeda = this._pasangJeda(SEBAB.LANGGANAN)
-      semua({ status: STATUS.MENUNGGU, cobaLagiSetelah: jeda.sampai, sebabTunda: SEBAB.LANGGANAN, galat: res.message ? String(res.message) : pesanServer(res) })
+      semua({ status: STATUS.MENUNGGU, cobaLagiSetelah: jeda.sampai, sebabTunda: SEBAB.LANGGANAN, kode: null, galat: res.message ? String(res.message) : pesanServer(res) })
       return selesai('berhenti')
     }
     if (res.status === 426) {
       const jeda = this._pasangJeda(SEBAB.UPDATE)
-      semua({ status: STATUS.MENUNGGU, cobaLagiSetelah: jeda.sampai, sebabTunda: SEBAB.UPDATE, galat: res.message ? String(res.message) : null })
+      semua({ status: STATUS.MENUNGGU, cobaLagiSetelah: jeda.sampai, sebabTunda: SEBAB.UPDATE, kode: null, galat: res.message ? String(res.message) : null })
       return selesai('berhenti')
     }
     if (res.status === 401) {
-      semua({ status: STATUS.MENUNGGU })
+      semua({ status: STATUS.MENUNGGU, kode: null })
       return selesai('berhenti')
     }
     const gangguan = jenisGangguan(res)
     if (gangguan === 'JARINGAN') {
       const jeda = this._pasangJeda(SEBAB.JARINGAN)
       semua((p) => ({
-        status: STATUS.MENUNGGU, percobaan: (p.percobaan || 0) + 1, cobaLagiSetelah: jeda.sampai, sebabTunda: SEBAB.JARINGAN,
+        status: STATUS.MENUNGGU, percobaan: (p.percobaan || 0) + 1, cobaLagiSetelah: jeda.sampai, sebabTunda: SEBAB.JARINGAN, kode: null,
         galat: res.status === 429 ? 'Server membatasi permintaan; dicoba lagi otomatis.' : 'Tidak dapat terhubung ke server.'
       }))
       if (this.koneksi) this.koneksi.tandaiOffline()
       return selesai('berhenti')
     }
     if (gangguan === 'TIMEOUT') {
-      semua((p) => {
-        const percobaan = (p.percobaan || 0) + 1
-        return { status: STATUS.MENUNGGU, percobaan, cobaLagiSetelah: kini + mundur(percobaan), sebabTunda: SEBAB.TIMEOUT, galat: 'Server tidak menjawab tepat waktu; dicoba lagi otomatis.' }
-      })
+      semua((p) => this._patchTimeout(p, kini))
+      // Baris yang terlalu tua kini TINJAU: turunannya yang masih menunggu ikut ditinjau.
+      for (const p of baris) if (p.status === STATUS.TINJAU) this._kaskadeTinjau(p.clientRef)
       return selesai('lanjut')
     }
     // 5xx/408, 409 berulang, 422 amplop cacat (bug app), 4xx lain: jawaban tidak menilai baris satu per satu
@@ -491,7 +524,7 @@ class Pengurai {
         this._bebaskanAnak(p.clientRef)
         sukses++
       } else {
-        this.antrean.perbarui(p.clientRef, { status: STATUS.MENUNGGU })
+        this.antrean.perbarui(p.clientRef, { status: STATUS.MENUNGGU, kode: null })
       }
     }
     this._batchMati = true
@@ -509,6 +542,20 @@ class Pengurai {
       return
     }
     this.antrean.perbarui(p.clientRef, { status: STATUS.MENUNGGU, percobaan, sebabTunda: SEBAB.BATCH, cobaLagiSetelah: this.sekarang() + jedaLama(percobaan), kode, galat: `${labelKode(kode)}: ${pesan}` })
+  }
+
+  /**
+   * Patch baris yang tak dijawab tepat waktu SETELAH terkirim (bukan galat server): mundur per baris; umur lewat
+   * batas /config → TINJAU "mungkin sudah sampai" (checkout diperiksa pemulih ke daftar transaksi server).
+   */
+  _patchTimeout(p, kini) {
+    const percobaan = (p.percobaan || 0) + 1
+    const k = this._kebijakan()
+    const umurJam = (kini - (Number(p.dibuat) || kini)) / 3600000
+    if (k.maksUmurJam !== null && umurJam >= k.maksUmurJam) {
+      return { status: STATUS.TINJAU, percobaan, cobaLagiSetelah: null, sebabTunda: null, kode: null, galat: `${PESAN_TIMEOUT_SETELAH_KIRIM} (tertunda lebih dari ${k.maksUmurJam} jam; perlu ditinjau)` }
+    }
+    return { status: STATUS.MENUNGGU, percobaan, cobaLagiSetelah: kini + mundur(percobaan), sebabTunda: SEBAB.TIMEOUT, kode: null, galat: 'Server tidak menjawab tepat waktu; dicoba lagi otomatis.' }
   }
 
   /** Galat server untuk baris INI: mundur per baris; lewat batas /config → TINJAU. */
@@ -535,6 +582,11 @@ class Pengurai {
   /** Pindahkan baris ke TINJAU; turunan lokal yang masih menunggu ikut ditinjau (berantai). */
   _tinjau(ref, patch) {
     this.antrean.perbarui(ref, { ...patch, status: STATUS.TINJAU })
+    this._kaskadeTinjau(ref)
+  }
+
+  /** Turunan lokal `ref` yang masih menunggu ikut TINJAU `INDUK_TINJAU` (berantai). */
+  _kaskadeTinjau(ref) {
     for (const q of this.antrean.semua()) {
       if (q.status === STATUS.MENUNGGU && refIndukLokal(q.path) === ref) this._tinjauIndukTinjau(q)
     }
@@ -619,7 +671,7 @@ class Pengurai {
     if (gangguan === 'JARINGAN') {
       const jeda = this._pasangJeda(SEBAB.JARINGAN)
       this.antrean.perbarui(p.clientRef, {
-        status: STATUS.MENUNGGU, percobaan, cobaLagiSetelah: jeda.sampai, sebabTunda: SEBAB.JARINGAN,
+        status: STATUS.MENUNGGU, percobaan, cobaLagiSetelah: jeda.sampai, sebabTunda: SEBAB.JARINGAN, kode: null,
         galat: res.status === 429 ? 'Server membatasi permintaan; dicoba lagi otomatis.' : 'Tidak dapat terhubung ke server.'
       })
       if (this.koneksi) this.koneksi.tandaiOffline()
@@ -630,10 +682,9 @@ class Pengurai {
     // Tidak ada jawaban dalam batas waktu: mundur untuk baris ini saja (server menolak duplikat
     // lewat client_ref bila ternyata sudah tercatat), lanjut ke baris lain.
     if (gangguan === 'TIMEOUT') {
-      this.antrean.perbarui(p.clientRef, {
-        status: STATUS.MENUNGGU, percobaan, cobaLagiSetelah: this.sekarang() + mundur(percobaan), sebabTunda: SEBAB.TIMEOUT,
-        galat: 'Server tidak menjawab tepat waktu; dicoba lagi otomatis.'
-      })
+      const patch = this._patchTimeout(p, this.sekarang())
+      if (patch.status === STATUS.TINJAU) this._tinjau(p.clientRef, patch)
+      else this.antrean.perbarui(p.clientRef, patch)
       this._ubah()
       return 'lanjut'
     }
@@ -650,7 +701,7 @@ class Pengurai {
     if (res.status === 402) {
       const jeda = this._pasangJeda(SEBAB.LANGGANAN)
       this.antrean.perbarui(p.clientRef, {
-        status: STATUS.MENUNGGU, percobaan, cobaLagiSetelah: jeda.sampai, sebabTunda: SEBAB.LANGGANAN,
+        status: STATUS.MENUNGGU, percobaan, cobaLagiSetelah: jeda.sampai, sebabTunda: SEBAB.LANGGANAN, kode: null,
         galat: res.message ? String(res.message) : pesanServer(res)
       })
       this._ubah()
@@ -659,18 +710,18 @@ class Pengurai {
     // Aplikasi wajib diperbarui: tunggu pembaruan (jeda panjang, tidak memukul server tiap detik).
     if (res.status === 426) {
       const jeda = this._pasangJeda(SEBAB.UPDATE)
-      this.antrean.perbarui(p.clientRef, { status: STATUS.MENUNGGU, cobaLagiSetelah: jeda.sampai, sebabTunda: SEBAB.UPDATE, galat: res.message ? String(res.message) : null })
+      this.antrean.perbarui(p.clientRef, { status: STATUS.MENUNGGU, cobaLagiSetelah: jeda.sampai, sebabTunda: SEBAB.UPDATE, kode: null, galat: res.message ? String(res.message) : null })
       this._ubah()
       return 'berhenti'
     }
     // Sesi berakhir: tunggu masuk ulang (siapKirim → token ada lagi).
     if (res.status === 401) {
-      this.antrean.perbarui(p.clientRef, { status: STATUS.MENUNGGU })
+      this.antrean.perbarui(p.clientRef, { status: STATUS.MENUNGGU, kode: null })
       this._ubah()
       return 'berhenti'
     }
     // Ditolak server (400/403/404/409/422) → tinjau.
-    this._tinjau(p.clientRef, { galat: pesanServer(res), sebabTunda: null })
+    this._tinjau(p.clientRef, { galat: pesanServer(res), sebabTunda: null, kode: null })
     this._ubah()
     return 'lanjut'
   }
@@ -749,6 +800,7 @@ module.exports = {
   JEDA_MUNDUR_MS,
   JEDA_LAMA_MS,
   JEDA_TUNDA_MS,
+  JEDA_BERJALAN_MS,
   AMBANG_PERINGATAN_PERCOBAAN,
   SEBAB,
   PENAHAN_KAUSAL,

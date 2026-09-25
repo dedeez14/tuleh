@@ -10,7 +10,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 
 const { Antrean, STATUS } = require('../src/main/offline/antrean')
-const { Pengurai, mundur, syncBatchDariConfig, JEDA_LAMA_MS, JEDA_TUNDA_MS } = require('../src/main/offline/pengurai')
+const { Pengurai, mundur, syncBatchDariConfig, JEDA_LAMA_MS, JEDA_TUNDA_MS, JEDA_BERJALAN_MS } = require('../src/main/offline/pengurai')
 const { Koneksi } = require('../src/main/offline')
 
 const fikstur = () => JSON.parse(fs.readFileSync(path.join(__dirname, 'fikstur', 'sync-batch-v2.json'), 'utf8'))
@@ -57,7 +57,7 @@ function pengurai(a, o = {}) {
     jadwal: () => null,
     batalJadwal: () => {}
   })
-  if (o.versi !== 0) pg.aturSyncBatch({ versi: o.versi || 2, maksOperasi: o.maksOperasi || null, maksByte: null })
+  if (o.versi !== 0) pg.aturSyncBatch({ versi: o.versi || 2, maksOperasi: o.maksOperasi || null, maksByte: o.maksByte || null })
   return { pg, log }
 }
 
@@ -212,17 +212,24 @@ test('HTTP batch 401/402/426/jaringan/timeout/5xx: semua baris segmen diperlakuk
     { res: { ok: false, status: 402, message: 'Langganan berakhir' }, cek: (p, pg) => { assert.equal(p.sebabTunda, 'LANGGANAN'); assert.equal(pg.status().jeda.sebab, 'LANGGANAN') } },
     { res: { ok: false, status: 426, message: 'Perbarui' }, cek: (p, pg) => { assert.equal(p.sebabTunda, 'UPDATE'); assert.equal(pg.status().jeda.sebab, 'UPDATE') } },
     { res: { ok: false, status: 0, gangguan: true, message: 'putus' }, cek: (p, pg, k) => { assert.equal(p.sebabTunda, 'JARINGAN'); assert.equal(p.percobaan, 1); assert.equal(k.online, false) } },
+    // 429 tanpa kode (batas laju pos-sync) = jeda jaringan untuk seluruh segmen, pita offline (kontrak §13.5, P-3d).
+    { res: { ok: false, status: 429, gangguan: true, message: 'Terlalu banyak permintaan.' }, cek: (p, pg, k) => { assert.equal(p.sebabTunda, 'JARINGAN'); assert.equal(p.percobaan, 1); assert.match(p.galat, /membatasi/); assert.equal(pg.status().jeda.sebab, 'JARINGAN'); assert.equal(k.online, false) } },
     { res: { ok: false, status: -1, gangguan: true, timeout: true }, cek: (p) => { assert.equal(p.sebabTunda, 'TIMEOUT'); assert.equal(p.cobaLagiSetelah, 1000 + mundur(1)) } },
     { res: { ok: false, status: 503, gangguan: true, message: 'Pemeliharaan' }, cek: (p) => { assert.equal(p.sebabTunda, 'SERVER'); assert.equal(p.galatServer, 1); assert.match(p.galat, /HTTP 503/) } }
   ]
   for (const { res, cek } of kasus) {
     const a = antreanMemori()
     baris(a, 'c1'); baris(a, 'c2')
+    // Kode basi dari hasil item sebelumnya tidak boleh tertinggal di panel setelah jawaban non-item.
+    a.perbarui('c1', { kode: 'PRASYARAT' })
     const koneksi = new Koneksi()
     const { pg, log } = pengurai(a, { kirimBatch: () => res, koneksi })
     assert.equal(await pg.jalankan(), 0, `HTTP ${res.status}`)
     assert.deepEqual(log, ['batch:c1,c2'], `HTTP ${res.status}: satu kiriman`)
-    for (const r of ['c1', 'c2']) cek(a.cari(r), pg, koneksi)
+    for (const r of ['c1', 'c2']) {
+      cek(a.cari(r), pg, koneksi)
+      assert.equal(a.cari(r).kode, null, `HTTP ${res.status}: kode dibersihkan (${r})`)
+    }
     assert.equal(a.ringkas().tinjau, 0, `HTTP ${res.status}: tidak ada yang ditinjau`)
   }
 })
@@ -241,10 +248,12 @@ test('422 amplop cacat → mundur per baris sebagai galat server + laporan diagn
 test('413 → segmen dibelah dua; satu baris yang tetap terlalu besar → TINJAU', async () => {
   const a = antreanMemori()
   for (const r of ['a', 'b', 'c', 'd']) baris(a, r)
+  a.perbarui('a', { kode: 'PRASYARAT' })
   const ukuran = []
   const { pg } = pengurai(a, { kirimBatch: (b) => { ukuran.push(b.operations.length); return b.operations.length > 2 ? { ok: false, status: 413, message: 'Terlalu besar', errors: { kode: ['BATCH_TERLALU_BESAR'] } } : terimaSemua(b) } })
   await pg.jalankan()
   assert.deepEqual(a.semua().map((p) => p.status), ['MENUNGGU', 'MENUNGGU', 'MENUNGGU', 'MENUNGGU'])
+  assert.equal(a.cari('a').kode, null, 'kode basi dibersihkan saat segmen dibelah')
   await pg.jalankan()
   assert.deepEqual(ukuran, [4, 2, 2])
   assert.equal(a.ringkas().total, 0)
@@ -268,7 +277,7 @@ test('409 BATCH_REF_BENTROK → kirim ulang SEKALI dengan ref bergaram', async (
   assert.equal(a.cari('c1').status, STATUS.TERKIRIM)
 })
 
-test('429 BATCH_BERJALAN → tunda 3 dtk tanpa menaikkan percobaan, putaran berhenti', async () => {
+test('429 BATCH_BERJALAN tanpa Retry-After → tunda 5 dtk (kontrak §13.5/K-7) tanpa menaikkan percobaan, putaran berhenti', async () => {
   const a = antreanMemori()
   baris(a, 'c1'); baris(a, 'x1', 'PENGELUARAN')
   const { pg, log } = pengurai(a, { kirimBatch: () => ({ ok: false, status: 429, errors: { kode: ['BATCH_BERJALAN'] }, message: 'Masih diproses' }) })
@@ -277,8 +286,10 @@ test('429 BATCH_BERJALAN → tunda 3 dtk tanpa menaikkan percobaan, putaran berh
   const p = a.cari('c1')
   assert.equal(p.status, STATUS.MENUNGGU)
   assert.equal(p.sebabTunda, 'BATCH')
-  assert.equal(p.cobaLagiSetelah, 1000 + JEDA_TUNDA_MS)
+  assert.equal(JEDA_BERJALAN_MS, 5000)
+  assert.equal(p.cobaLagiSetelah, 1000 + JEDA_BERJALAN_MS)
   assert.equal(p.percobaan, 0)
+  assert.equal(p.kode, 'BATCH_BERJALAN')
 })
 
 test('404 rute / 503 BATCH_TIDAK_TERSEDIA → kembali per baris di putaran yang sama sampai /config berikutnya', async () => {
@@ -288,8 +299,14 @@ test('404 rute / 503 BATCH_TIDAK_TERSEDIA → kembali per baris di putaran yang 
   ]) {
     const a = antreanMemori()
     baris(a, 'c1'); baris(a, 'c2')
-    const { pg, log } = pengurai(a, { kirimBatch: () => res })
+    a.perbarui('c1', { kode: 'PRASYARAT' })
+    const kodeSaatPerBaris = []
+    const { pg, log } = pengurai(a, {
+      kirimBatch: () => res,
+      kirim: async (jalur, body, p) => { log.push(`baris:${p.clientRef}`); kodeSaatPerBaris.push(a.cari(p.clientRef).kode); return { ok: true, status: 201, data: {} } }
+    })
     assert.equal(await pg.jalankan(), 2, `HTTP ${res.status}`)
+    assert.deepEqual(kodeSaatPerBaris, [null, null], `HTTP ${res.status}: kode basi dibersihkan`)
     assert.deepEqual(log, ['batch:c1,c2', 'baris:c1', 'baris:c2'])
     assert.equal(pg.modeBatch(), false)
     assert.equal(pg.aturSyncBatch({ versi: 2 }), true, '/config berikutnya mencoba batch lagi')
@@ -442,4 +459,146 @@ test('pemilik aktif belum diketahui (null) → tidak ada baris yang dikirim', as
   const { pg, log } = pengurai(a, { pemilikAktif: () => null })
   assert.equal(await pg.jalankan(), 0)
   assert.deepEqual(log, [])
+})
+
+// ── Tambahan pelaksana Task 18 (carry-over pengendali Task 17) ──
+
+test('429 BATCH_BERJALAN menghormati Retry-After (angka, header objek, Headers); nilai tak sah → 5 dtk', async () => {
+  const kasus = [
+    { tambahan: { retryAfter: 12 }, harap: 12000 },
+    { tambahan: { headers: { 'Retry-After': '7' } }, harap: 7000 },
+    { tambahan: { headers: new Headers({ 'Retry-After': '9' }) }, harap: 9000 },
+    { tambahan: { retryAfter: 'nanti' }, harap: JEDA_BERJALAN_MS },
+    { tambahan: { retryAfter: 0 }, harap: JEDA_BERJALAN_MS }
+  ]
+  for (const { tambahan, harap } of kasus) {
+    const a = antreanMemori()
+    baris(a, 'c1')
+    const { pg } = pengurai(a, { kirimBatch: () => ({ ok: false, status: 429, errors: { kode: ['BATCH_BERJALAN'] }, message: 'Masih diproses', ...tambahan }) })
+    await pg.jalankan()
+    assert.equal(a.cari('c1').cobaLagiSetelah, 1000 + harap, JSON.stringify(tambahan))
+    assert.equal(a.cari('c1').percobaan, 0)
+  }
+})
+
+test('per baris: jawaban non-item (jaringan/429/timeout/402/426/401/5xx/4xx) membersihkan kode basi', async () => {
+  const kasus = [
+    { res: { ok: false, status: 0, gangguan: true }, sebab: 'JARINGAN' },
+    { res: { ok: false, status: 429, gangguan: true }, sebab: 'JARINGAN' },
+    { res: { ok: false, status: -1, gangguan: true, timeout: true }, sebab: 'TIMEOUT' },
+    { res: { ok: false, status: 402, message: 'Langganan berakhir' }, sebab: 'LANGGANAN' },
+    { res: { ok: false, status: 426, message: 'Perbarui' }, sebab: 'UPDATE' },
+    { res: { ok: false, status: 401, message: 'Sesi berakhir' }, sebab: undefined },
+    { res: { ok: false, status: 503, gangguan: true, message: 'Pemeliharaan' }, sebab: 'SERVER' },
+    { res: { ok: false, status: 422, message: 'Data tidak valid.' }, sebab: null }
+  ]
+  for (const { res, sebab } of kasus) {
+    const a = antreanMemori()
+    baris(a, 'c1')
+    a.perbarui('c1', { kode: 'PRASYARAT' })
+    const { pg } = pengurai(a, { versi: 0, kirim: async () => ({ ...res }) })
+    await pg.jalankan()
+    const p = a.cari('c1')
+    assert.equal(p.kode, null, `HTTP ${res.status}`)
+    assert.equal(p.sebabTunda, sebab, `HTTP ${res.status}`)
+  }
+})
+
+test('TIMEOUT kena batas umur /config: baris terlalu tua → TINJAU "mungkin sudah sampai" (per baris & batch), turunan ikut', async () => {
+  const kebijakan = () => ({ maksPercobaanGalatServer: null, maksUmurJam: 1 })
+  const TIMEOUT = { ok: false, status: -1, gangguan: true, timeout: true }
+  for (const mode of ['perBaris', 'batch']) {
+    // dibuat = 1 (0 dianggap "tak diketahui" oleh hitungan umur); anak dibuat belakangan (masih muda) sehingga
+    // di batch ia mundur TIMEOUT sendiri lalu ikut TINJAU lewat kaskade induk.
+    let buat = 1
+    const a = new Antrean({ berkas: null, sekarang: () => buat, buatId: () => 'dev-uji' })
+    baris(a, 'tua')
+    buat = 3000000
+    a.antrekan({ clientRef: 'anak', jenis: 'REFUND', tokoId: 'T1', path: '/transaksi/lokal%3Atua/refund', body: { client_ref: 'anak', items: [{ baris: 0, kuantitas: 1 }] } })
+    const { pg } = pengurai(a, {
+      versi: mode === 'batch' ? 2 : 0,
+      kebijakan,
+      sekarang: () => 3600001,
+      kirim: async () => ({ ...TIMEOUT }),
+      kirimBatch: () => ({ ...TIMEOUT })
+    })
+    await pg.jalankan()
+    const p = a.cari('tua')
+    assert.equal(p.status, STATUS.TINJAU, mode)
+    assert.equal(p.kode, null, mode)
+    assert.equal(p.percobaan, 1, mode)
+    assert.match(p.galat, /setelah data dikirim/, `${mode}: layak dipulihkan pemulih`)
+    assert.match(p.galat, /lebih dari 1 jam/, mode)
+    assert.equal(a.cari('anak').status, STATUS.TINJAU, mode)
+    assert.equal(a.cari('anak').kode, 'INDUK_TINJAU', mode)
+  }
+})
+
+test('TIMEOUT baris yang masih muda tetap mundur per baris walau batas umur ada', async () => {
+  const a = new Antrean({ berkas: null, sekarang: () => 1, buatId: () => 'dev-uji' })
+  baris(a, 'muda')
+  const { pg } = pengurai(a, { kebijakan: () => ({ maksPercobaanGalatServer: null, maksUmurJam: 1 }), kirimBatch: () => ({ ok: false, status: -1, gangguan: true, timeout: true }) })
+  await pg.jalankan()
+  assert.equal(a.cari('muda').status, STATUS.MENUNGGU)
+  assert.equal(a.cari('muda').sebabTunda, 'TIMEOUT')
+})
+
+test('umur_detik dihitung per operasi saat dikirim (segmen berikutnya & kiriman ulang 409 tidak basi)', async () => {
+  const a = new Antrean({ berkas: null, sekarang: () => 1, buatId: () => 'dev-uji' })
+  baris(a, 'c1'); baris(a, 'c2')
+  let jam = 10001
+  const umur = []
+  const { pg } = pengurai(a, {
+    maksOperasi: 1,
+    sekarang: () => jam,
+    kirimBatch: (b) => { umur.push(b.operations.map((op) => op.umur_detik)); jam += 20000; return terimaSemua(b) }
+  })
+  assert.equal(await pg.jalankan(), 2)
+  assert.deepEqual(umur, [[10], [30]])
+})
+
+test('409 dijawab dua kali (ref bergaram pun bentrok) → galat server per baris, bukan kirim ketiga', async () => {
+  const a = new Antrean({ berkas: null, sekarang: () => 1, buatId: () => 'dev-uji' })
+  baris(a, 'c1'); baris(a, 'c2')
+  let jam = 10001
+  const kiriman = []
+  const { pg } = pengurai(a, {
+    sekarang: () => jam,
+    kirimBatch: (b) => { kiriman.push(b); jam += 5000; return { ok: false, status: 409, errors: { kode: ['BATCH_REF_BENTROK'] }, message: 'Bentrok' } }
+  })
+  assert.equal(await pg.jalankan(), 0)
+  assert.equal(kiriman.length, 2)
+  assert.notEqual(kiriman[0].client_ref, kiriman[1].client_ref)
+  assert.deepEqual(kiriman.map((b) => b.operations[0].umur_detik), [10, 15], 'umur disegarkan pada kiriman bergaram')
+  for (const r of ['c1', 'c2']) {
+    const p = a.cari(r)
+    assert.equal(p.status, STATUS.MENUNGGU, r)
+    assert.equal(p.sebabTunda, 'SERVER', r)
+    assert.equal(p.galatServer, 1, r)
+    assert.match(p.galat, /HTTP 409/, r)
+    assert.equal(p.kode, null, r)
+  }
+})
+
+test('segmen dibelah menurut byte (≤70% maks_byte /config)', async () => {
+  const a = antreanMemori()
+  for (let i = 0; i < 5; i++) baris(a, `b${i}`, 'CHECKOUT', { body: { client_ref: `b${i}`, catatan: 'x'.repeat(1000) } })
+  const ukuran = []
+  const byte = []
+  const { pg } = pengurai(a, { maksByte: 4000, kirimBatch: (b) => { ukuran.push(b.operations.length); byte.push(Buffer.byteLength(JSON.stringify(b.operations))); return terimaSemua(b) } })
+  assert.equal(await pg.jalankan(), 5)
+  assert.deepEqual(ukuran, [2, 2, 1])
+  for (const n of byte) assert.ok(n <= 2800 + 10, `segmen ${n} byte`)
+})
+
+test('maks_operasi/saran/maks_byte /config pecahan dibulatkan ke bawah (10.5 → 10); < 1 = tanpa batas', async () => {
+  assert.deepEqual(syncBatchDariConfig({ sync_batch: { versi: 2.9, maks_operasi: 10.5, maks_byte: 4000.7 } }), { versi: 2, maksOperasi: 10, maksByte: 4000 })
+  assert.equal(syncBatchDariConfig({ sync_batch: { versi: 2, maks_operasi: 200, saran_operasi_per_segmen: 7.9 } }).maksOperasi, 7)
+  assert.equal(syncBatchDariConfig({ sync_batch: { versi: 2, maks_operasi: 0.5 } }).maksOperasi, null)
+  const a = antreanMemori()
+  for (let i = 0; i < 5; i++) baris(a, `c${i}`)
+  const ukuran = []
+  const { pg } = pengurai(a, { maksOperasi: 2.5, kirimBatch: (b) => { ukuran.push(b.operations.length); return terimaSemua(b) } })
+  await pg.jalankan()
+  assert.deepEqual(ukuran, [2, 2, 1], 'aturSyncBatch ikut membulatkan')
 })
