@@ -1,0 +1,177 @@
+{
+  "versi": 2,
+  "catatan": "Fikstur kontrak POST /api/pos/v1/sync/v2/batch (Fase 4 Tuléh, 2026-09-24). Salin apa adanya ke frontend/tests/fikstur/ dan mobile-flutter/test/fikstur/. Id terenkripsi di sini contoh — jangan dibandingkan antar-jawaban.",
+  "kode": {
+    "OK": false,
+    "VALIDASI": false,
+    "HAK_AKSES": false,
+    "OTORISASI_WAJIB": false,
+    "SESI_TIDAK_ADA": true,
+    "SESI_BEDA_TOKO": true,
+    "STOK_KURANG": false,
+    "PRASYARAT": true,
+    "TIDAK_DITEMUKAN": false,
+    "KONFLIK": false,
+    "PELUNASAN_HARUS_REFUND": false,
+    "DITUNDA": true,
+    "LANGGANAN": true,
+    "GALAT_SERVER": true
+  },
+  "peringatan": ["SELISIH_STOK", "SESI_TUTUP", "SESI_BERBEDA", "JAM_PERANGKAT", "SUDAH_DIBATALKAN", "SUDAH_DI_TAHAP"],
+  "permintaan": {
+    "client_ref": "9e1b6d0c3a7f45e2b8c1d4f6a9e0b3c5d7f8a1b2c3d4e5f60718293a4b5c6d7e",
+    "device_id": "3b9d6c1e-6a0f-4a55-9f7e-2c7f0d6e8a11",
+    "operations": [
+      {
+        "idempotency_key": "c0ffee00-1111-4222-8333-444455556666",
+        "device_seq": 41,
+        "umur_detik": 3180,
+        "type": "checkout",
+        "payload": {
+          "offline": true,
+          "toko_id": "eyJpdiI6IlRva28ifQ",
+          "nomor_lokal": "L-3B9D-260924-0007",
+          "waktu_klien": "2026-09-24T10:15:02+07:00",
+          "items": [
+            { "id_produk": "eyJpdiI6Ik1pbnVtIn0", "kuantitas": 5, "harga": 12000 },
+            { "id_produk": "eyJpdiI6IkFpciJ9", "kuantitas": 1, "harga": 8000, "diskon_persen": 10 }
+          ],
+          "diskon_nominal": 2000,
+          "tipe_pembayaran": "TUNAI",
+          "dibayar": 70000
+        }
+      },
+      {
+        "idempotency_key": "rf-1727147800123-4471",
+        "device_seq": 42,
+        "type": "refund",
+        "payload": {
+          "transaksi_ref": "c0ffee00-1111-4222-8333-444455556666",
+          "items": [ { "baris": 1, "kuantitas": 1 } ],
+          "metode": "TUNAI",
+          "alasan": "Barang rusak",
+          "kembali_stok": true,
+          "waktu_klien": "2026-09-24T10:21:40+07:00"
+        }
+      },
+      {
+        "idempotency_key": "b47a2f10-0c9d-4e3b-a8f1-7d6e5c4b3a29",
+        "device_seq": 43,
+        "type": "batal",
+        "payload": { "transaksi_id": "eyJpdiI6IlBlbHVuYXNhbiJ9", "alasan": "Salah input" }
+      },
+      {
+        "idempotency_key": "0d9c8b7a-6f5e-4d3c-b2a1-0f9e8d7c6b5a",
+        "device_seq": 44,
+        "type": "bills.settle",
+        "payload": { "bon_id": "eyJpdiI6IkJvbiJ9", "tipe_pembayaran": "QRIS" }
+      },
+      {
+        "idempotency_key": "5a4b3c2d-1e0f-4a9b-8c7d-6e5f4a3b2c1d",
+        "device_seq": 45,
+        "type": "orders.transition",
+        "payload": { "order_id": "eyJpdiI6IlBlc2FuYW4ifQ", "to": "SELESAI", "tipe_pembayaran": "TUNAI" }
+      }
+    ]
+  },
+  "respons": {
+    "success": true,
+    "data": {
+      "versi": 2,
+      "results": [
+        {
+          "idempotency_key": "c0ffee00-1111-4222-8333-444455556666",
+          "device_id": "3b9d6c1e-6a0f-4a55-9f7e-2c7f0d6e8a11",
+          "device_seq": 41,
+          "type": "checkout",
+          "accepted": true,
+          "server_id": "eyJpdiI6IlRyeDgxMiJ9",
+          "nomor": "POS/202609/000812",
+          "kode": "OK",
+          "retriable": false,
+          "message": "Transaksi berhasil.",
+          "reason": null,
+          "idempoten": false,
+          "peringatan": ["SELISIH_STOK"],
+          "data": {
+            "grand_total": 65200,
+            "items": [
+              { "baris": 0, "id": "eyJpdiI6Ikl0ZW0xIn0", "selisih": 2 },
+              { "baris": 1, "id": "eyJpdiI6Ikl0ZW0yIn0", "selisih": 0 }
+            ]
+          }
+        },
+        {
+          "idempotency_key": "rf-1727147800123-4471",
+          "device_id": "3b9d6c1e-6a0f-4a55-9f7e-2c7f0d6e8a11",
+          "device_seq": 42,
+          "type": "refund",
+          "accepted": true,
+          "server_id": "eyJpdiI6IlJmZDQ0In0",
+          "nomor": "RFD/202609/000044",
+          "kode": "OK",
+          "retriable": false,
+          "message": "Refund RFD/202609/000044 tercatat.",
+          "reason": null,
+          "idempoten": false,
+          "peringatan": [],
+          "data": { "transaksi_id": "eyJpdiI6IlRyeDgxMiJ9", "transaksi_nomor": "POS/202609/000812", "total": 7200 }
+        },
+        {
+          "idempotency_key": "b47a2f10-0c9d-4e3b-a8f1-7d6e5c4b3a29",
+          "device_id": "3b9d6c1e-6a0f-4a55-9f7e-2c7f0d6e8a11",
+          "device_seq": 43,
+          "type": "batal",
+          "accepted": false,
+          "server_id": "eyJpdiI6IlBlbHVuYXNhbiJ9",
+          "nomor": "POS/202609/000790",
+          "kode": "PELUNASAN_HARUS_REFUND",
+          "retriable": false,
+          "message": "Transaksi pelunasan pesanan tidak bisa dibatalkan. Gunakan Refund agar uang (termasuk uang muka) dikembalikan dan kas sesi tetap cocok.",
+          "reason": "Transaksi pelunasan pesanan tidak bisa dibatalkan. Gunakan Refund agar uang (termasuk uang muka) dikembalikan dan kas sesi tetap cocok.",
+          "idempoten": false,
+          "peringatan": [],
+          "data": null
+        },
+        {
+          "idempotency_key": "0d9c8b7a-6f5e-4d3c-b2a1-0f9e8d7c6b5a",
+          "device_id": "3b9d6c1e-6a0f-4a55-9f7e-2c7f0d6e8a11",
+          "device_seq": 44,
+          "type": "bills.settle",
+          "accepted": false,
+          "server_id": null,
+          "nomor": null,
+          "kode": "SESI_TIDAK_ADA",
+          "retriable": true,
+          "message": "Belum ada sesi kasir untuk transaksi ini. Buka sesi kasir di toko ini.",
+          "reason": "Belum ada sesi kasir untuk transaksi ini. Buka sesi kasir di toko ini.",
+          "idempoten": false,
+          "peringatan": [],
+          "data": null
+        },
+        {
+          "idempotency_key": "5a4b3c2d-1e0f-4a9b-8c7d-6e5f4a3b2c1d",
+          "device_id": "3b9d6c1e-6a0f-4a55-9f7e-2c7f0d6e8a11",
+          "device_seq": 45,
+          "type": "orders.transition",
+          "accepted": false,
+          "server_id": null,
+          "nomor": null,
+          "kode": "DITUNDA",
+          "retriable": true,
+          "message": "Waktu proses batch habis sebelum operasi ini disentuh; dikirim ulang otomatis.",
+          "reason": "Waktu proses batch habis sebelum operasi ini disentuh; dikirim ulang otomatis.",
+          "idempoten": false,
+          "peringatan": [],
+          "data": null
+        }
+      ],
+      "accepted": 2,
+      "rejected": 3,
+      "ditunda": 1
+    },
+    "meta": { "sidik": "4be1c0a9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1" },
+    "message": "Sinkronisasi selesai.",
+    "errors": null
+  }
+}
