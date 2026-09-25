@@ -8,6 +8,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tuleh_pos/core/offline/antrean.dart';
 import 'package:tuleh_pos/core/offline/operasi_batch.dart';
+import 'package:tuleh_pos/core/offline/waktu_klien.dart';
 
 PesanAntrean _p(
   String ref,
@@ -196,5 +197,116 @@ void main() {
     expect(await ambilKonfigSyncBatch(rusak), isNull);
     final daftar = Dio(BaseOptions(validateStatus: (_) => true))..httpClientAdapter = _Server((o) => (200, {'success': true, 'data': <Object>[]}));
     expect((await ambilKonfigSyncBatch(daftar))!.aktif, isFalse, reason: 'server menjawab tanpa blok');
+  });
+  // ---- Koreksi review Task 24: paritas dengan desktop operasi-batch.js ----
+
+  test('idDariJalur: segmen gagal di-decode → null (bukan segmen mentah)', () {
+    expect(idDariJalur('/transaksi/%ZZ/batal', 'transaksi'), isNull);
+    expect(idDariJalur('/transaksi/%FF/batal', 'transaksi'), isNull);
+    expect(idDariJalur('/transaksi/T%2F1/batal', 'transaksi'), 'T/1');
+    final op = opDariBaris(_p('b-z', 'BATAL', '/transaksi/%ZZ/batal', {'alasan': 'x'}), deviceId: 'd', kini: DateTime(2026, 9, 24, 11));
+    final pl = op['payload'] as Map<String, dynamic>;
+    expect(pl.containsKey('transaksi_id'), isTrue);
+    expect(pl['transaksi_id'], isNull);
+    // Vektor desktop 181f8ac.
+    final utf = opDariBaris(_p('b-2', 'BATAL', '/transaksi/%E0%A4%A/batal', {'alasan': 'x'}), deviceId: 'd', kini: DateTime(2026, 9, 24, 11));
+    expect((utf['payload'] as Map)['transaksi_id'], isNull);
+    expect((utf['payload'] as Map).containsKey('transaksi_ref'), isFalse);
+    final bon = opDariBaris(_p('s-2', 'BILL_BAYAR', '/bills/%ZZ/settle', const {}), deviceId: 'd', kini: DateTime(2026, 9, 24, 11));
+    expect((bon['payload'] as Map)['bon_id'], isNull);
+  });
+
+  test('waktu_klien tak terurai → waktu baris dibuat; tanpa zona → ber-offset', () {
+    final dibuat = DateTime(2026, 9, 24, 9, 30, 5);
+    final rusak = opDariBaris(_p('w1', 'CHECKOUT', '/transaksi/checkout', {'waktu_klien': 'bukan-waktu'}, dibuat: dibuat), deviceId: 'd', kini: DateTime(2026, 9, 24, 11));
+    expect((rusak['payload'] as Map)['waktu_klien'], waktuKlienIso(dibuat));
+    final kosong = opDariBaris(_p('w2', 'CHECKOUT', '/transaksi/checkout', {'waktu_klien': ''}, dibuat: dibuat), deviceId: 'd', kini: DateTime(2026, 9, 24, 11));
+    expect((kosong['payload'] as Map)['waktu_klien'], waktuKlienIso(dibuat));
+    final tanpaZona = opDariBaris(_p('w3', 'CHECKOUT', '/transaksi/checkout', {'waktu_klien': '2026-09-24T10:15:02'}, dibuat: dibuat), deviceId: 'd', kini: DateTime(2026, 9, 24, 11));
+    final wk = (tanpaZona['payload'] as Map)['waktu_klien'] as String;
+    expect(wk, matches(_zona));
+    expect(wk, waktuKlienIso(DateTime(2026, 9, 24, 10, 15, 2)), reason: 'waktu lokal badan dipertahankan, bukan waktu dibuat');
+  });
+
+  test('device_id kosong tidak dikirim; nomor_lokal kosong di badan → parameter', () {
+    final op = opDariBaris(_p('d1', 'CHECKOUT', '/transaksi/checkout', {'nomor_lokal': ''}), deviceId: '', kini: DateTime(2026, 9, 24, 11), nomorLokal: 'L-P-1');
+    expect(op.containsKey('device_id'), isFalse);
+    expect((op['payload'] as Map)['nomor_lokal'], 'L-P-1');
+    final panjang = opDariBaris(_p('d2', 'CHECKOUT', '/transaksi/checkout', const {}), deviceId: 'dev', kini: DateTime(2026, 9, 24, 11), nomorLokal: 'L-${'9' * 40}');
+    expect(((panjang['payload'] as Map)['nomor_lokal'] as String).length, 30);
+    final tanpa = opDariBaris(_p('d3', 'CHECKOUT', '/transaksi/checkout', {'nomor_lokal': ''}), deviceId: 'dev', kini: DateTime(2026, 9, 24, 11));
+    expect((tanpa['payload'] as Map)['nomor_lokal'], '', reason: 'tanpa nomor: badan apa adanya (paritas desktop ...body)');
+  });
+
+  test('clientRefBatch tepi (= desktop): garam ≤ 0 tanpa akhiran, kirim ulang dipotong bulat, jenis non-batch dikecualikan', () {
+    final a = _p('a', 'CHECKOUT', '/transaksi/checkout', const {});
+    PesanAntrean b(Object? ke) => _p('b', 'REFUND', '/transaksi/T1/refund', {'_kirim_ulang': ke});
+    const r0 = 'fe481eea9f58de368b53f096384781ea43950b643012811349ddede35f5cf3cd';
+    const r1 = 'e44b34c9b6cd657103c07941e5e9aee04b4054b16d22fb77e145eb9715b998f3';
+    expect(clientRefBatch('dev', [a, b(0)], garam: -1), r0);
+    expect(clientRefBatch('dev', [a, b(1)]), r1, reason: 'vektor desktop kirimUlangKe 1');
+    expect(clientRefBatch('dev', [a, b(1.9)]), r1);
+    expect(clientRefBatch('dev', [a, b(' +1 ')]), r1);
+    expect(clientRefBatch('dev', [a, b('1.5')]), r0, reason: 'teks bukan bilangan bulat → 0');
+    expect(clientRefBatch('dev', [a, b('0x10')]), r0, reason: 'heksadesimal tidak dianggap angka');
+    expect(clientRefBatch('dev', [a, b(-0.5)]), r0);
+    expect(clientRefBatch('dev', [a, b(double.nan)]), r0);
+    expect(clientRefBatch('dev', [a, b(double.infinity)]), r0);
+    expect(clientRefBatch('dev', [a, b(true)]), r0);
+    expect(kirimUlangKe(b(-2)), -2);
+    final lain = _p('x', 'PENGELUARAN', '/pengeluaran', const {});
+    expect(sidikKomposisi([a, lain, b(0)]), 'checkout:a:0\nrefund:b:0');
+    expect(clientRefBatch('dev', [a, lain, b(0)]), r0);
+    expect(clientRefBatch('dev', [a, null, b(0)]), r0, reason: 'baris null dibuang');
+    // Vektor desktop 181f8ac: garam dinormalkan seperti kirimUlangKe.
+    expect(clientRefBatch('dev', [a, b(0)], garam: 0.9), r0);
+    expect(clientRefBatch('dev', [a, b(0)], garam: double.nan), r0);
+    expect(clientRefBatch('dev', [a, b(0)], garam: 'x'), r0);
+    expect(clientRefBatch('dev', [a, b(0)], garam: 1.7), clientRefBatch('dev', [a, b(0)], garam: 1));
+    expect(clientRefBatch('dev', [a, b(0)], garam: 1.7), '0e60b3cd99e807769359fd279851932cb17696d348ebb4b85781b8ccc777d2a5');
+    final tanpaKunci = _p('b', 'REFUND', '/transaksi/T1/refund', const {});
+    expect(sidikKomposisi([tanpaKunci]), 'refund:b:0');
+    expect(sidikKomposisi([b(1.7)]), 'refund:b:1');
+    expect(sidikKomposisi([b(-0.5)]), 'refund:b:0', reason: 'bukan "-0"');
+    expect(sidikKomposisi([b('2')]), 'refund:b:2');
+    for (final v in <Object?>[null, double.nan, double.infinity, double.negativeInfinity, '1.5', 'x', true]) {
+      expect(sidikKomposisi([b(v)]), 'refund:b:0', reason: 'kirimUlangKe $v');
+    }
+  });
+
+  test('HasilItemBatch: retriable, kode asing dipertahankan, pesan message → reason → label', () {
+    final h = HasilItemBatch.dariJson({
+      'idempotency_key': 'r', 'accepted': false, 'kode': 'KODE_BARU', 'retriable': true, 'message': '  ', 'reason': 'Sesi dikunci',
+    })!;
+    expect(h.retriable, isTrue);
+    expect(h.kode, 'KODE_BARU');
+    expect(h.message, 'Sesi dikunci');
+    final kosong = HasilItemBatch.dariJson({'idempotency_key': 's', 'accepted': false, 'kode': 'STOK_KURANG', 'message': '', 'reason': ' '})!;
+    expect(kosong.message, 'Stok tidak cukup');
+    expect(kosong.retriable, isFalse);
+    final utama = HasilItemBatch.dariJson({'idempotency_key': 't', 'accepted': false, 'message': ' Ditolak ', 'reason': 'lain'})!;
+    expect(utama.message, 'Ditolak');
+  });
+
+  test('idItemDariHasil: hanya bilangan bulat, baris dibandingkan sebagai angka, id wajib tidak kosong', () {
+    final batch = {'data': {'items': [{'baris': '1.0', 'id': 'I-b'}, {'baris': 2, 'id': ''}, {'baris': 3, 'id': 'I-d'}]}};
+    expect(idItemDariHasil(batch, 1), 'I-b', reason: "'1.0' == 1");
+    expect(idItemDariHasil(batch, '1'), 'I-b');
+    expect(idItemDariHasil(batch, 1.0), 'I-b');
+    expect(idItemDariHasil(batch, 1.5), isNull);
+    expect(idItemDariHasil(batch, '1.5'), isNull);
+    expect(idItemDariHasil(batch, 2), isNull, reason: 'id kosong');
+    expect(idItemDariHasil(batch, -1), isNull);
+    expect(idItemDariHasil({'items': [{'id': ''}, {'id': 'J-b'}]}, 0), isNull);
+    expect(idItemDariHasil({'items': [{'id': ''}, {'id': 'J-b'}]}, 1), 'J-b');
+  });
+
+  test('KonfigSyncBatch: saran server lebih kecil dipakai (P-5); sync_batch null nonaktif; galat jaringan → null', () async {
+    final k = KonfigSyncBatch.dariConfig({'sync_batch': {'versi': 2, 'maks_operasi': 200, 'saran_operasi_per_segmen': 10}});
+    expect(k.batasOp(25), 10);
+    expect(k.batasOp(4), 4);
+    expect(KonfigSyncBatch.dariConfig({'sync_batch': null}).aktif, isFalse);
+    final putus = Dio(BaseOptions(validateStatus: (_) => true))..httpClientAdapter = _Server((o) => DioExceptionType.connectionError);
+    expect(await ambilKonfigSyncBatch(putus), isNull);
   });
 }

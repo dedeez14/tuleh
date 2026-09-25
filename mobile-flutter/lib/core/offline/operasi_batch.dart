@@ -143,11 +143,20 @@ Future<KonfigSyncBatch?> ambilKonfigSyncBatch(Dio dio) async {
   }
 }
 
-/// Generasi kirim ulang baris (0 = belum pernah).
-int kirimUlangKe(PesanAntrean p) {
-  final v = p.body[kunciKirimUlang];
-  return v is num ? v.toInt() : int.tryParse('${v ?? ''}') ?? 0;
+final _polaBulat = RegExp(r'^\s*[+-]?\d+\s*$');
+
+/// Bilangan bulat untuk sidik `client_ref` (paritas desktop `bulatSidik`):
+/// angka hingga → dipotong ke arah nol (-0,5 → 0); teks bilangan bulat
+/// (`"2"`, `" +3 "`) → nilainya; selain itu (null, NaN, ±∞, `"1.5"`, `"0x10"`,
+/// boolean) → 0. `truncate()` pada NaN/∞ melempar — karena itu dicek dulu.
+int _bulatSidik(Object? v) {
+  if (v is num) return v.isFinite ? v.truncate() : 0;
+  if (v is String && _polaBulat.hasMatch(v)) return int.tryParse(v.trim()) ?? 0;
+  return 0;
 }
+
+/// Generasi kirim ulang baris (0 = belum pernah).
+int kirimUlangKe(PesanAntrean p) => _bulatSidik(p.body[kunciKirimUlang]);
 
 /// Segmen id pada jalur `/<grup>/<id>/…` (sudah di-decode), null bila bukan grup itu.
 String? idDariJalur(String jalur, String grup) {
@@ -156,7 +165,8 @@ String? idDariJalur(String jalur, String grup) {
   try {
     return Uri.decodeComponent(seg[2]);
   } catch (_) {
-    return seg[2];
+    // Paritas desktop: segmen rusak (`%ZZ`, UTF-8 tak sah) bukan id yang sah.
+    return null;
   }
 }
 
@@ -178,15 +188,18 @@ Map<String, dynamic> opDariBaris(
   final payload = badanKirim(p.body);
   // Server menolak item bila client_ref payload ≠ idempotency_key.
   payload['client_ref'] = p.clientRef;
+  // [badanKirim] sudah merapikan waktu yang terurai (tanpa zona → lokal +
+  // offset); yang kosong/tak terurai → waktu baris dibuat (paritas desktop).
   final wk = payload['waktu_klien'];
-  if (wk is! String || wk.isEmpty) payload['waktu_klien'] = waktuKlienIso(p.dibuat);
+  if (wk is! String || DateTime.tryParse(wk) == null) payload['waktu_klien'] = waktuKlienIso(p.dibuat);
   final toko = p.tokoId;
   if (toko != null && toko.isNotEmpty) payload['toko_id'] = toko;
   switch (type) {
     case 'checkout':
       // Penjualan yang diantrekan sudah terjadi fisik: diterima walau stok kurang (selisih dicatat).
       payload['offline'] = true;
-      final nomor = '${p.body['nomor_lokal'] ?? nomorLokal ?? ''}';
+      final diBadan = '${p.body['nomor_lokal'] ?? ''}';
+      final nomor = diBadan.isNotEmpty ? diBadan : (nomorLokal ?? '');
       if (nomor.isNotEmpty) payload['nomor_lokal'] = nomor.length > 30 ? nomor.substring(0, 30) : nomor;
     case 'refund' || 'batal':
       final ref = rujukanDalamPath(jalur);
@@ -202,7 +215,7 @@ Map<String, dynamic> opDariBaris(
   }
   return {
     'idempotency_key': p.clientRef,
-    'device_id': deviceId,
+    if (deviceId.isNotEmpty) 'device_id': deviceId,
     if (p.urut > 0) 'device_seq': p.urut,
     // Umur baris menurut jam perangkat sendiri: kebal jam absolut yang salah.
     'umur_detik': max(0, kini.difference(p.dibuat).inSeconds),
@@ -212,14 +225,22 @@ Map<String, dynamic> opDariBaris(
 }
 
 /// Komposisi segmen urutan kirim: `<type>:<clientRef>:<kirimUlangKe>` per baris.
-String sidikKomposisi(Iterable<PesanAntrean> baris) =>
-    baris.map((p) => '${jenisBatch[p.jenis]}:${p.clientRef}:${kirimUlangKe(p)}').join('\n');
+/// Baris null / berjenis non-batch DIKECUALIKAN (tak pernah ikut segmen) —
+/// bukan ditulis `null:…` (paritas desktop).
+String sidikKomposisi(Iterable<PesanAntrean?> baris) => [
+  for (final p in baris)
+    if (p != null && jenisBatch.containsKey(p.jenis)) '${jenisBatch[p.jenis]}:${p.clientRef}:${kirimUlangKe(p)}',
+].join('\n');
 
 /// `client_ref` batch deterministik (sha256 hex 64): kiriman ulang identik
 /// setelah putus jaringan = ref sama = replay server; komposisi / generasi
-/// kirim ulang berbeda = ref berbeda. [garam] hanya untuk 409 BATCH_REF_BENTROK.
-String clientRefBatch(String deviceId, Iterable<PesanAntrean> baris, {int garam = 0}) =>
-    sha256.convert(utf8.encode('$deviceId|${sidikKomposisi(baris)}${garam > 0 ? '|$garam' : ''}')).toString();
+/// kirim ulang berbeda = ref berbeda. [garam] hanya untuk 409 BATCH_REF_BENTROK;
+/// dinormalkan seperti desktop: dipotong bulat, akhiran `|<g>` hanya bila g > 0
+/// (negatif, 0, 0,9, NaN, teks bukan angka → tanpa akhiran; 1,7 → `|1`).
+String clientRefBatch(String deviceId, Iterable<PesanAntrean?> baris, {Object? garam = 0}) {
+  final g = _bulatSidik(garam);
+  return sha256.convert(utf8.encode('$deviceId|${sidikKomposisi(baris)}${g > 0 ? '|$g' : ''}')).toString();
+}
 
 /// Ukuran JSON dalam byte UTF-8.
 int ukuranJson(Object? nilai) => utf8.encode(jsonEncode(nilai)).length;
@@ -261,7 +282,9 @@ class HasilItemBatch {
     final accepted = m['accepted'] == true;
     final kodeMentah = m['kode'];
     final kode = kodeMentah is String && kodeMentah.isNotEmpty ? kodeMentah : (accepted ? 'OK' : 'GALAT_SERVER');
-    final pesan = '${m['message'] ?? m['reason'] ?? ''}'.trim();
+    String teks(Object? v) => v == null ? '' : '$v'.trim();
+    final msg = teks(m['message']);
+    final alasan = teks(m['reason']);
     final per = m['peringatan'];
     final data = m['data'];
     return HasilItemBatch(
@@ -272,7 +295,7 @@ class HasilItemBatch {
       serverId: m['server_id']?.toString(),
       nomor: m['nomor']?.toString(),
       retriable: m['retriable'] == true,
-      message: pesan.isEmpty ? labelKode(kode) : pesan,
+      message: msg.isNotEmpty ? msg : (alasan.isNotEmpty ? alasan : labelKode(kode)),
       idempoten: m['idempoten'] == true,
       peringatan: [if (per is List) for (final x in per) '$x'],
       data: data is Map ? Map<String, dynamic>.from(data) : null,
@@ -299,21 +322,39 @@ class HasilItemBatch {
 /// urutan `baris` — server K-22).
 String? idItemDariHasil(Map<String, dynamic>? hasil, Object? baris) {
   if (hasil == null) return null;
-  final n = baris is num ? baris.toInt() : int.tryParse('${baris ?? ''}');
+  final n = _bulatBaris(baris);
   if (n == null || n < 0) return null;
   final data = hasil['data'];
   final ringkas = data is Map ? data['items'] : null;
   if (ringkas is List) {
+    // Paritas desktop (`find`): entri PERTAMA ber-`baris` itu; id kosong → struk.
     for (final x in ringkas) {
-      if (x is Map && '${x['baris']}' == '$n' && x['id'] != null) return '${x['id']}';
+      if (x is Map && _bulatBaris(x['baris']) == n) {
+        final id = _idTakKosong(x['id']);
+        if (id != null) return id;
+        break;
+      }
     }
   }
   final struk = hasil['items'];
   if (struk is List && n < struk.length) {
     final x = struk[n];
-    if (x is Map && x['id'] != null) return '${x['id']}';
+    if (x is Map) return _idTakKosong(x['id']);
   }
   return null;
+}
+
+/// Nomor `baris` sebagai bilangan bulat: angka / teks angka yang nilainya
+/// bulat (`'1.0'` = 1); pecahan, NaN, ∞, dan bukan angka → null.
+int? _bulatBaris(Object? v) {
+  final n = v is num ? v : (v is String ? num.tryParse(v.trim()) : null);
+  if (n == null || !n.isFinite || n % 1 != 0) return null;
+  return n.toInt();
+}
+
+String? _idTakKosong(Object? v) {
+  final s = v == null ? '' : '$v';
+  return s.isEmpty ? null : s;
 }
 
 /// Badan refund berujukan `baris` → `id` item server dari hasil induk, untuk
