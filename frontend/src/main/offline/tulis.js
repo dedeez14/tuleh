@@ -2,7 +2,9 @@
 
 // Permintaan tulis dengan jalur offline (dipakai ipc.js untuk semua kanal kontrak ber-`antrean`
 // dan checkout). Keputusan per jawaban mengikuti kontrak "Klien — perilaku wajib":
-//   - client_ref masih di antrean (belum terkirim) → tertunda lagi, tanpa kirim & tanpa baris kedua;
+//   - client_ref masih di antrean (belum terkirim) → tertunda lagi, tanpa kirim & tanpa baris kedua
+//     (baris ditinjau → `perluTinjau`);
+//   - client_ref sudah TERKIRIM lewat antrean + offline/gangguan → hasil tersimpan (`dariAntrean`), tanpa baris baru;
 //   - diketahui offline / `langsungAntre` → antrekan langsung;
 //   - sukses                            → kembalikan apa adanya (+ clientRef);
 //   - gangguan (jaringan/timeout/5xx/408/429/galat gateway) → antrekan, dikirim ulang
@@ -16,6 +18,20 @@
 const { adalahGangguan } = require('../lib/klasifikasi-http')
 
 const teks = (v) => (typeof v === 'string' && v ? v : null)
+
+/**
+ * `data` dari hasil baris TERKIRIM: hasil batch ({id, nomor, kode, tipe, idempoten, data, …}) → `data` item
+ * atau {id, nomor}; hasil pemulih ({id, nomor, dipulihkan}) → {id, nomor}; hasil per baris = data server
+ * mentah (tanpa penanda internal `_idempoten`).
+ */
+function dataHasilTersimpan(h) {
+  if (!h || typeof h !== 'object') return null
+  const bentukBatch = 'kode' in h && 'tipe' in h && 'idempoten' in h
+  if (bentukBatch) return h.data && typeof h.data === 'object' ? h.data : { id: h.id ?? null, nomor: h.nomor ?? null }
+  if (h.dipulihkan === true) return { id: h.id ?? null, nomor: h.nomor ?? null }
+  const { _idempoten, ...data } = h
+  return data
+}
 
 /**
  * @param {object} o
@@ -48,13 +64,20 @@ function buatTulisAtauAntre({ offline, kirim, tokoAktif, pemilikAktif = () => nu
     // jangan coba online (server bisa mencatatnya lalu baris antre dikirim lagi) dan jangan antrekan baris kedua.
     const ada = offline.antrean.cari(clientRef)
     if (ada && ada.status !== offline.STATUS.TERKIRIM) {
-      return { ok: true, status: 202, data: null, meta: null, message: '', tertunda: true, clientRef }
+      const r = { ok: true, status: 202, data: null, meta: null, message: '', tertunda: true, clientRef }
+      if (ada.status === offline.STATUS.TINJAU) r.perluTinjau = true
+      return r
     }
     const badan = { ...body, client_ref: clientRef, waktu_klien: teks(body && body.waktu_klien) || offline.waktuKlien() }
     if (!langsungAntre && offline.koneksi.online) {
       const r = await kirim(jalur, badan)
       if (r.ok) return { ...r, clientRef }
       if (!adalahGangguan(r)) return r // ditolak server / langganan: tampilkan apa adanya
+    }
+    // Operasi ini SUDAH tercatat server lewat antrean (ref sama TERKIRIM) dan server kini tak terjangkau:
+    // kembalikan hasil tersimpan — mengantrekan lagi = baris kembar berkunci sama.
+    if (ada && ada.status === offline.STATUS.TERKIRIM) {
+      return { ok: true, status: 200, data: dataHasilTersimpan(ada.hasil), meta: null, message: '', clientRef, dariAntrean: true }
     }
     let badanAntre = badan
     let transaksiAntre = transaksi
@@ -84,4 +107,4 @@ function buatTulisAtauAntre({ offline, kirim, tokoAktif, pemilikAktif = () => nu
   }
 }
 
-module.exports = { buatTulisAtauAntre }
+module.exports = { buatTulisAtauAntre, dataHasilTersimpan }

@@ -629,3 +629,25 @@ test('429 BATCH_BERJALAN = jeda batch tingkat perangkat: putaran berikut di dala
   assert.equal(await pg.jalankan(), 2)
   assert.deepEqual(log, ['batch:c1', 'batch:c1', 'batch:c2'])
 })
+
+// Paritas Flutter A-17 (memo /config 5 menit): 503 BATCH_TIDAK_TERSEDIA itu sementara (tabel idempotensi
+// belum siap / gagal-tertutup) → batch dicoba lagi setelah 5 menit walau /config belum dimuat ulang.
+// 404 (rute belum ada di server/gateway) tetap per baris sampai /config berikutnya.
+test('503 BATCH_TIDAK_TERSEDIA mematikan batch 5 menit; 404 sampai /config berikutnya', async () => {
+  const { BATCH_MATI_SEMENTARA_MS } = require('../src/main/offline/pengurai')
+  assert.equal(BATCH_MATI_SEMENTARA_MS, 5 * 60 * 1000)
+  let kini = 1000
+  const a = antreanMemori()
+  const { pg } = pengurai(a, { sekarang: () => kini })
+  pg._olahJawabanBatch([], { ok: false, status: 503, gangguan: true, errors: { kode: ['BATCH_TIDAK_TERSEDIA'] } })
+  assert.equal(pg.modeBatch(), false)
+  kini += BATCH_MATI_SEMENTARA_MS - 1
+  assert.equal(pg.modeBatch(), false, 'belum 5 menit')
+  kini += 1
+  assert.equal(pg.modeBatch(), true, 'lewat 5 menit → batch dicoba lagi')
+
+  pg._olahJawabanBatch([], { ok: false, status: 404, gateway: 'route-unknown' })
+  kini += BATCH_MATI_SEMENTARA_MS * 10
+  assert.equal(pg.modeBatch(), false, '404 tidak kedaluwarsa sendiri')
+  assert.equal(pg.aturSyncBatch({ versi: 2 }), true)
+})

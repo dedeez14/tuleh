@@ -62,6 +62,11 @@ const JEDA_TUNDA_MS = 3000
 // menggantikan 3 dtk A-7). Tanpa menaikkan percobaan.
 const JEDA_BERJALAN_MS = 5000
 
+// 503 BATCH_TIDAK_TERSEDIA (server gagal-tertutup, mis. tabel idempotensi belum siap) itu sementara: batch
+// dicoba lagi setelah 5 menit walau /config belum dimuat ulang (paritas memo /config 5 menit Flutter, A-17).
+// 404 / server lama tetap per baris sampai /config berikutnya.
+const BATCH_MATI_SEMENTARA_MS = 5 * 60 * 1000
+
 // Penjualan/pembayaran bon toko T tidak dikirim selagi baris jenis ini (toko T, lebih tua, akun sama) belum
 // tercatat: stok masuk sebelum jual, sesi & bon dibuka sebelum dipakai. Penahan gugur saat penentunya
 // TERKIRIM, TINJAU, atau dibatalkan — batas tinjau /config tetap mencegah tertahan selamanya.
@@ -192,7 +197,8 @@ class Pengurai {
     // Versi batch terakhir dari /config disimpan di antrean → start dingin langsung memakai mode yang benar.
     const pr = typeof antrean.perangkat === 'function' ? antrean.perangkat() : null
     this._syncBatch = { versi: pr ? Math.floor(Number(pr.syncBatchVersi) || 0) : 0, maksOperasi: null, maksByte: null }
-    this._batchMati = false // server menjawab 404/503 BATCH_TIDAK_TERSEDIA → per baris sampai /config berikutnya
+    this._batchMati = false // server menjawab 404/503 BATCH_TIDAK_TERSEDIA → per baris sampai /config berikutnya (503: ≤5 menit)
+    this._batchMatiSampai = null // 503: kedaluwarsa sendiri pada waktu ini (null = sampai /config berikutnya)
     this._batasOpAdaptif = BATAS_OP_SEGMEN
     // 429 BATCH_BERJALAN: kunci batch akun ini masih dipegang server → TIDAK ada POST batch (segmen mana pun)
     // sampai waktu ini; tanpa ini putaran ±1 dtk berikutnya mem-POST segmen lain dan menghabiskan limiter pos-sync.
@@ -231,12 +237,24 @@ class Pengurai {
     const s = sb && typeof sb === 'object' ? sb : {}
     this._syncBatch = { versi: Math.floor(Number(s.versi) || 0), maksOperasi: bulatPositif(s.maksOperasi), maksByte: bulatPositif(s.maksByte) }
     this._batchMati = false
+    this._batchMatiSampai = null
     if (typeof this.antrean.aturPerangkat === 'function') this.antrean.aturPerangkat({ syncBatchVersi: this._syncBatch.versi })
     return this.modeBatch()
   }
 
   modeBatch() {
-    return typeof this.kirimBatch === 'function' && this._syncBatch.versi >= 2 && !this._batchMati
+    return typeof this.kirimBatch === 'function' && this._syncBatch.versi >= 2 && !this._batchMatiAktif()
+  }
+
+  /** Batch dimatikan server? Mati sementara (503) gugur sendiri setelah BATCH_MATI_SEMENTARA_MS. */
+  _batchMatiAktif() {
+    if (!this._batchMati) return false
+    if (this._batchMatiSampai !== null && this.sekarang() >= this._batchMatiSampai) {
+      this._batchMati = false
+      this._batchMatiSampai = null
+      return false
+    }
+    return true
   }
 
   /** undefined = tanpa saringan pemilik; null = akun belum diketahui (tak ada baris yang dikirim). */
@@ -418,6 +436,7 @@ class Pengurai {
     // Server/gateway belum mengenal batch v2 di koneksi ini: kembali per baris tanpa menghukum baris.
     if (res.status === 404 || (res.status === 503 && kode === 'BATCH_TIDAK_TERSEDIA')) {
       this._batchMati = true
+      this._batchMatiSampai = res.status === 503 ? kini + BATCH_MATI_SEMENTARA_MS : null
       semua({ status: STATUS.MENUNGGU, kode: null })
       return selesai('perBaris')
     }
@@ -549,6 +568,7 @@ class Pengurai {
       }
     }
     this._batchMati = true
+    this._batchMatiSampai = null
     this._ubah()
     return { sukses, hasil: 'perBaris' }
   }
@@ -847,6 +867,7 @@ module.exports = {
   JEDA_LAMA_MS,
   JEDA_TUNDA_MS,
   JEDA_BERJALAN_MS,
+  BATCH_MATI_SEMENTARA_MS,
   AMBANG_PERINGATAN_PERCOBAAN,
   SEBAB,
   PENAHAN_KAUSAL,

@@ -11,7 +11,7 @@ const kontrak = require('../src/shared/kontrak-kanal.js')
 const { Antrean, STATUS, buatClientRef, waktuKlien } = require('../src/main/offline/antrean')
 const { buatTulisAtauAntre } = require('../src/main/offline/tulis')
 const { Koneksi } = require('../src/main/offline')
-const { NomorLokal, buatStrukLokal } = require('../src/main/offline/struk-lokal')
+const { NomorLokal, buatStrukLokal, strukCadangan } = require('../src/main/offline/struk-lokal')
 
 const badan = (m) => JSON.parse(JSON.stringify(m.body))
 
@@ -129,7 +129,10 @@ test('tulisAtauAntre: client_ref yang masih ada di antrean (belum terkirim) tida
   for (const status of [STATUS.MENUNGGU, STATUS.TINJAU]) {
     off.antrean.perbarui('rf-1', { status })
     const r2 = await tulis({ jenis: 'REFUND', jalur: '/transaksi/T1/refund', body: { items: [], client_ref: 'rf-1' } })
-    assert.deepEqual(r2, { ok: true, status: 202, data: null, meta: null, message: '', tertunda: true, clientRef: 'rf-1' })
+    const harap = { ok: true, status: 202, data: null, meta: null, message: '', tertunda: true, clientRef: 'rf-1' }
+    // Baris ditinjau: layar menampilkan "periksa Pengaturan → Sinkronisasi" (pos.js membaca perluTinjau).
+    if (status === STATUS.TINJAU) harap.perluTinjau = true
+    assert.deepEqual(r2, harap)
   }
   assert.equal(dikirim, 1, 'tidak ada percobaan online kedua')
   assert.equal(off.antrean.semua().filter((p) => p.clientRef === 'rf-1').length, 1, 'tetap satu baris')
@@ -186,4 +189,69 @@ test('trx:refund: indeks baris hanya bilangan bulat ≥ 0 atau teks digit (true/
   assert.deepEqual(badan(refund(0)).items, [{ baris: 0, kuantitas: 1 }])
   assert.deepEqual(badan(refund(3)).items, [{ baris: 3, kuantitas: 1 }])
   assert.deepEqual(badan(refund('2')).items, [{ baris: 2, kuantitas: 1 }])
+})
+
+test('tulisAtauAntre: ref sama sudah TERKIRIM + offline / galat jaringan → hasil tersimpan dikembalikan, tanpa baris baru', async () => {
+  // (i) offline: tidak ada percobaan online; hasil per baris = data server mentah.
+  const off = offlinePalsu(false)
+  off.antrean.antrekan({ clientRef: 'rf-1', jenis: 'REFUND', tokoId: 'T1', path: '/transaksi/T1/refund', body: {} })
+  off.antrean.selesai('rf-1', { id: 'R1', nomor: 'RF/1', total_refund: 5000, _idempoten: true })
+  let dikirim = 0
+  const t1 = buatTulisAtauAntre({ offline: off, kirim: async () => { dikirim++; return { ok: true } }, tokoAktif: () => 'T1' })
+  const r1 = await t1({ jenis: 'REFUND', jalur: '/transaksi/T1/refund', body: { items: [], client_ref: 'rf-1' }, siapkanAntre: () => { throw new Error('tak boleh dipanggil') } })
+  assert.deepEqual(r1, { ok: true, status: 200, data: { id: 'R1', nomor: 'RF/1', total_refund: 5000 }, meta: null, message: '', clientRef: 'rf-1', dariAntrean: true })
+  assert.equal(dikirim, 0)
+  assert.equal(off.antrean.semua().length, 1, 'tidak ada baris baru')
+
+  // (ii) online tetapi galat jaringan: dicoba online dulu, lalu hasil tersimpan (bentuk hasil batch).
+  const on = offlinePalsu(true)
+  on.antrean.antrekan({ clientRef: 'b-1', jenis: 'BATAL', tokoId: 'T1', path: '/transaksi/T1/batal', body: {} })
+  on.antrean.selesai('b-1', { id: 'T1', nomor: 'POS/1', kode: 'OK', tipe: 'transaksi.batal', peringatan: [], idempoten: false, _idempoten: false, data: null })
+  const t2 = buatTulisAtauAntre({ offline: on, kirim: async () => { dikirim++; return { ok: false, status: 0, gangguan: true } }, tokoAktif: () => 'T1' })
+  const r2 = await t2({ jenis: 'BATAL', jalur: '/transaksi/T1/batal', body: { client_ref: 'b-1' } })
+  assert.deepEqual(r2, { ok: true, status: 200, data: { id: 'T1', nomor: 'POS/1' }, meta: null, message: '', clientRef: 'b-1', dariAntrean: true })
+  assert.equal(dikirim, 1, 'tetap dicoba online dulu')
+  assert.equal(on.antrean.semua().length, 1)
+
+  // Hasil batch ber-data → data itu yang dikembalikan.
+  on.antrean.perbarui('b-1', { hasil: { id: 'T1', nomor: 'POS/1', kode: 'OK', tipe: 'transaksi.batal', peringatan: [], idempoten: true, data: { status: 'DIBATALKAN' } } })
+  assert.deepEqual((await t2({ jenis: 'BATAL', jalur: '/transaksi/T1/batal', body: { client_ref: 'b-1' } })).data, { status: 'DIBATALKAN' })
+})
+
+test('Antrean.antrekan: clientRef yang sudah ada → baris itu dikembalikan, tidak ditambah (pertahanan berlapis)', () => {
+  const a = new Antrean({ berkas: null, sekarang: () => 1, buatId: () => 'dev-uji' })
+  const p1 = a.antrekan({ clientRef: 'x', jenis: 'CHECKOUT', tokoId: 'T1', path: '/transaksi/checkout', body: { a: 1 } }, { transaksi: { nomorLokal: 'L-1' }, deltaStok: { P1: -1 } })
+  const seq = a.perangkat().seqTerakhir
+  const p2 = a.antrekan({ clientRef: 'x', jenis: 'CHECKOUT', tokoId: 'T1', path: '/transaksi/checkout', body: { a: 2 } }, { transaksi: { nomorLokal: 'L-2' }, deltaStok: { P1: -5 } })
+  assert.equal(p2, p1)
+  assert.equal(a.semua().length, 1)
+  assert.equal(a.perangkat().seqTerakhir, seq, 'nomor urut perangkat tidak terpakai')
+  assert.equal(a.transaksiLokal('x').nomorLokal, 'L-1')
+  assert.deepEqual(a.deltaStokTertunda(), { P1: -1 })
+})
+
+test('strukCadangan: struk minimal dari badan checkout bila struk lokal gagal disusun (renderer tak boleh meledak)', () => {
+  const body = { items: [{ id_produk: 'P1', harga: 10000, kuantitas: 2 }, { id_produk: 'P2', harga: 5000, kuantitas: 1, diskon_persen: 10 }], tipe_pembayaran: 'TUNAI', dibayar: 30000 }
+  // tampilan rusak (null) membuat buatStrukLokal melempar → cadangan tetap menghitung dari badan.
+  assert.throws(() => buatStrukLokal({ nomor: 'L-1', body, tampilan: [null] }))
+  const s = strukCadangan({ body, tampilan: [null] })
+  assert.equal(s.nomor, null)
+  assert.equal(s.items.length, 2)
+  assert.equal(s.grand_total, 24500)
+  assert.equal(s.dibayar, 30000)
+  assert.equal(s.kembalian, 5500)
+  assert.equal(s.tipe_pembayaran, 'TUNAI')
+  assert.equal(s.belum_sinkron, true)
+  assert.equal(s.catatan_kaki, 'Belum tersinkron — struk lengkap tersedia setelah sinkron.')
+
+  // Badan rusak pun menghasilkan struk minimal yang aman dibaca.
+  for (const rusak of [null, {}, { items: 'x', dibayar: 'abc' }, { items: [null, 5] }]) {
+    const m = strukCadangan({ body: rusak })
+    assert.equal(m.nomor, null)
+    assert.ok(Array.isArray(m.items))
+    assert.equal(typeof m.grand_total, 'number')
+    assert.equal(typeof m.dibayar, 'number')
+    assert.equal(m.kembalian, 0)
+    assert.match(m.catatan_kaki, /Belum tersinkron/)
+  }
 })

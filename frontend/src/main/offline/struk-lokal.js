@@ -96,4 +96,36 @@ function buatStrukLokal({ nomor, body, tampilan = [], kasir = null, pelangganNam
   }
 }
 
-module.exports = { NomorLokal, buatStrukLokal }
+const CATATAN_CADANGAN = 'Belum tersinkron — struk lengkap tersedia setelah sinkron.'
+
+/**
+ * Struk CADANGAN untuk penjualan yang sudah diantrekan tetapi struk lokalnya gagal disusun (penyiapan antre
+ * melempar): renderer selalu menerima objek struk yang aman dibaca (grand_total, dibayar, kembalian, items).
+ * Isi dihitung dari badan checkout bila bisa (tampilan rusak diabaikan); bila badan pun rusak → struk minimal.
+ * Tanpa nomor: nomor lokal mungkin tak terbuat — nomor resmi menyusul setelah sinkron.
+ */
+function strukCadangan({ body, tampilan = [], kasir = null, pelangganNama = null, waktu = new Date() } = {}) {
+  const b = body && typeof body === 'object' ? body : {}
+  const items = Array.isArray(b.items) ? b.items.filter((i) => i && typeof i === 'object') : []
+  const bersih = Array.isArray(tampilan) ? tampilan.filter((t) => t && typeof t === 'object') : []
+  let s = null
+  for (const tpl of [bersih, []]) {
+    try {
+      s = buatStrukLokal({ nomor: null, body: { ...b, items }, tampilan: tpl, kasir, pelangganNama, waktu })
+      break
+    } catch { s = null }
+  }
+  if (!s) {
+    let tanggal = null
+    try { tanggal = new Date(waktu).toISOString() } catch { tanggal = null }
+    s = {
+      id: null, nomor: null, tanggal, status: 'BELUM SINKRON', belum_sinkron: true, kasir, pelanggan: pelangganNama,
+      tipe_pembayaran: typeof b.tipe_pembayaran === 'string' && b.tipe_pembayaran ? b.tipe_pembayaran : 'TUNAI',
+      catatan: null, items: [], subtotal: 0, total_diskon: 0, total_pajak: 0, grand_total: 0,
+      dibayar: Number(b.dibayar) || 0, kembalian: 0
+    }
+  }
+  return { ...s, nomor: null, catatan_kaki: CATATAN_CADANGAN }
+}
+
+module.exports = { NomorLokal, buatStrukLokal, strukCadangan }

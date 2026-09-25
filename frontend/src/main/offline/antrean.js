@@ -201,8 +201,13 @@ class Antrean {
     return this.perangkat()
   }
 
-  /** Antrekan pesan (+ transaksi lokal & delta stok) dalam satu penulisan. */
+  /**
+   * Antrekan pesan (+ transaksi lokal & delta stok) dalam satu penulisan. clientRef selalu unik: bila sudah
+   * ada, baris itu dikembalikan apa adanya (tanpa baris, transaksi, delta, atau nomor urut perangkat baru).
+   */
   antrekan({ clientRef, jenis, tokoId = null, path: jalur, body, status = STATUS.MENUNGGU, galat = null, pemilik = null }, { transaksi = null, deltaStok = {} } = {}) {
+    const ada = this.cari(clientRef)
+    if (ada) return ada
     const p = {
       urut: ++this._urut,
       // Nomor urut perangkat untuk server (device_seq): disimpan bersama barisnya dan tak pernah turun.

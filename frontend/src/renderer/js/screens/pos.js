@@ -1238,6 +1238,20 @@ function renderPos(container) {
 
     // Bersihkan keranjang + segarkan katalog, lalu tampilkan struk sukses.
     function finalizeSuccess(struk) {
+      // Sukses tanpa struk (mis. penjualan yang sama sudah di antrean): transaksi tetap tercatat —
+      // kosongkan keranjang & beri tahu kasir, jangan membaca field struk yang tak ada.
+      if (!struk || typeof struk !== 'object') {
+        cart = []
+        diskonTransaksi = 0
+        pelanggan = null
+        if (!disposed) {
+          renderCart()
+          loadProduk()
+        }
+        modal.close()
+        toast('Transaksi disimpan. Struk tersedia di Riwayat setelah tersinkron.', 'info', 6000)
+        return
+      }
       // Snapshot "Terima kasih" utk Display Pelanggan (keranjang akan dikosongkan).
       cdDone = true
       cdDoneData = {

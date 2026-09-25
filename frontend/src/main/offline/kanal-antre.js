@@ -6,9 +6,10 @@
 //    pemilik, induk ditinjau, dan satu tindakan tertunda per transaksi lokal; bila induknya sudah terkirim,
 //    rujukan diganti id server dan dikirim seperti biasa;
 //  - tutup sesi sendiri ditahan selama antrean akun ini untuk toko itu belum kosong (paritas Flutter);
-//  - baris untuk panel Sinkronisasi tanpa token persetujuan.
+//  - baris untuk panel Sinkronisasi tanpa token persetujuan;
+//  - akun aktif (pemilik baris) dan handler sesi:tutup sebagai pabrik murni yang dirakit ipc.js.
 
-const { STATUS, refIndukLokal, labelJenis } = require('./antrean')
+const { STATUS, refIndukLokal, labelJenis, kunciPemilik } = require('./antrean')
 const { gantiRujukanLokal, labelKode, labelPeringatan } = require('./operasi-batch')
 
 const JENIS_BOLEH_LOKAL = new Set(['REFUND', 'BATAL'])
@@ -56,6 +57,55 @@ function pesanTahanTutupSesi(antrean, { tokoId = null, pemilik } = {}) {
   return `${n} data belum terkirim ke server (transaksi, pembayaran, atau pembatalan). Sambungkan internet, buka Pengaturan → Sinkronisasi, dan tunggu sampai kosong sebelum menutup sesi.`
 }
 
+/**
+ * Handler `sesi:tutup`: tutup sesi SENDIRI ditolak 409 `ANTREAN` selama antrean akun ini untuk toko aktif belum
+ * kosong (rekap & kas server baru benar setelah semua penjualan/pembayaran tercatat); `sesiLain: true` (sesi
+ * kasir lain) tidak ditahan.
+ * @param {{antrean: object, tokoAktif: () => string|null, pemilik: () => string|undefined, kirim: (payload: object) => Promise<object>}} o
+ */
+function buatTutupSesi({ antrean, tokoAktif, pemilik, kirim }) {
+  return async function tutupSesi(payload) {
+    const p = payload && typeof payload === 'object' ? payload : {}
+    if (!p.sesiLain) {
+      const pesan = pesanTahanTutupSesi(antrean, { tokoId: tokoAktif(), pemilik: pemilik() })
+      if (pesan) return { ok: false, status: 409, code: 'ANTREAN', message: pesan, errors: null }
+    }
+    return kirim(p)
+  }
+}
+
+/**
+ * Akun aktif = pemilik baris antrean ("<email>@<host server>"). Akun dikenali (salinan /auth/me saat start,
+ * login, auth:me) → baris lama tanpa pemilik diklaim akun ini; keluar → dilupakan (pengurai berhenti mengirim).
+ * @param {{antrean: () => object, baseUrl: () => string|null, setelahKlaim?: () => void}} o
+ */
+function buatAkunAktif({ antrean, baseUrl, setelahKlaim = () => {} }) {
+  let email = null
+  const pemilikAktif = () => kunciPemilik(email, baseUrl())
+  function atur(e) {
+    const v = typeof e === 'string' && e.trim() ? e.trim() : null
+    if (!v) return
+    email = v
+    const pemilik = pemilikAktif()
+    const a = antrean()
+    if (pemilik && a && a.klaimTanpaPemilik(pemilik) > 0) setelahKlaim()
+  }
+  return {
+    pemilikAktif,
+    // Untuk hitungan status/penjaga: akun belum diketahui → semua baris (undefined), bukan "tanpa pemilik".
+    pemilikStatus: () => pemilikAktif() || undefined,
+    atur,
+    lupakan() { email = null },
+    /** Identitas dari salinan /auth/me (tersimpan saat masuk): antrean bisa dikirim sebelum renderer memuat identitas. */
+    dariSalinan(salinan) {
+      try {
+        const s = salinan ? salinan.ambil(null, '/auth/me', {}) : null
+        if (s && s.data && s.data.user) atur(s.data.user.email)
+      } catch { /* abaikan */ }
+    }
+  }
+}
+
 /** Baris antrean untuk renderer: label siap tampil, tanpa token persetujuan (berkas antrean tetap utuh). */
 function barisUntukTampilan(p, pemilik) {
   const body = p.body && typeof p.body === 'object' ? { ...p.body } : p.body
@@ -70,4 +120,4 @@ function barisUntukTampilan(p, pemilik) {
   }
 }
 
-module.exports = { daftarKanalAntre, putuskanTulisAntre, pesanTahanTutupSesi, barisUntukTampilan }
+module.exports = { daftarKanalAntre, putuskanTulisAntre, pesanTahanTutupSesi, barisUntukTampilan, buatTutupSesi, buatAkunAktif }

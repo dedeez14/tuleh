@@ -12,7 +12,8 @@ const path = require('node:path')
 
 const kontrak = require('../src/shared/kontrak-kanal.js')
 const { Antrean, STATUS } = require('../src/main/offline/antrean')
-const { daftarKanalAntre, putuskanTulisAntre, pesanTahanTutupSesi, barisUntukTampilan } = require('../src/main/offline/kanal-antre')
+const { daftarKanalAntre, putuskanTulisAntre, pesanTahanTutupSesi, barisUntukTampilan, buatTutupSesi, buatAkunAktif } = require('../src/main/offline/kanal-antre')
+const { SalinanBaca } = require('../src/main/offline/salinan')
 
 const memori = () => new Antrean({ berkas: null, sekarang: () => 1, buatId: () => 'dev-uji' })
 const K = 'kasir@toko.test'
@@ -101,9 +102,16 @@ test('barisUntukTampilan: token persetujuan tidak pernah sampai renderer; label 
   assert.equal(u.milikLain, false)
 })
 
-test('simpul offline: /config sync_batch mengaktifkan mode batch & tersimpan untuk start dingin; status memuat modeBatch & milikLain', () => {
+// Direktori sementara dihapus setelah tes selesai.
+function dirSementara(t, awalan) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), awalan))
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
+  return dir
+}
+
+test('simpul offline: /config sync_batch mengaktifkan mode batch & tersimpan untuk start dingin; status memuat modeBatch & milikLain', (t) => {
   const offline = require('../src/main/offline')
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tuleh-simpul-'))
+  const dir = dirSementara(t, 'tuleh-simpul-')
   const kirim = async () => ({ ok: true })
   offline.init({ dir, kirim, kirimBatch: async () => ({ ok: true }), pemilikAktif: () => K })
   assert.equal(offline.status().modeBatch, false)
@@ -120,9 +128,9 @@ test('simpul offline: /config sync_batch mengaktifkan mode batch & tersimpan unt
   assert.equal(offline.status().modeBatch, false)
 })
 
-test('simpul offline: setiap /config memanggil aturSyncBatch → mode batch yang dimatikan 404/503 pulih (paritas memo 5 menit Flutter)', () => {
+test('simpul offline: setiap /config memanggil aturSyncBatch → mode batch yang dimatikan 404/503 pulih (paritas memo 5 menit Flutter)', (t) => {
   const offline = require('../src/main/offline')
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tuleh-simpul-mati-'))
+  const dir = dirSementara(t, 'tuleh-simpul-mati-')
   offline.init({ dir, kirim: async () => ({ ok: true }), kirimBatch: async () => ({ ok: true }), pemilikAktif: () => K })
   offline.aturSyncBatch({ sync_batch: { versi: 2 } })
   assert.equal(offline.status().modeBatch, true)
@@ -131,4 +139,61 @@ test('simpul offline: setiap /config memanggil aturSyncBatch → mode batch yang
   assert.equal(offline.status().modeBatch, false)
   offline.aturSyncBatch({ sync_batch: { versi: 2 } })
   assert.equal(offline.status().modeBatch, true, '/config berikutnya mengaktifkan lagi')
+})
+
+test('sesi:tutup: sesi sendiri ditahan 409 ANTREAN selama antrean akun ini untuk toko aktif belum kosong; sesiLain melewati', async () => {
+  const a = memori()
+  const dikirim = []
+  const tutup = buatTutupSesi({ antrean: a, tokoAktif: () => 'T1', pemilik: () => K, kirim: async (p) => { dikirim.push(p); return { ok: true, status: 200, data: { id: p.id } } } })
+  assert.equal((await tutup({ id: 'S1' })).ok, true, 'antrean kosong → diteruskan')
+  a.antrekan({ clientRef: 'c', jenis: 'CHECKOUT', tokoId: 'T1', path: '/transaksi/checkout', body: {}, pemilik: K })
+  const r = await tutup({ id: 'S1' })
+  assert.deepEqual([r.ok, r.status, r.code, r.errors], [false, 409, 'ANTREAN', null])
+  assert.match(r.message, /^1 data belum terkirim/)
+  assert.equal(dikirim.length, 1, 'tidak diteruskan ke server')
+  assert.equal((await tutup({ id: 'S2', sesiLain: true })).ok, true, 'sesi kasir lain tidak ditahan')
+  assert.equal(dikirim.length, 2)
+  // Baris akun lain / toko lain tidak menahan.
+  const b = memori()
+  b.antrekan({ clientRef: 'l', jenis: 'CHECKOUT', tokoId: 'T1', path: '/x', body: {}, pemilik: 'lain@toko.test' })
+  b.antrekan({ clientRef: 't2', jenis: 'CHECKOUT', tokoId: 'T2', path: '/x', body: {}, pemilik: K })
+  const tutupB = buatTutupSesi({ antrean: b, tokoAktif: () => 'T1', pemilik: () => K, kirim: async () => ({ ok: true }) })
+  assert.equal((await tutupB({ id: 'S1' })).ok, true)
+  // Payload kosong tidak meledak.
+  assert.equal((await buatTutupSesi({ antrean: a, tokoAktif: () => 'T1', pemilik: () => K, kirim: async () => ({ ok: true }) })()).status, 409)
+})
+
+test('akun aktif: salinan /auth/me saat start & login mengklaim baris tanpa pemilik; keluar melupakan akun', () => {
+  const a = memori()
+  a.antrekan({ clientRef: 'lama', jenis: 'CHECKOUT', tokoId: 'T1', path: '/x', body: {} })
+  let siar = 0
+  const akun = buatAkunAktif({ antrean: () => a, baseUrl: () => 'https://toko.contoh.test', setelahKlaim: () => { siar++ } })
+  assert.equal(akun.pemilikAktif(), null)
+  assert.equal(akun.pemilikStatus(), undefined, 'akun belum diketahui → semua baris untuk hitungan')
+
+  // Start: identitas dari salinan /auth/me (disimpan saat masuk).
+  const salinan = new SalinanBaca({ berkas: null })
+  salinan.simpan(null, '/auth/me', {}, { data: { user: { email: ' Kasir@Toko.Test ' } }, meta: null })
+  akun.dariSalinan(salinan)
+  assert.equal(akun.pemilikAktif(), 'kasir@toko.test@toko.contoh.test')
+  assert.equal(a.cari('lama').pemilik, 'kasir@toko.test@toko.contoh.test')
+  assert.equal(siar, 1)
+
+  // Login akun lain: baris yang sudah berpemilik tidak diklaim ulang; baris baru tanpa pemilik diklaim.
+  a.antrekan({ clientRef: 'baru', jenis: 'CHECKOUT', tokoId: 'T1', path: '/x', body: {} })
+  akun.atur('owner@toko.test')
+  assert.equal(a.cari('lama').pemilik, 'kasir@toko.test@toko.contoh.test')
+  assert.equal(a.cari('baru').pemilik, 'owner@toko.test@toko.contoh.test')
+  assert.equal(siar, 2)
+  akun.atur('owner@toko.test')
+  assert.equal(siar, 2, 'tanpa klaim → tanpa siaran')
+  akun.atur('')
+  assert.equal(akun.pemilikAktif(), 'owner@toko.test@toko.contoh.test', 'email kosong diabaikan')
+
+  akun.lupakan()
+  assert.equal(akun.pemilikAktif(), null, 'keluar → akun dilupakan')
+  // Salinan rusak / kosong tidak melempar.
+  akun.dariSalinan({ ambil: () => { throw new Error('rusak') } })
+  akun.dariSalinan(null)
+  assert.equal(akun.pemilikAktif(), null)
 })

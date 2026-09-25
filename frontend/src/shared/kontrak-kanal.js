@@ -137,6 +137,9 @@
   /**
    * Indeks baris item: HANYA angka bulat ≥ 0 atau teks berisi digit saja ("2"). Number(true) = 1 dan
    * Number([2]) = 2 — tanpa saringan tipe, nilai seperti itu diam-diam merujuk baris lain. null = tak sah.
+   * SATU aturan masukan: kontrak inilah gerbangnya dan menormalkan ke angka sebelum badan disimpan/dikirim.
+   * `bulatBaris` (main/offline/operasi-batch.js) hanya membaca nilai yang SUDAH dinormalkan (baris antrean,
+   * ringkasan server) dan sengaja lebih longgar demi baris lama & paritas Flutter — bukan aturan kedua.
    */
   function indeksBaris (v) {
     if (typeof v === 'number') return Number.isSafeInteger(v) && v >= 0 ? v : null

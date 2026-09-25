@@ -173,6 +173,9 @@ function hasilDariItem(item) {
  * Nomor `baris` sebagai bilangan bulat (paritas Flutter `_bulatBaris`): angka hingga yang bulat, atau teks
  * yang nilainya bulat ("2", " 2 ", "1.0"); null, "", boolean, pecahan, NaN, ∞, larik/objek → null.
  * Tanpa ini `Number(null)`/`Number('')`/`Number(false)` = 0 diam-diam merujuk item PERTAMA.
+ * Aturan MASUKAN ada di kontrak (`indeksBaris` di shared/kontrak-kanal.js: bulat ≥ 0 atau /^\d+$/, lalu
+ * dinormalkan ke angka). Fungsi ini hanya membaca bentuk yang sudah dinormalkan (baris antrean, ringkasan
+ * server `data.items[].baris`) — longgar demi baris lama & paritas Flutter; indeks negatif ditolak pemanggil.
  */
 function bulatBaris(v) {
   let n = null

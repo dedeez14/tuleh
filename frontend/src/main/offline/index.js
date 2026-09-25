@@ -9,7 +9,7 @@ const { SalinanBaca } = require('./salinan')
 const { Antrean, STATUS, buatClientRef, labelJenis, waktuKlien } = require('./antrean')
 const { Pengurai, kebijakanDariConfig, syncBatchDariConfig, AMBANG_PERINGATAN_PERCOBAAN } = require('./pengurai')
 const { Pemulih } = require('./pemulih')
-const { NomorLokal, buatStrukLokal } = require('./struk-lokal')
+const { NomorLokal, buatStrukLokal, strukCadangan } = require('./struk-lokal')
 
 class Koneksi {
   constructor() {
@@ -119,6 +119,7 @@ module.exports = {
   waktuKlien,
   labelJenis,
   buatStrukLokal,
+  strukCadangan,
   get salinan() { return salinan },
   get antrean() { return antrean },
   get pengurai() { return pengurai },
