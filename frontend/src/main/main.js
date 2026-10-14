@@ -126,6 +126,7 @@ if (!app.requestSingleInstanceLock()) {
                   loaded: true,
                   version: app.getVersion(),
                   rendererReady: await mainWindow.webContents.executeJavaScript("document.documentElement.dataset.bootReady === 'true'"),
+                  loginReady: await mainWindow.webContents.executeJavaScript("Boolean(document.querySelector('#login-user')?.getClientRects().length && document.querySelector('#login-pass')?.getClientRects().length)"),
                   demo: require('./demo').isActive(),
                   gateway: gateway.status(),
                   tracking: require('./tracker').status(),

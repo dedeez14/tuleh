@@ -11,9 +11,10 @@ Perbaikan sinkronisasi yang sebelumnya belum dirilis kini disertakan:
 ## Pemeriksaan rilis
 
 Tes Node dan Go berjalan setiap push, termasuk ketika nomor versi tidak berubah.
-Installer Windows harus berhasil dipasang pada runner bersih, membuka Mode Demo,
+Installer Windows harus berhasil dipasang pada runner bersih, membuka formulir masuk,
 menyelesaikan boot renderer, dan menjalankan gateway dengan versi yang sama.
 Pengujian memakai profil sementara dengan upstream `.invalid`, tanpa token dan data pelanggan.
+Aktivasi demo tetap memerlukan verifikasi server dan tidak dilewati untuk pengujian.
 Laporan dan screenshot tersimpan sebagai artifact `desktop-install-smoke`.
 APK pelanggan wajib ditandatangani keystore rilis; tidak ada fallback APK debug.
 Tag rilis menunjuk tepat ke commit yang diuji, bukan HEAD yang mungkin berubah selama build.

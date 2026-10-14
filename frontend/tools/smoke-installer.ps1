@@ -14,8 +14,8 @@ if ($setup.ExitCode -ne 0) { throw "Installer gagal: $($setup.ExitCode)" }
 $exe = Join-Path $installDir 'Tuleh.exe'
 if (-not (Test-Path -LiteralPath $exe)) { throw 'Executable tidak ditemukan setelah instalasi.' }
 $env:IPOS_SMOKE = '1'
-$env:IPOS_SMOKE_DEMO = '1'
-$env:IPOS_SMOKE_SCREEN = 'pos'
+$env:IPOS_SMOKE_DEMO = '0'
+$env:IPOS_SMOKE_LOGIN = '1'
 $env:IPOS_SMOKE_DELAY = '15000'
 $env:IPOS_SMOKE_USER_DATA = $profileDir
 $env:IPOS_SMOKE_OUT = $reportPath
@@ -24,5 +24,6 @@ $appProcess = Start-Process -FilePath $exe -WindowStyle Hidden -PassThru
 if (-not $appProcess.WaitForExit(90000)) { throw 'Aplikasi tidak menyelesaikan pengujian startup.' }
 if ($appProcess.ExitCode -ne 0) { throw "Aplikasi gagal: $($appProcess.ExitCode)" }
 if (-not (Test-Path -LiteralPath $reportPath)) { throw 'Laporan startup tidak dihasilkan.' }
+Get-Content -LiteralPath $reportPath
 node (Join-Path $PSScriptRoot 'verify-smoke.cjs') $reportPath
 if ($LASTEXITCODE -ne 0) { throw 'Verifikasi aplikasi hasil instalasi gagal.' }

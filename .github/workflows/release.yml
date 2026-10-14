@@ -50,7 +50,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
       - uses: actions/setup-go@v5
         with:
           go-version-file: backend/go.mod
@@ -92,7 +92,7 @@ jobs:
           ls -la "$BIN"
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
       - name: Install deps (frontend, dari package-lock.json)
         working-directory: frontend
         run: npm ci --no-audit --no-fund
@@ -139,7 +139,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
