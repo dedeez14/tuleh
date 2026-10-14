@@ -1108,7 +1108,8 @@ if (new URLSearchParams(location.search).get('display') === 'customer') {
     document.addEventListener('visibilitychange', onForeground)
     window.addEventListener('focus', onForeground)
   }).catch(() => { /* fail-open */ })
-  boot().catch((err) => { console.error('Boot gagal:', err); hideSplash() })
+  boot().then(() => { document.documentElement.dataset.bootReady = 'true' })
+    .catch((err) => { console.error('Boot gagal:', err); hideSplash() })
   // Jaring pengaman: jangan biarkan splash tersangkut bila boot lama/gagal.
   setTimeout(hideSplash, 15000)
 }

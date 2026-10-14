@@ -1,8 +1,8 @@
 {
   "name": "ipos-frontend",
-  "productName": "Tuléh",
-  "version": "0.9.40",
-  "description": "Tuléh — aplikasi Point of Sale desktop (Electron) untuk TATREPORT POS API",
+  "productName": "TulÃ©h",
+  "version": "0.9.41",
+  "description": "TulÃ©h â€” aplikasi Point of Sale desktop (Electron) untuk TATREPORT POS API",
   "main": "src/main/main.js",
   "tuleh": {
     "serverBawaan": "https://tatreport.com"
@@ -24,7 +24,7 @@
   },
   "build": {
     "appId": "com.movera.mpos",
-    "productName": "Tuléh",
+    "productName": "TulÃ©h",
     "directories": {
       "buildResources": "build",
       "output": "dist"
@@ -37,7 +37,9 @@
       {
         "from": "build/backend",
         "to": "backend",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "asar": true,
@@ -53,7 +55,9 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ]
     },
@@ -61,7 +65,7 @@
       "oneClick": true,
       "perMachine": false,
       "artifactName": "Tuleh-Setup-${version}.${ext}",
-      "shortcutName": "Tuléh"
+      "shortcutName": "TulÃ©h"
     }
   }
 }

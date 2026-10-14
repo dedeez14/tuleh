@@ -1,10 +1,8 @@
 name: Build & Release
 
-# Setiap push ke main: baca versi dari frontend/package.json. Bila belum ada
-# Release untuk versi itu, jalankan SEMUA tes (Node + Go) lalu build installer
-# Windows (.exe) + Android (.apk) dan terbitkan Release vX.Y.Z otomatis. Tes gagal
-# = tidak ada build/rilis. Idempoten — versi yang sudah dirilis dilewati, jadi hanya
-# kenaikan versi yang memicu Release baru.
+# Setiap push ke main menjalankan tes Node + Go. Versi baru membangun installer
+# Windows yang wajib lolos uji pemasangan, dan APK bertanda tangan rilis.
+# Tes/build gagal = tidak ada rilis. Versi yang sudah dirilis tidak dibangun ulang.
 
 on:
   push:
@@ -45,8 +43,8 @@ jobs:
   # Gerbang mutu: tes Node (renderer/main/kontrak, termasuk rute gateway ⇄ kontrak kanal
   # dan paritas desktop ↔ Android) + go vet/go test gateway. Build & rilis butuh job ini lulus.
   tests:
+    # Selalu uji source, termasuk push yang tidak menaikkan versi.
     needs: version-check
-    if: needs.version-check.outputs.exists == 'false'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -106,6 +104,15 @@ jobs:
         # (+ .blockmap) di dist/ meski --publish never. File itu dipakai
         # electron-updater untuk mendeteksi & memverifikasi (sha512) pembaruan.
         run: npx electron-builder --win --publish never
+      - name: Uji instalasi dan startup aplikasi hasil kemasan
+        shell: pwsh
+        run: ./frontend/tools/smoke-installer.ps1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: desktop-install-smoke
+          path: ${{ runner.temp }}/tuleh-install-smoke/report.*
+          if-no-files-found: warn
       - name: Pastikan latest.yml ada (feed electron-updater)
         shell: bash
         run: |
@@ -219,10 +226,9 @@ jobs:
           sed -i "s/versionCode 1/versionCode $VC/" mobile/android/app/build.gradle
           sed -i "s/versionName \"1.0\"/versionName \"$VER\"/" mobile/android/app/build.gradle
           grep -E 'versionCode|versionName' mobile/android/app/build.gradle
-      - name: Cek keystore rilis (opsional)
+      - name: Cek keystore rilis
         id: ks
-        # Tanda tangan STABIL agar update bisa dipasang di atas app lama. Bila secret
-        # keystore belum diisi, jatuh ke assembleDebug (update belum bisa menimpa app lama).
+        # Tanda tangan STABIL agar update bisa dipasang di atas app lama.
         run: |
           if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then echo "has=true" >> "$GITHUB_OUTPUT"; else echo "has=false" >> "$GITHUB_OUTPUT"; fi
       - name: Siapkan signing rilis
@@ -244,15 +250,15 @@ jobs:
           if [ "${{ steps.ks.outputs.has }}" = "true" ]; then
             ./gradlew assembleRelease --console=plain
           else
-            echo "::warning::Tanpa keystore rilis (secret ANDROID_KEYSTORE_BASE64 kosong) — memakai assembleDebug; update Android belum bisa menimpa app lama."
-            ./gradlew assembleDebug --console=plain
+            echo "::error::Keystore rilis wajib tersedia; APK debug tidak boleh diterbitkan sebagai pembaruan pelanggan."
+            exit 1
           fi
       - name: Beri nama APK sesuai versi
         run: |
           VER="${{ needs.version-check.outputs.version }}"
           REL=mobile/android/app/build/outputs/apk/release/app-release.apk
-          DBG=mobile/android/app/build/outputs/apk/debug/app-debug.apk
-          if [ -f "$REL" ]; then cp "$REL" "Tuleh-$VER-android.apk"; else cp "$DBG" "Tuleh-$VER-android.apk"; fi
+          test -s "$REL"
+          cp "$REL" "Tuleh-$VER-android.apk"
           ls -la Tuleh-*-android.apk
       - uses: actions/upload-artifact@v4
         with:
@@ -271,6 +277,8 @@ jobs:
       - name: Terbitkan Release
         uses: softprops/action-gh-release@v2
         with:
+          target_commitish: ${{ github.sha }}
+          fail_on_unmatched_files: true
           tag_name: v${{ needs.version-check.outputs.version }}
           name: Tuléh v${{ needs.version-check.outputs.version }}
           generate_release_notes: true

@@ -3,6 +3,13 @@
 const fs = require('node:fs')
 const path = require('node:path')
 const { app, BrowserWindow, Menu, shell, session } = require('electron')
+const IS_SMOKE = process.env.IPOS_SMOKE === '1'
+// Pengujian installer memakai profil khusus, sebelum log/antrean/token dimuat.
+if (IS_SMOKE && process.env.IPOS_SMOKE_USER_DATA) {
+  const profil = path.resolve(process.env.IPOS_SMOKE_USER_DATA)
+  fs.mkdirSync(profil, { recursive: true })
+  app.setPath('userData', profil)
+}
 // Log berkas SEDINI mungkin: galat saat memuat modul lain pun tercatat.
 const diagnostik = require('./diagnostik')
 diagnostik.mulaiLog()
@@ -21,8 +28,6 @@ process.on('unhandledRejection', (alasan) => {
   console.error('[galat] unhandledRejection:', alasan)
   diagnostik.lapor({ jenis: 'error', pesan: (alasan && alasan.message) || String(alasan), stack: (alasan && alasan.stack) || '', konteks: { sumber: 'main' } })
 })
-
-const IS_SMOKE = process.env.IPOS_SMOKE === '1'
 
 // Locale Indonesia agar <input type=date> tampil dd/mm/yyyy
 app.commandLine.appendSwitch('lang', 'id')
@@ -89,8 +94,10 @@ if (!app.requestSingleInstanceLock()) {
     if (IS_SMOKE) {
       // Mode uji asap: kumpulkan log renderer, tulis laporan, lalu keluar.
       const smokeLog = []
-      mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
-        smokeLog.push(`[${level}] ${message} (${sourceId}:${line})`)
+      mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+        // Electron 35 mengirim detail di event, bukan argumen posisi lama.
+        const e = event && typeof event === 'object' ? event : {}
+        smokeLog.push(`[${e.level ?? level}] ${e.message ?? message} (${e.sourceId ?? sourceId}:${e.lineNumber ?? line})`)
       })
       mainWindow.webContents.on('did-fail-load', (_event, code, desc) => {
         smokeLog.push(`did-fail-load: ${code} ${desc}`)
@@ -117,6 +124,9 @@ if (!app.requestSingleInstanceLock()) {
               fs.writeFileSync(process.env.IPOS_SMOKE_OUT,
                 JSON.stringify({
                   loaded: true,
+                  version: app.getVersion(),
+                  rendererReady: await mainWindow.webContents.executeJavaScript("document.documentElement.dataset.bootReady === 'true'"),
+                  demo: require('./demo').isActive(),
                   gateway: gateway.status(),
                   tracking: require('./tracker').status(),
                   log: smokeLog

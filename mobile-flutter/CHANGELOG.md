@@ -5,6 +5,13 @@ sebagai isi Release GitHub (workflow flutter-release.yml), dan empat baris
 pertamanya tampil di banner pembaruan dalam aplikasi. Tulis untuk kasir, bukan
 untuk programmer.
 
+## 2.34.0
+
+- Transaksi yang tertunda tetap mengikuti toko dan akun pembuatnya saat koneksi kembali.
+- Sinkronisasi mempertahankan identitas transaksi saat dicoba ulang, termasuk ketika jawaban server terlambat.
+- Penanganan refund, pembatalan, dan transaksi terkait yang belum tersinkron diperbaiki.
+- Sinkronisasi batch mengikuti kemampuan server; server lama tetap memakai pengiriman per transaksi.
+
 ## 2.33.0
 
 - **Uang muka untuk pesanan bayar nanti.** Di laundry, bengkel, salon, dan usaha berpesanan lain, kasir bisa menerima DP saat pesanan dibuat: pilih Lunas, Bayar nanti, atau Uang muka di layar pembayaran. Nota mencetak uang muka dan sisanya, plus nomor antrian.
